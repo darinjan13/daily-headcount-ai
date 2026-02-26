@@ -7,24 +7,14 @@ function App() {
   const [data, setData] = useState(null);
   const [blueprint, setBlueprint] = useState(null);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [activeSection, setActiveSection] = useState("top");
 
-  // Scroll progress + active section tracking
+  // Scroll progress tracking
   useEffect(() => {
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
       const max = scrollHeight - clientHeight;
       const pct = max > 0 ? (scrollTop / max) * 100 : 0;
       setScrollProgress(pct);
-
-      const anchors = ["top", "summary", "kpis", "builder", "custom", "data-table", "analytics", "chatbot"];
-      const found = anchors.find((id) => {
-        const el = document.getElementById(id);
-        if (!el) return false;
-        const rect = el.getBoundingClientRect();
-        return rect.top <= 120 && rect.bottom >= 120;
-      });
-      if (found) setActiveSection(found);
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
@@ -103,26 +93,24 @@ function App() {
         </main>
 
         {/* Right rail navigation */}
-        <aside className="w-64 hidden lg:block">
-          <div className="glass-panel rounded-2xl px-4 py-5 sticky top-24">
-            <div className="text-xs font-bold tracking-[0.18em] text-[var(--color-primary)] uppercase mb-3">Navigate</div>
-            <div className="flex flex-col gap-2">
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => scrollTo(item.id)}
-                  className={`text-left px-3 py-2 rounded-xl border transition-all duration-150 ${
-                    activeSection === item.id
-                      ? "border-[var(--color-primary)] bg-[rgba(4,98,65,0.08)] text-[var(--color-primary)]"
-                      : "border-transparent bg-white/70 hover:bg-[rgba(4,98,65,0.06)] text-slate-600"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+        {data && blueprint && (
+          <aside className="w-64 hidden lg:block">
+            <div className="glass-panel rounded-2xl px-4 py-5 sticky top-24">
+              <div className="text-xs font-bold tracking-[0.18em] text-[var(--color-primary)] uppercase mb-3">Navigate</div>
+              <div className="flex flex-col gap-2">
+                {navItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => scrollTo(item.id)}
+                    className="relative text-left px-4 py-2 rounded-xl border border-transparent transition-all duration-200 bg-white/70 hover:bg-[rgba(4,98,65,0.06)] text-slate-600"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </aside>
+          </aside>
+        )}
       </div>
     </div>
   );

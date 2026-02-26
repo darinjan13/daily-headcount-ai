@@ -180,3 +180,7 @@ input, select, textarea {
 .animate-chat-bubble {
   animation: chat-pop 200ms ease forwards;
 }
+
+html {
+  scroll-behavior: smooth;
+}
