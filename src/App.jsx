@@ -32,7 +32,6 @@ function App() {
       { id: "custom", label: "Custom Outputs" },
       { id: "data-table", label: "Data Table" },
       { id: "analytics", label: "Analytics" },
-      { id: "chatbot", label: "AI Chat" },
     ];
   }, [data, blueprint]);
 
