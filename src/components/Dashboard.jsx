@@ -42,7 +42,7 @@ function AIBanner({ summary }) {
   if (!summary) return null;
   return (
     <div id="summary" className="glass-panel border border-[rgba(4,98,65,0.15)] rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
-      <span className="text-xl mt-0.5">🤖</span>
+      <span className="text-xl mt-0.5">◇</span>
       <div>
         <div className="pill-badge mb-1">AI Analysis</div>
         <p className="text-sm text-[var(--color-ink)] m-0">{summary}</p>

@@ -83,7 +83,7 @@ export default function DataChatbot({ headers, rows, blueprint }) {
         }`}
         title="Ask about your data"
       >
-        {open ? "✕" : "💬"}
+        {open ? "✕" : "◇"}
       </button>
 
       {/* Chat Panel */}
@@ -93,7 +93,7 @@ export default function DataChatbot({ headers, rows, blueprint }) {
 
           {/* Header */}
           <div className="bg-[var(--color-primary)] px-4 py-3 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-white/15 border border-white/20 flex items-center justify-center text-base">🤖</div>
+            <div className="w-8 h-8 rounded-full bg-white/15 border border-white/20 flex items-center justify-center text-base">◇</div>
             <div>
               <div className="text-white font-bold text-sm leading-tight">Data Assistant</div>
               <div className="text-white/70 text-xs">Ask anything about your data</div>
@@ -109,7 +109,7 @@ export default function DataChatbot({ headers, rows, blueprint }) {
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 {msg.role === "assistant" && (
-                  <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0">🤖</div>
+                  <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0">◇</div>
                 )}
                 <div
                   className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
@@ -142,7 +142,7 @@ export default function DataChatbot({ headers, rows, blueprint }) {
             {/* Loading indicator */}
             {loading && (
               <div className="flex justify-start">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0">🤖</div>
+                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0">◇</div>
                 <div className="bg-white border border-gray-100 shadow-sm px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
