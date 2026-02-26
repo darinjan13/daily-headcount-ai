@@ -23,11 +23,9 @@ function App() {
 
   const navItems = useMemo(() => {
     if (!data || !blueprint) return [
-      { id: "top", label: "Upload" },
       { id: "summary", label: "About" },
     ];
     return [
-      { id: "top", label: "Upload" },
       { id: "summary", label: "Summary" },
       { id: "kpis", label: "Highlights" },
       { id: "builder", label: "Custom Builder" },
