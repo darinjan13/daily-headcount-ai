@@ -29,7 +29,6 @@ function App() {
       { id: "summary", label: "Summary" },
       { id: "kpis", label: "Highlights" },
       { id: "builder", label: "Custom Builder" },
-      { id: "custom", label: "Custom Outputs" },
       { id: "data-table", label: "Data Table" },
       { id: "analytics", label: "Analytics" },
     ];
