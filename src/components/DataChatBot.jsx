@@ -88,7 +88,7 @@ export default function DataChatbot({ headers, rows, blueprint }) {
 
       {/* Chat Panel */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-[rgba(4,98,65,0.12)] flex flex-col overflow-hidden"
+        <div className="fixed bottom-24 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-[rgba(4,98,65,0.12)] flex flex-col overflow-hidden animate-chat-panel"
           style={{ height: "520px" }}>
 
           {/* Header */}
@@ -107,15 +107,15 @@ export default function DataChatbot({ headers, rows, blueprint }) {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-[rgba(4,98,65,0.03)]">
             {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-chat-message`} style={{ animationDelay: `${i * 35}ms` }}>
                 {msg.role === "assistant" && (
-                  <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0">◇</div>
+                  <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0 animate-chat-bubble">◇</div>
                 )}
                 <div
                   className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                     msg.role === "user"
                       ? "bg-emerald-700 text-white rounded-br-sm"
-                      : "bg-white text-gray-700 shadow-sm border border-gray-100 rounded-bl-sm"
+                      : "bg-white text-gray-700 shadow-sm border border-gray-100 rounded-bl-sm animate-chat-bubble"
                   }`}
                 >
                   {msg.content}
@@ -141,8 +141,8 @@ export default function DataChatbot({ headers, rows, blueprint }) {
 
             {/* Loading indicator */}
             {loading && (
-              <div className="flex justify-start">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0">◇</div>
+              <div className="flex justify-start animate-chat-message">
+                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0 animate-chat-bubble">◇</div>
                 <div className="bg-white border border-gray-100 shadow-sm px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
