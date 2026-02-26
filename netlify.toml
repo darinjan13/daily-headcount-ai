@@ -16,4 +16,4 @@ Also add a `_redirects` file inside your `public/` folder to fix React Router pa
 
 In Netlify dashboard → **Site Settings → Environment Variables**, add:
 ```
-VITE_API_URL = https://your-backend.railway.app
+VITE_API_URL = https://daily-headcount-ai-backend.onrender.com/
