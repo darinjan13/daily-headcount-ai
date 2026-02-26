@@ -6,6 +6,7 @@ import { useState } from "react";
 import ChartBuilder from "./ChartBuilder";
 import PivotTableRenderer from "./PivotTableRenderer";
 import DataTable from "./DataTable";
+import DataChatbot from "./DataChatBot";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 
 function SectionHeader({ title, subtitle, badge }) {
@@ -15,7 +16,11 @@ function SectionHeader({ title, subtitle, badge }) {
         <div className="flex items-center gap-2.5">
           <h3 className="text-base font-bold text-gray-800 m-0">{title}</h3>
           {badge && (
-            <span className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold tracking-wide">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-bold tracking-wide ${
+              badge === "AI" 
+                ? "bg-violet-50 text-violet-700" 
+                : "bg-emerald-50 text-emerald-700"
+            }`}>
               {badge}
             </span>
           )}
@@ -32,23 +37,41 @@ const Section = ({ children, className = "" }) => (
   </div>
 );
 
-// ── Helpers ──────────────────────────────
-
-function normalizeKey(val) {
-  if (val === null || val === undefined) return null;
-  const s = String(val).trim();
-  if (s === "" || s.toLowerCase() === "null") return null;
-  return s.toLowerCase();
+// ── AI Dataset Summary Banner ──
+function AIBanner({ summary }) {
+  if (!summary) return null;
+  return (
+    <div className="flex items-start gap-3 bg-violet-50 border border-violet-200 rounded-xl px-5 py-4 mb-6">
+      <span className="text-xl mt-0.5">🤖</span>
+      <div>
+        <div className="text-xs font-bold text-violet-600 uppercase tracking-wide mb-1">AI Analysis</div>
+        <p className="text-sm text-violet-900 m-0">{summary}</p>
+      </div>
+      <span className="ml-auto text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-bold whitespace-nowrap self-start">
+        AI Generated
+      </span>
+    </div>
+  );
 }
+
+// ── Helpers ──────────────────────────────
 
 function buildLabelMap(data, field) {
   const map = {};
   data.forEach((row) => {
     const raw = row[field];
-    const key = normalizeKey(raw);
-    if (key && !map[key]) map[key] = String(raw).trim();
+    if (raw == null) return;
+    const key = String(raw).trim().toLowerCase();  // case-insensitive key
+    if (key && !map[key]) map[key] = String(raw).trim();  // keep first-seen casing as label
   });
   return map;
+}
+
+function normalizeKey(val) {
+  if (val === null || val === undefined) return null;
+  const s = String(val).trim();
+  if (s === "" || s.toLowerCase() === "null") return null;
+  return s.toLowerCase();  // always lowercase for grouping
 }
 
 function generatePivot(data, rowField, columnField, metric, aggregation) {
@@ -101,24 +124,29 @@ function generatePivot(data, rowField, columnField, metric, aggregation) {
       : vals.reduce((a, b) => a + b, 0);
   });
 
-  return { columns: [rowField, ...columnLabels], rows: pivotRows, totalRow };
+  return {
+    columns: [rowField, ...columnLabels],
+    rows: pivotRows,
+    totalRow,
+    hasColDim: !!columnField,  // tells renderer whether to show column totals
+  };
 }
 
 function groupForBar(data, xField, yField, topN = 15) {
-  const labelMap = buildLabelMap(data, xField);
-  const grouped = {};
+  const grouped = {};  // key → { label, value }
   data.forEach((row) => {
-    const key = normalizeKey(row[xField]);
-    if (!key) return;
-    grouped[key] = (grouped[key] || 0) + (Number(row[yField]) || 0);
+    const raw = row[xField] != null ? String(row[xField]).trim() : null;
+    if (!raw) return;
+    const key = raw.toLowerCase();
+    if (!grouped[key]) grouped[key] = { label: raw, value: 0 };
+    grouped[key].value += Number(row[yField]) || 0;
   });
-  return Object.entries(grouped)
-    .map(([k, v]) => ({ name: labelMap[k] || k, value: v }))
+  return Object.values(grouped)
+    .map(({ label, value }) => ({ name: label, value }))
     .sort((a, b) => b.value - a.value)
     .slice(0, topN);
 }
 
-// Convert analytics payload (headers + rows) to recharts-friendly array of objects
 function analyticsToObjects(payload) {
   if (!payload) return [];
   return payload.rows.map((row) =>
@@ -126,16 +154,14 @@ function analyticsToObjects(payload) {
   );
 }
 
-// Build a pre-computed pivot from analytics payload (already aggregated by backend)
 function analyticsToPrebuiltPivot(payload, rowField, valueField) {
   if (!payload) return null;
   const rows = analyticsToObjects(payload);
   const pivotRows = rows.map((r) => ({ [rowField]: r[rowField], [valueField]: r[valueField] }));
   const totalRow = { [rowField]: "Grand Total", [valueField]: pivotRows.reduce((s, r) => s + (Number(r[valueField]) || 0), 0) };
-  return { columns: [rowField, valueField], rows: pivotRows, totalRow };
+  return { columns: [rowField, valueField], rows: pivotRows, totalRow, hasColDim: false };
 }
 
-// ── KPI card for pre-computed values (wide format) ──
 function StaticSummaryCards({ cards }) {
   if (!cards || cards.length === 0) return null;
 
@@ -161,16 +187,23 @@ function StaticSummaryCards({ cards }) {
   );
 }
 
-// ── Line chart that works directly with {Date, Total} pre-aggregated objects ──
 function SimpleLineChart({ data, xKey, yKey }) {
+  const angle = data.length > 14 ? -45 : 0;
+  const marginBottom = angle !== 0 ? 60 : 10;
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+    <ResponsiveContainer width="100%" height={340}>
+      <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: marginBottom }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-        <XAxis dataKey={xKey} tick={{ fontSize: 11, fill: "#6b7280" }} />
+        <XAxis
+          dataKey={xKey}
+          tick={{ fontSize: 11, fill: "#6b7280" }}
+          angle={angle}
+          textAnchor={angle !== 0 ? "end" : "middle"}
+          interval={data.length > 30 ? Math.floor(data.length / 15) : 0}
+        />
         <YAxis tick={{ fontSize: 12, fill: "#6b7280" }} tickFormatter={(v) => v.toLocaleString()} />
         <Tooltip formatter={(v) => v.toLocaleString()} contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }} />
-        <Line type="monotone" dataKey={yKey} stroke="#046241" strokeWidth={2.5} dot={{ fill: "#046241", r: 4 }} activeDot={{ r: 6 }} />
+        <Line type="monotone" dataKey={yKey} stroke="#046241" strokeWidth={2.5} dot={{ fill: "#046241", r: data.length > 30 ? 2 : 4 }} activeDot={{ r: 6 }} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -184,8 +217,9 @@ export default function Dashboard({ data, blueprint }) {
 
   const isWide = blueprint.tableFormat === "wide";
   const analytics = blueprint.analytics || data.analytics || null;
+  const aiGenerated = blueprint.aiGenerated || false;
+  const datasetSummary = blueprint.datasetSummary || null;
 
-  // objectData — always needed for custom builder + long-format auto charts
   const objectData = rows
     .map((row) => Object.fromEntries(headers.map((h, i) => [h, row[i]])))
     .filter((row) =>
@@ -199,7 +233,6 @@ export default function Dashboard({ data, blueprint }) {
 
   const removeCustom = (id) => setCustomCharts((prev) => prev.filter((c) => c.id !== id));
 
-  // ── Wide format analytics ──
   const periodData = analytics ? analyticsToObjects(analytics.periodTotals) : [];
   const primaryCol = analytics?.primaryCol || "Entity";
   const valueCol = analytics?.valueCol || "Value";
@@ -212,13 +245,15 @@ export default function Dashboard({ data, blueprint }) {
     ? analyticsToPrebuiltPivot(analytics.sectionTotals, "Section", valueCol)
     : null;
 
-  // ── Long format pivot generation ──
   function buildLongPivot(pivotDef) {
     return generatePivot(objectData, pivotDef.rowDim, pivotDef.colDim || null, pivotDef.measure, pivotDef.aggregation || "sum");
   }
 
   return (
     <div className="px-6 py-6 max-w-screen-2xl mx-auto">
+
+      {/* AI Dataset Summary Banner */}
+      {aiGenerated && datasetSummary && <AIBanner summary={datasetSummary} />}
 
       {/* KPI Cards */}
       {isWide && blueprint.cards?.length > 0 && <StaticSummaryCards cards={blueprint.cards} />}
@@ -229,6 +264,7 @@ export default function Dashboard({ data, blueprint }) {
         <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table" />
         <ChartBuilder
           columns={headers}
+          sampleData={objectData.slice(0, 50)}
           onGenerate={(config) => {
             let result;
             if (config.outputType === "pivot") {
@@ -236,9 +272,9 @@ export default function Dashboard({ data, blueprint }) {
             } else if (config.outputType === "bar") {
               result = { id: Date.now(), type: "bar", title: config.title, chartData: groupForBar(objectData, config.rowGroup, config.metric, config.topN) };
             } else if (config.outputType === "line") {
-              result = { id: Date.now(), type: "line", title: config.title, config: { x: config.rowGroup, y: config.metric } };
+              result = { id: Date.now(), type: "line", title: config.title, config: { x: config.rowGroup, y: config.metric, aggregation: config.aggregation } };
             } else if (config.outputType === "donut") {
-              result = { id: Date.now(), type: "donut", title: config.title, config: { x: config.rowGroup, y: config.metric } };
+              result = { id: Date.now(), type: "donut", title: config.title, config: { x: config.rowGroup, y: config.metric, topN: config.topN } };
             }
             if (result) setCustomCharts((prev) => [result, ...prev]);
           }}
@@ -283,7 +319,6 @@ export default function Dashboard({ data, blueprint }) {
       {/* ── WIDE FORMAT: pre-computed analytics ── */}
       {isWide && (
         <>
-          {/* Period line chart */}
           {periodData.length > 1 && (
             <Section>
               <SectionHeader title={`${valueCol} over Time`} subtitle="Totals per period across all records" badge="AUTO" />
@@ -291,7 +326,6 @@ export default function Dashboard({ data, blueprint }) {
             </Section>
           )}
 
-          {/* Pivot tables side by side if both exist */}
           <div className={`grid gap-6 ${sectionPivot ? "grid-cols-2" : "grid-cols-1"}`}>
             {primaryPivot && (
               <Section>
@@ -309,28 +343,32 @@ export default function Dashboard({ data, blueprint }) {
         </>
       )}
 
-      {/* ── LONG FORMAT: generate charts from raw data ── */}
+      {/* ── LONG FORMAT: AI-generated charts ── */}
       {!isWide && (
         <>
-          {/* Line chart */}
-          {blueprint.charts?.filter((c) => c.type === "line").map((chart) => (
+          {/* Charts — line, bar, donut all supported */}
+          {blueprint.charts?.map((chart) => (
             <Section key={chart.id}>
-              <SectionHeader title={chart.title} badge="AUTO" />
-              <LineChartRenderer data={objectData} config={chart} />
+              <SectionHeader title={chart.title} badge={aiGenerated ? "AI" : "AUTO"} />
+              {chart.type === "line" && <LineChartRenderer data={objectData} config={chart} />}
+              {chart.type === "bar" && <BarChartRenderer data={groupForBar(objectData, chart.x, chart.y, 20)} config={{ x: "name", y: "value" }} />}
+              {chart.type === "donut" && <DonutChartRenderer data={objectData} config={chart} />}
             </Section>
           ))}
 
-          {/* Pivot tables */}
           <div className={`grid gap-6 ${blueprint.pivots?.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
             {blueprint.pivots?.map((pivot) => (
               <Section key={pivot.id}>
-                <SectionHeader title={pivot.title} badge="AUTO" />
+                <SectionHeader title={pivot.title} badge={aiGenerated ? "AI" : "AUTO"} />
                 <PivotTableRenderer data={buildLongPivot(pivot)} />
               </Section>
             ))}
           </div>
         </>
       )}
+
+      {/* Floating Data Chatbot */}
+      <DataChatbot headers={headers} rows={rows} blueprint={blueprint} />
 
     </div>
   );

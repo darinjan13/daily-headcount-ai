@@ -2,10 +2,17 @@ export default function SummaryCards({ data, cards }) {
   if (!cards || cards.length === 0) return null;
 
   const calculate = (column, agg) => {
-    const values = data.map((row) => Number(row[column])).filter((v) => !isNaN(v));
-    if (agg === "sum") return values.reduce((a, b) => a + b, 0);
-    if (agg === "avg") return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-    if (agg === "count") return values.length;
+    const rawValues = data
+      .map((row) => row[column])
+      .filter((v) => v !== null && v !== undefined && String(v).trim() !== "");
+
+    // count = distinct non-null values, case-insensitive + trimmed
+    if (agg === "count")
+      return new Set(rawValues.map((v) => String(v).trim().toLowerCase())).size;
+
+    const numValues = rawValues.map((v) => Number(v)).filter((v) => !isNaN(v));
+    if (agg === "sum") return numValues.reduce((a, b) => a + b, 0);
+    if (agg === "avg") return numValues.length ? numValues.reduce((a, b) => a + b, 0) / numValues.length : 0;
     return 0;
   };
 

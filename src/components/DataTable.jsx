@@ -10,8 +10,14 @@ export default function DataTable({ headers, rows }) {
 
   const normalizedRows = useMemo(() => {
     if (!rows || rows.length === 0) return [];
-    if (Array.isArray(rows[0])) return rows;
-    return rows.map((row) => headers.map((h) => row[h] ?? null));
+    const first = rows[0];
+    // Already arrays → use directly
+    if (Array.isArray(first)) return rows;
+    // Objects → convert using headers as keys
+    if (typeof first === "object" && first !== null)
+      return rows.map((row) => headers.map((h) => row[h] ?? null));
+    // Fallback: wrap primitive in array
+    return rows.map((row) => [row]);
   }, [rows, headers]);
 
   const handleSort = (col) => {
@@ -103,7 +109,11 @@ export default function DataTable({ headers, rows }) {
                 <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                   {row.map((cell, j) => (
                     <td key={j} className="px-4 py-2 border border-gray-100 text-gray-700 whitespace-nowrap">
-                      {cell ?? ""}
+                      {cell === null || cell === undefined
+                        ? ""
+                        : typeof cell === "object"
+                        ? String(cell)
+                        : cell}
                     </td>
                   ))}
                 </tr>
