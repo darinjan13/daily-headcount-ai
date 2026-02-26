@@ -18,7 +18,7 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
     const formData = new FormData();
     formData.append("file", uploadedFile);
     try {
-      const res = await fetch("http://127.0.0.1:8000/get-sheets", { method: "POST", body: formData });
+      const res = await fetch("https://daily-headcount-ai-backend.onrender.com/get-sheets", { method: "POST", body: formData });
       const data = await res.json();
       setSheets(data.sheets);
       setSelectedSheet(data.sheets[0]);
@@ -41,12 +41,12 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
     formData.append("file", f);
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/extract-raw-table?sheet_name=${sheet}`,
+        `https://daily-headcount-ai-backend.onrender.com/extract-raw-table?sheet_name=${sheet}`,
         { method: "POST", body: formData }
       );
       const data = await res.json();
       if (data.wasTransformed && data.transformNote) setTransformNote(data.transformNote);
-      const blueprintRes = await fetch("http://127.0.0.1:8000/generate-dashboard-blueprint", {
+      const blueprintRes = await fetch("https://daily-headcount-ai-backend.onrender.com/generate-dashboard-blueprint", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
