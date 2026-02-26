@@ -14,40 +14,40 @@ function SectionHeader({ title, subtitle, badge }) {
     <div className="flex items-start justify-between mb-5">
       <div>
         <div className="flex items-center gap-2.5">
-          <h3 className="text-base font-bold text-gray-800 m-0">{title}</h3>
+          <h3 className="text-base font-bold text-[var(--color-primary)] m-0">{title}</h3>
           {badge && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-bold tracking-wide ${
-              badge === "AI" 
-                ? "bg-violet-50 text-violet-700" 
-                : "bg-emerald-50 text-emerald-700"
+              badge === "AI"
+                ? "bg-[rgba(4,98,65,0.08)] text-[var(--color-primary)]"
+                : "bg-[rgba(255,179,71,0.16)] text-[#b56800]"
             }`}>
               {badge}
             </span>
           )}
         </div>
-        {subtitle && <p className="text-xs text-gray-400 mt-1 mb-0">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-slate-500 mt-1 mb-0">{subtitle}</p>}
       </div>
     </div>
   );
 }
 
-const Section = ({ children, className = "" }) => (
-  <div className={`bg-white rounded-xl shadow-sm p-6 mb-6 ${className}`}>
+const Section = ({ children, className = "", id }) => (
+  <section id={id} className={`card-elevated p-6 mb-8 rounded-2xl ${className}`}>
     {children}
-  </div>
+  </section>
 );
 
 // ── AI Dataset Summary Banner ──
 function AIBanner({ summary }) {
   if (!summary) return null;
   return (
-    <div className="flex items-start gap-3 bg-violet-50 border border-violet-200 rounded-xl px-5 py-4 mb-6">
+    <div id="summary" className="glass-panel border border-[rgba(4,98,65,0.15)] rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
       <span className="text-xl mt-0.5">🤖</span>
       <div>
-        <div className="text-xs font-bold text-violet-600 uppercase tracking-wide mb-1">AI Analysis</div>
-        <p className="text-sm text-violet-900 m-0">{summary}</p>
+        <div className="pill-badge mb-1">AI Analysis</div>
+        <p className="text-sm text-[var(--color-ink)] m-0">{summary}</p>
       </div>
-      <span className="ml-auto text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded-full font-bold whitespace-nowrap self-start">
+      <span className="ml-auto text-xs bg-[rgba(255,179,71,0.18)] text-[#b56800] px-2 py-0.5 rounded-full font-bold whitespace-nowrap self-start">
         AI Generated
       </span>
     </div>
@@ -176,11 +176,14 @@ function StaticSummaryCards({ cards }) {
   };
 
   return (
-    <div className="grid gap-4 mb-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+    <div id="kpis" className="grid gap-4 mb-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
       {cards.map((card) => (
-        <div key={card.id} className="bg-white rounded-xl shadow-sm border-l-4 border-emerald-700 px-6 py-5 hover:-translate-y-1 transition-transform cursor-default">
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">{card.label}</div>
-          <div className="text-3xl font-extrabold text-emerald-700 tracking-tight">{format(card.value, card.formatHint)}</div>
+        <div
+          key={card.id}
+          className="card-elevated px-6 py-5 border-l-4 border-[var(--color-primary)] rounded-2xl hover:-translate-y-1 transition-transform cursor-default"
+        >
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">{card.label}</div>
+          <div className="text-3xl font-extrabold text-[var(--color-primary)] tracking-tight">{format(card.value, card.formatHint)}</div>
         </div>
       ))}
     </div>
@@ -250,7 +253,7 @@ export default function Dashboard({ data, blueprint }) {
   }
 
   return (
-    <div className="px-6 py-6 max-w-screen-2xl mx-auto">
+    <div className="px-1 sm:px-2 md:px-0 py-2 max-w-screen-2xl mx-auto" id="summary">
 
       {/* AI Dataset Summary Banner */}
       {aiGenerated && datasetSummary && <AIBanner summary={datasetSummary} />}
@@ -260,7 +263,7 @@ export default function Dashboard({ data, blueprint }) {
       {!isWide && <SummaryCards data={objectData} cards={blueprint.cards} />}
 
       {/* Custom Builder */}
-      <Section>
+      <Section id="builder">
         <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table" />
         <ChartBuilder
           columns={headers}
@@ -282,24 +285,30 @@ export default function Dashboard({ data, blueprint }) {
       </Section>
 
       {/* Custom Chart Results */}
-      {customCharts.map((chart) => (
-        <div key={chart.id} className="bg-white rounded-xl shadow-sm p-6 mb-6 border-l-4 border-emerald-600">
-          <div className="flex justify-between items-start mb-5">
-            <div className="flex items-center gap-2.5">
-              <h3 className="text-base font-bold text-gray-800 m-0">{chart.title}</h3>
-              <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-bold">CUSTOM</span>
-            </div>
-            <button onClick={() => removeCustom(chart.id)} className="text-gray-300 hover:text-gray-500 text-lg bg-transparent border-none cursor-pointer px-1">✕</button>
-          </div>
-          {chart.type === "pivot" && <PivotTableRenderer data={chart.pivotData} />}
-          {chart.type === "bar" && <BarChartRenderer data={chart.chartData} config={{ x: "name", y: "value" }} />}
-          {chart.type === "line" && <LineChartRenderer data={objectData} config={chart.config} />}
-          {chart.type === "donut" && <DonutChartRenderer data={objectData} config={chart.config} />}
+      {customCharts.length > 0 ? (
+        <div id="custom">
+          {customCharts.map((chart) => (
+            <Section key={chart.id} className="border-l-4 border-[var(--color-primary)]">
+              <div className="flex justify-between items-start mb-5">
+                <div className="flex items-center gap-2.5">
+                  <h3 className="text-base font-bold text-[var(--color-primary)] m-0">{chart.title}</h3>
+                  <span className="text-xs bg-[rgba(255,179,71,0.18)] text-[#b56800] px-2 py-0.5 rounded-full font-bold">CUSTOM</span>
+                </div>
+                <button onClick={() => removeCustom(chart.id)} className="text-slate-300 hover:text-slate-500 text-lg bg-transparent border-none cursor-pointer px-1">✕</button>
+              </div>
+              {chart.type === "pivot" && <PivotTableRenderer data={chart.pivotData} />}
+              {chart.type === "bar" && <BarChartRenderer data={chart.chartData} config={{ x: "name", y: "value" }} />}
+              {chart.type === "line" && <LineChartRenderer data={objectData} config={chart.config} />}
+              {chart.type === "donut" && <DonutChartRenderer data={objectData} config={chart.config} />}
+            </Section>
+          ))}
         </div>
-      ))}
+      ) : (
+        <div id="custom" className="mb-2" />
+      )}
 
       {/* Raw Data Table */}
-      <Section>
+      <Section id="data-table">
         <SectionHeader
           title="Data Table"
           subtitle={`${rows.length.toLocaleString()} rows · ${headers.length} columns`}
@@ -309,9 +318,9 @@ export default function Dashboard({ data, blueprint }) {
       </Section>
 
       {/* Divider */}
-      <div className="relative my-2 mb-8">
-        <div className="border-t-2 border-dashed border-gray-200" />
-        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-gray-50 px-4 text-xs font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">
+      <div className="relative my-2 mb-8" id="analytics">
+        <div className="border-t-2 border-dashed border-[rgba(4,98,65,0.18)]" />
+        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-4 text-xs font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
           Analytics
         </span>
       </div>
@@ -326,7 +335,7 @@ export default function Dashboard({ data, blueprint }) {
             </Section>
           )}
 
-          <div className={`grid gap-6 ${sectionPivot ? "grid-cols-2" : "grid-cols-1"}`}>
+          <div className={`grid gap-6 ${sectionPivot ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1"}`}>
             {primaryPivot && (
               <Section>
                 <SectionHeader title={`${valueCol} by ${primaryCol}`} badge="AUTO" />
@@ -347,8 +356,8 @@ export default function Dashboard({ data, blueprint }) {
       {!isWide && (
         <>
           {/* Charts — line, bar, donut all supported */}
-          {blueprint.charts?.map((chart) => (
-            <Section key={chart.id}>
+          {blueprint.charts?.map((chart, idx) => (
+            <Section key={chart.id} id={idx === 0 ? "kpis" : undefined}>
               <SectionHeader title={chart.title} badge={aiGenerated ? "AI" : "AUTO"} />
               {chart.type === "line" && <LineChartRenderer data={objectData} config={chart} />}
               {chart.type === "bar" && <BarChartRenderer data={groupForBar(objectData, chart.x, chart.y, 20)} config={{ x: "name", y: "value" }} />}
@@ -356,9 +365,9 @@ export default function Dashboard({ data, blueprint }) {
             </Section>
           ))}
 
-          <div className={`grid gap-6 ${blueprint.pivots?.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
-            {blueprint.pivots?.map((pivot) => (
-              <Section key={pivot.id}>
+          <div className={`grid gap-6 ${blueprint.pivots?.length > 1 ? "grid-cols-1 xl:grid-cols-2" : "grid-cols-1"}`}>
+            {blueprint.pivots?.map((pivot, idx) => (
+              <Section key={pivot.id} id={idx === 0 ? "builder" : undefined}>
                 <SectionHeader title={pivot.title} badge={aiGenerated ? "AI" : "AUTO"} />
                 <PivotTableRenderer data={buildLongPivot(pivot)} />
               </Section>
@@ -368,6 +377,7 @@ export default function Dashboard({ data, blueprint }) {
       )}
 
       {/* Floating Data Chatbot */}
+      <div id="chatbot" />
       <DataChatbot headers={headers} rows={rows} blueprint={blueprint} />
 
     </div>

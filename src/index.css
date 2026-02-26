@@ -1,70 +1,153 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
-
+  --font-body: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --color-bg: #ffffff;
+  --color-primary: #046241;
+  --color-accent: #FFB347;
+  --color-ink: #132620;
+  --color-soft: #e7f1ec;
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --shadow-soft: 0 12px 40px rgba(0, 0, 0, 0.08);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
   min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  line-height: 1.6;
 }
 
+h1, h2, h3, h4 {
+  font-family: var(--font-body);
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* 2:1 hierarchy for primary/secondary headings */
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  font-size: clamp(32px, 4vw, 42px);
+}
+
+h2 {
+  font-size: calc(clamp(32px, 4vw, 42px) / 2);
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: #034d33;
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  font-family: var(--font-body);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+/* Glass + card helpers */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(4, 98, 65, 0.08);
+  box-shadow: var(--shadow-soft);
+}
+
+.card-elevated {
+  background: #ffffff;
+  border: 1px solid rgba(4, 98, 65, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.06);
+}
+
+.accent-button {
+  background: var(--color-accent);
+  color: #1f2f20;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-weight: 700;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.accent-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(255, 179, 71, 0.35);
+  filter: saturate(1.02);
+}
+
+.accent-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.pill-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(4, 98, 65, 0.08);
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Scroll progress bar */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--color-accent), var(--color-primary));
+  box-shadow: 0 4px 12px rgba(4, 98, 65, 0.25);
+  z-index: 60;
+  transform-origin: left center;
+}
+
+/* Custom scrollbar */
+:root {
+  scrollbar-color: var(--color-primary) #f3f6f4;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f5f7f6;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--color-primary), #089b6a);
+  border-radius: 999px;
+  border: 2px solid #f5f7f6;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #089b6a, var(--color-primary));
+}
+
+/* Form elements */
+input, select, textarea {
+  font-family: var(--font-body);
 }

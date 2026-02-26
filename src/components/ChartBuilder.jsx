@@ -2,13 +2,13 @@ import { useState } from "react";
 
 const Select = ({ label, value, onChange, children, optional }) => (
   <div>
-    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">
-      {label}{optional && <span className="text-gray-300 font-normal normal-case tracking-normal ml-1">(optional)</span>}
+    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+      {label}{optional && <span className="text-slate-300 font-normal normal-case tracking-normal ml-1">(optional)</span>}
     </label>
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 min-w-36"
+      className="px-3 py-2 rounded-xl border border-[rgba(4,98,65,0.12)] text-sm text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[rgba(4,98,65,0.25)] min-w-36 shadow-[0_4px_14px_rgba(0,0,0,0.04)]"
     >
       {children}
     </select>
@@ -96,14 +96,14 @@ export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
 
       {/* Group By */}
       <div>
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">
+        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
           {outputType === "line" ? "Date / X Axis" : "Row / Group By"}
         </label>
         <select
           value={groupBy}
           onChange={(e) => setGroupBy(e.target.value)}
-          className={`px-3 py-2 rounded-lg border text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 min-w-36 ${
-            lineNeedsDate ? "border-orange-300 text-orange-600" : "border-gray-200 text-gray-700"
+          className={`px-3 py-2 rounded-xl border text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[rgba(4,98,65,0.25)] min-w-36 shadow-[0_4px_14px_rgba(0,0,0,0.04)] ${
+            lineNeedsDate ? "border-[rgba(255,179,71,0.6)] text-[#b56800]" : "border-[rgba(4,98,65,0.12)] text-[var(--color-ink)]"
           }`}
         >
           <option value="">Select column</option>
@@ -130,19 +130,19 @@ export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
           {groupByCols.length === 0 && columns.map((col) => <option key={col} value={col}>{col}</option>)}
         </select>
         {lineNeedsDate && (
-          <p className="text-orange-500 text-xs mt-1">⚠ Line chart works best with a date column</p>
+          <p className="text-[#b56800] text-xs mt-1">⚠ Line chart works best with a date column</p>
         )}
       </div>
 
       {/* Metric */}
       <div>
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">
+        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
           {outputType === "line" ? "Y Axis / Metric" : "Metric"}
         </label>
         <select
           value={metric}
           onChange={(e) => setMetric(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 min-w-36"
+          className="px-3 py-2 rounded-xl border border-[rgba(4,98,65,0.12)] text-sm text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[rgba(4,98,65,0.25)] min-w-36 shadow-[0_4px_14px_rgba(0,0,0,0.04)]"
         >
           <option value="">Select column</option>
           {aggregation === "count" ? (
@@ -184,14 +184,14 @@ export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
 
       {/* Chart Title */}
       <div>
-        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">
-          Title <span className="text-gray-300 font-normal normal-case tracking-normal ml-1">(optional)</span>
+        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5">
+          Title <span className="text-slate-300 font-normal normal-case tracking-normal ml-1">(optional)</span>
         </label>
         <input
           value={chartTitle}
           onChange={(e) => setChartTitle(e.target.value)}
           placeholder={groupBy && metric ? `${metric} by ${groupBy}` : "Auto"}
-          className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400 min-w-44"
+          className="px-3 py-2 rounded-xl border border-[rgba(4,98,65,0.12)] text-sm text-[var(--color-ink)] bg-white focus:outline-none focus:ring-2 focus:ring-[rgba(4,98,65,0.25)] min-w-44 shadow-[0_4px_14px_rgba(0,0,0,0.04)]"
         />
       </div>
 
@@ -208,8 +208,8 @@ export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
             title: chartTitle.trim() || `${metric} by ${groupBy}`,
           });
         }}
-        className={`px-5 py-2 rounded-lg text-white text-sm font-bold tracking-wide transition-colors h-9 ${
-          canGenerate ? "bg-emerald-700 hover:bg-emerald-800 cursor-pointer" : "bg-gray-300 cursor-not-allowed"
+        className={`accent-button px-5 py-2 text-sm font-bold tracking-wide h-10 ${
+          canGenerate ? "cursor-pointer" : "opacity-60 cursor-not-allowed"
         }`}
       >
         Generate

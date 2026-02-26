@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+
 const WELCOME = "Hi! I can answer questions about your uploaded data — totals, breakdowns, trends, anything. What would you like to know?";
 
 export default function DataChatbot({ headers, rows, blueprint }) {
@@ -36,7 +38,7 @@ export default function DataChatbot({ headers, rows, blueprint }) {
     setLoading(true);
 
     try {
-      const response = await fetch("https://daily-headcount-ai-backend.onrender.com/chat", {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -76,8 +78,8 @@ export default function DataChatbot({ headers, rows, blueprint }) {
       {/* Floating Button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-white text-2xl transition-all duration-200 cursor-pointer border-none ${
-          open ? "bg-gray-600 scale-90" : "bg-emerald-700 hover:bg-emerald-800 hover:scale-110"
+        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-[#1f2f20] text-2xl transition-all duration-200 cursor-pointer border-none ${
+          open ? "bg-[rgba(255,179,71,0.85)] scale-90" : "bg-[var(--color-accent)] hover:shadow-[0_14px_34px_rgba(255,179,71,0.35)] hover:scale-110"
         }`}
         title="Ask about your data"
       >
@@ -86,24 +88,24 @@ export default function DataChatbot({ headers, rows, blueprint }) {
 
       {/* Chat Panel */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden"
+        <div className="fixed bottom-24 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-[rgba(4,98,65,0.12)] flex flex-col overflow-hidden"
           style={{ height: "520px" }}>
 
           {/* Header */}
-          <div className="bg-emerald-700 px-4 py-3 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-base">🤖</div>
+          <div className="bg-[var(--color-primary)] px-4 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-white/15 border border-white/20 flex items-center justify-center text-base">🤖</div>
             <div>
               <div className="text-white font-bold text-sm leading-tight">Data Assistant</div>
-              <div className="text-emerald-300 text-xs">Ask anything about your data</div>
+              <div className="text-white/70 text-xs">Ask anything about your data</div>
             </div>
             <div className="ml-auto flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-emerald-300 text-xs">Live</span>
+              <div className="w-2 h-2 rounded-full bg-[var(--color-accent)] animate-pulse" />
+              <span className="text-white text-xs">Live</span>
             </div>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50">
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-[rgba(4,98,65,0.03)]">
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 {msg.role === "assistant" && (
@@ -152,7 +154,7 @@ export default function DataChatbot({ headers, rows, blueprint }) {
           </div>
 
           {/* Input */}
-          <div className="px-3 py-3 border-t border-gray-100 bg-white flex gap-2 items-end">
+          <div className="px-3 py-3 border-t border-[rgba(4,98,65,0.12)] bg-white flex gap-2 items-end">
             <textarea
               ref={inputRef}
               value={input}
@@ -166,10 +168,10 @@ export default function DataChatbot({ headers, rows, blueprint }) {
             <button
               onClick={send}
               disabled={!input.trim() || loading}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-base transition-all shrink-0 border-none cursor-pointer ${
+              className={`w-9 h-9 rounded-xl flex items-center justify-center text-[#1f2f20] text-base transition-all shrink-0 border-none cursor-pointer ${
                 input.trim() && !loading
-                  ? "bg-emerald-700 hover:bg-emerald-800"
-                  : "bg-gray-200 cursor-not-allowed"
+                  ? "bg-[var(--color-accent)] hover:shadow-[0_10px_26px_rgba(255,179,71,0.35)]"
+                  : "bg-slate-200 cursor-not-allowed"
               }`}
             >
               {loading ? (
@@ -182,8 +184,8 @@ export default function DataChatbot({ headers, rows, blueprint }) {
           </div>
 
           {/* Footer hint */}
-          <div className="px-4 py-1.5 bg-gray-50 border-t border-gray-100 text-center">
-            <span className="text-xs text-gray-300">Enter to send · Shift+Enter for new line</span>
+          <div className="px-4 py-1.5 bg-[rgba(4,98,65,0.03)] border-t border-[rgba(4,98,65,0.12)] text-center">
+            <span className="text-xs text-slate-400">Enter to send · Shift+Enter for new line</span>
           </div>
         </div>
       )}
