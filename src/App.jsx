@@ -7,8 +7,7 @@ function App() {
   const [data, setData] = useState(null);
   const [blueprint, setBlueprint] = useState(null);
   const [scrollProgress, setScrollProgress] = useState(0);
-  const [activeSection, setActiveSection] = useState("summary");
-  const [showTop, setShowTop] = useState(false);
+  const [activeSection] = useState("summary");
 
   // Scroll progress tracking
   useEffect(() => {
@@ -17,31 +16,13 @@ function App() {
       const max = scrollHeight - clientHeight;
       const pct = max > 0 ? (scrollTop / max) * 100 : 0;
       setScrollProgress(pct);
-      setShowTop(scrollTop > 220);
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     handleScroll();
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Section spy for nav highlight
-  useEffect(() => {
-    const ids = ["summary", "kpis", "builder", "data-table", "analytics", "custom", "chatbot"];
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        if (visible[0]) setActiveSection(visible[0].target.id);
-      },
-      { rootMargin: "-40% 0px -45% 0px", threshold: [0.1, 0.25, 0.5] }
-    );
-    ids.forEach((id) => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, []);
+  // (Nav highlight observer removed; keeping simple static nav)
 
   const navItems = useMemo(() => {
     if (!data || !blueprint) return [
@@ -130,16 +111,6 @@ function App() {
           </aside>
         )}
       </div>
-
-      {showTop && (
-        <button
-          onClick={() => scrollTo("top")}
-          className="fixed bottom-20 right-4 sm:bottom-20 sm:right-6 z-40 glass-panel rounded-full px-4 py-2 text-sm font-semibold text-[var(--color-primary)] shadow-lg backdrop-blur btn-soft"
-          aria-label="Back to top"
-        >
-          ↑ Back to top
-        </button>
-      )}
     </div>
   );
 }
