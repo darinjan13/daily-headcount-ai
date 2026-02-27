@@ -9,6 +9,8 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
   const [transformNote, setTransformNote] = useState(null);
   const fileInputRef = useRef(null);
 
+  // const host = 'https://daily-headcount-ai-backend.onrender.com';
+  const host = "http://127.0.0.1:8000";
   const handleFileUpload = async (uploadedFile) => {
     if (!uploadedFile) return;
     setFile(uploadedFile);
@@ -18,7 +20,10 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
     const formData = new FormData();
     formData.append("file", uploadedFile);
     try {
-      const res = await fetch("https://daily-headcount-ai-backend.onrender.com/get-sheets", { method: "POST", body: formData });
+      const res = await fetch(
+        `${host}/get-sheets`,
+        { method: "POST", body: formData },
+      );
       const data = await res.json();
       setSheets(data.sheets);
       setSelectedSheet(data.sheets[0]);
@@ -41,16 +46,20 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
     formData.append("file", f);
     try {
       const res = await fetch(
-        `https://daily-headcount-ai-backend.onrender.com/extract-raw-table?sheet_name=${sheet}`,
-        { method: "POST", body: formData }
+        `${host}/extract-raw-table?sheet_name=${sheet}`,
+        { method: "POST", body: formData },
       );
       const data = await res.json();
-      if (data.wasTransformed && data.transformNote) setTransformNote(data.transformNote);
-      const blueprintRes = await fetch("https://daily-headcount-ai-backend.onrender.com/generate-dashboard-blueprint", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      });
+      if (data.wasTransformed && data.transformNote)
+        setTransformNote(data.transformNote);
+      const blueprintRes = await fetch(
+        `${host}/generate-dashboard-blueprint`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        },
+      );
       const blueprint = await blueprintRes.json();
       onDataReady(data, blueprint);
     } catch {
@@ -84,13 +93,19 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
           <>
             <div className="w-px h-6 bg-emerald-600" />
             <div className="flex items-center gap-2">
-              <label className="text-emerald-300 text-xs font-bold uppercase tracking-wide">Sheet</label>
+              <label className="text-emerald-300 text-xs font-bold uppercase tracking-wide">
+                Sheet
+              </label>
               <select
                 value={selectedSheet}
                 onChange={(e) => setSelectedSheet(e.target.value)}
                 className="px-3 py-1.5 rounded-lg border border-emerald-600 text-sm text-white bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
               >
-                {sheets.map((s) => <option key={s} value={s}>{s}</option>)}
+                {sheets.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
               </select>
               <button
                 onClick={() => extractSheet(file, selectedSheet)}
@@ -110,9 +125,24 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
         {/* Loading spinner */}
         {loading && (
           <div className="flex items-center gap-2 text-emerald-300 text-xs">
-            <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            <svg
+              className="animate-spin h-3.5 w-3.5"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              />
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8v8z"
+              />
             </svg>
             Analyzing with AI...
           </div>
@@ -124,16 +154,18 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
         )}
 
         {/* Error */}
-        {error && (
-          <span className="text-red-300 text-xs">⚠️ {error}</span>
-        )}
+        {error && <span className="text-red-300 text-xs">⚠️ {error}</span>}
 
         {/* Current file info badge */}
         {file && !loading && sheets.length > 0 && (
           <div className="ml-auto flex items-center gap-2 text-emerald-300 text-xs shrink-0">
             <span className="text-emerald-400">✓</span>
             <span>{file.name}</span>
-            {sheets.length > 1 && <span className="bg-emerald-700 px-1.5 py-0.5 rounded text-xs">{selectedSheet}</span>}
+            {sheets.length > 1 && (
+              <span className="bg-emerald-700 px-1.5 py-0.5 rounded text-xs">
+                {selectedSheet}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -146,22 +178,37 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
       <div className="bg-white rounded-2xl shadow-xl p-12 w-full max-w-md">
         <div className="text-center mb-9">
           <div className="text-5xl mb-3">📊</div>
-          <h2 className="text-2xl font-extrabold text-emerald-800 m-0">Excel Dashboard</h2>
-          <p className="text-gray-400 text-sm mt-1">Upload a spreadsheet to auto-generate your dashboard</p>
+          <h2 className="text-2xl font-extrabold text-emerald-800 m-0">
+            Excel Dashboard
+          </h2>
+          <p className="text-gray-400 text-sm mt-1">
+            Upload a spreadsheet to auto-generate your dashboard
+          </p>
         </div>
 
         <label className="block border-2 border-dashed border-emerald-200 rounded-xl p-8 text-center cursor-pointer bg-emerald-50 hover:border-emerald-600 transition-colors mb-5">
-          <input type="file" accept=".xlsx,.xls" onChange={(e) => handleFileUpload(e.target.files?.[0])} className="hidden" />
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={(e) => handleFileUpload(e.target.files?.[0])}
+            className="hidden"
+          />
           {file ? (
             <>
               <div className="text-3xl mb-2">📄</div>
-              <div className="font-semibold text-emerald-700 text-sm">{file.name}</div>
-              <div className="text-gray-400 text-xs mt-1">Click to change file</div>
+              <div className="font-semibold text-emerald-700 text-sm">
+                {file.name}
+              </div>
+              <div className="text-gray-400 text-xs mt-1">
+                Click to change file
+              </div>
             </>
           ) : (
             <>
               <div className="text-3xl mb-2">📁</div>
-              <div className="font-semibold text-gray-600 text-sm">Click to upload Excel file</div>
+              <div className="font-semibold text-gray-600 text-sm">
+                Click to upload Excel file
+              </div>
               <div className="text-gray-400 text-xs mt-1">.xlsx or .xls</div>
             </>
           )}
@@ -169,13 +216,19 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
 
         {sheets.length > 1 && (
           <div className="mb-5">
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">Sheet</label>
+            <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-1.5">
+              Sheet
+            </label>
             <select
               value={selectedSheet}
               onChange={(e) => setSelectedSheet(e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400"
             >
-              {sheets.map((s) => <option key={s} value={s}>{s}</option>)}
+              {sheets.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
           </div>
         )}
@@ -203,7 +256,9 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
         )}
 
         {loading && (
-          <p className="text-center text-gray-400 text-xs mt-4">Analyzing your data and building dashboard...</p>
+          <p className="text-center text-gray-400 text-xs mt-4">
+            Analyzing your data and building dashboard...
+          </p>
         )}
       </div>
     </div>
