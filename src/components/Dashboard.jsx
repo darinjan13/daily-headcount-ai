@@ -14,7 +14,9 @@ function SectionHeader({ title, subtitle, badge }) {
     <div className="flex items-start justify-between mb-5">
       <div>
         <div className="flex items-center gap-2.5">
-          <h3 className="text-base font-bold text-[var(--color-primary)] m-0">{title}</h3>
+          <h3 className="text-base font-bold text-[var(--color-primary)] m-0 relative">
+            <span className="pb-1 border-b-2 border-[var(--color-primary)]/40 inline-block leading-tight">{title}</span>
+          </h3>
           {badge && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-bold tracking-wide ${
               badge === "AI"
@@ -32,7 +34,7 @@ function SectionHeader({ title, subtitle, badge }) {
 }
 
 const Section = ({ children, className = "", id }) => (
-  <section id={id} className={`card-elevated p-6 mb-8 rounded-2xl ${className}`}>
+  <section id={id} className={`glassy-box p-6 mb-8 rounded-2xl animate-fade-slide ${className}`}>
     {children}
   </section>
 );

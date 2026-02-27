@@ -69,33 +69,43 @@ export default function LineChartRenderer({ data, config }) {
   const marginBottom = angle !== 0 ? 60 : 10;
 
   return (
-    <ResponsiveContainer width="100%" height={340}>
-      <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: marginBottom }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-        <XAxis
-          dataKey="name"
-          tick={{ fontSize: 11, fill: "#6b7280" }}
-          angle={angle}
-          textAnchor={angle !== 0 ? "end" : "middle"}
-          interval={chartData.length > 30 ? Math.floor(chartData.length / 15) : 0}
-        />
-        <YAxis
-          tick={{ fontSize: 12, fill: "#6b7280" }}
-          tickFormatter={(v) => v.toLocaleString()}
-        />
-        <Tooltip
-          formatter={(v) => v.toLocaleString()}
-          contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
-        />
-        <Line
-          type="monotone"
-          dataKey="value"
-          stroke="#046241"
-          strokeWidth={2.5}
-          dot={{ fill: "#046241", r: chartData.length > 30 ? 2 : 4 }}
-          activeDot={{ r: 6 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-2">
+        <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-[rgba(4,98,65,0.06)] text-[var(--color-primary)] text-xs font-semibold">
+          <span className="w-2.5 h-2.5 rounded-full bg-[var(--color-primary)]" />
+          {config?.y || "Value"}
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={340}>
+        <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: marginBottom }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis
+            dataKey="name"
+            tick={{ fontSize: 11, fill: "#48665b" }}
+            angle={angle}
+            textAnchor={angle !== 0 ? "end" : "middle"}
+            interval={chartData.length > 30 ? Math.floor(chartData.length / 15) : 0}
+          />
+          <YAxis
+            tick={{ fontSize: 12, fill: "#48665b" }}
+            tickFormatter={(v) => v.toLocaleString()}
+          />
+          <Tooltip
+            formatter={(v) => v.toLocaleString()}
+            contentStyle={{ borderRadius: 12, border: "1px solid #e5e7eb", fontSize: 13, background: "rgba(255,255,255,0.94)", backdropFilter: "blur(8px)" }}
+          />
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke="#046241"
+            strokeWidth={2.5}
+            dot={{ fill: "#046241", r: chartData.length > 30 ? 2 : 4 }}
+            activeDot={{ r: 6 }}
+            isAnimationActive
+            animationDuration={260}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }

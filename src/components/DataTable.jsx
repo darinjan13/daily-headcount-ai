@@ -8,6 +8,8 @@ export default function DataTable({ headers, rows }) {
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
+  const [density, setDensity] = useState("comfortable");
+  const rowPad = density === "compact" ? "py-1.5" : "py-2.5";
 
   const normalizedRows = useMemo(() => {
     if (!rows || rows.length === 0) return [];
@@ -64,6 +66,18 @@ export default function DataTable({ headers, rows }) {
         </span>
 
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm text-xs text-gray-500">
+            <span className="font-semibold uppercase tracking-wide text-gray-400">Density</span>
+            <button
+              onClick={() => setDensity("comfortable")}
+              className={`px-2 py-1 rounded-md border text-xs font-semibold ${density === "comfortable" ? "border-[var(--color-primary)] text-[var(--color-primary)] bg-[rgba(4,98,65,0.06)]" : "border-transparent text-gray-500 hover:text-[var(--color-primary)]"}`}
+            >Comfort</button>
+            <button
+              onClick={() => setDensity("compact")}
+              className={`px-2 py-1 rounded-md border text-xs font-semibold ${density === "compact" ? "border-[var(--color-primary)] text-[var(--color-primary)] bg-[rgba(4,98,65,0.06)]" : "border-transparent text-gray-500 hover:text-[var(--color-primary)]"}`}
+            >Compact</button>
+          </div>
+
           <label className="flex items-center gap-2 text-sm text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
             <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Rows / page</span>
             <input
@@ -99,7 +113,7 @@ export default function DataTable({ headers, rows }) {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl shadow-sm">
+      <div className="overflow-x-auto rounded-xl shadow-sm shimmer-border">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr>
@@ -128,10 +142,10 @@ export default function DataTable({ headers, rows }) {
               visibleRows.map((row, i) => (
                 <tr
                   key={i}
-                  className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} transition duration-200 hover:-translate-y-[1px] hover:bg-emerald-50/60`}
+                  className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} transition duration-200 hover:-translate-y-[1px] hover:bg-emerald-50/60 active:scale-[0.995]`}
                 >
                   {row.map((cell, j) => (
-                    <td key={j} className="px-4 py-2 border border-gray-100 text-gray-700 whitespace-nowrap transition-colors duration-200">
+                    <td key={j} className={`px-4 ${rowPad} border border-gray-100 text-gray-700 whitespace-nowrap transition-colors duration-200`}>
                       {cell === null || cell === undefined
                         ? ""
                         : typeof cell === "object"
@@ -148,7 +162,8 @@ export default function DataTable({ headers, rows }) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-1.5 mt-4">
+        <div className="flex justify-center items-center gap-1.5 mt-4 bg-white/85 backdrop-blur rounded-xl px-3 py-2 shadow-sm sticky bottom-2 sm:static">
+          <span className="hidden sm:inline text-xs text-gray-400 mr-2">Navigate</span>
           <PagBtn onClick={() => goTo(0)} disabled={page === 0}>«</PagBtn>
           <PagBtn onClick={() => goTo(page - 1)} disabled={page === 0}>‹</PagBtn>
           {getPageNumbers(page, totalPages).map((p, i) =>

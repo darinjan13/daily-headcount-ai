@@ -5,6 +5,8 @@ const DEFAULT_PAGE_SIZE = 15;
 export default function PivotTableRenderer({ data }) {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [density, setDensity] = useState("comfortable");
+  const rowPad = density === "compact" ? "py-1.5" : "py-2.5";
   const { columns, rows, totalRow, hasColDim } = data;
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(rows.length / pageSize)), [rows.length, pageSize]);
@@ -42,24 +44,38 @@ export default function PivotTableRenderer({ data }) {
     <div className="mt-2">
       <div className="flex flex-col gap-2 mb-2 sm:flex-row sm:items-center sm:justify-between">
         <span className="text-xs text-gray-400">{rows.length.toLocaleString()} rows</span>
-        <label className="flex items-center gap-2 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm w-fit">
-          <span className="font-semibold uppercase tracking-wide text-gray-400">Rows / page</span>
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={pageSize}
-            onChange={(e) => {
-              const val = Number(e.target.value) || DEFAULT_PAGE_SIZE;
-              setPageSize(Math.max(1, Math.min(200, val)));
-              setPage(0);
-            }}
-            className="w-16 px-2 py-1 rounded-md border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          />
-        </label>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm w-fit">
+            <span className="font-semibold uppercase tracking-wide text-gray-400">Density</span>
+            <button
+              onClick={() => setDensity("comfortable")}
+              className={`px-2 py-1 rounded-md border text-xs font-semibold ${density === "comfortable" ? "border-[var(--color-primary)] text-[var(--color-primary)] bg-[rgba(4,98,65,0.06)]" : "border-transparent text-gray-500 hover:text-[var(--color-primary)]"}`}
+            >Comfort</button>
+            <button
+              onClick={() => setDensity("compact")}
+              className={`px-2 py-1 rounded-md border text-xs font-semibold ${density === "compact" ? "border-[var(--color-primary)] text-[var(--color-primary)] bg-[rgba(4,98,65,0.06)]" : "border-transparent text-gray-500 hover:text-[var(--color-primary)]"}`}
+            >Compact</button>
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm w-fit">
+            <span className="font-semibold uppercase tracking-wide text-gray-400">Rows / page</span>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={pageSize}
+              onChange={(e) => {
+                const val = Number(e.target.value) || DEFAULT_PAGE_SIZE;
+                setPageSize(Math.max(1, Math.min(200, val)));
+                setPage(0);
+              }}
+              className="w-16 px-2 py-1 rounded-md border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            />
+          </label>
+        </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl shadow-sm">
+      <div className="overflow-x-auto rounded-xl shadow-sm shimmer-border">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr>
@@ -88,12 +104,12 @@ export default function PivotTableRenderer({ data }) {
               return (
                 <tr
                   key={i}
-                  className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} transition duration-200 hover:-translate-y-[1px] hover:bg-emerald-50/60`}
+                  className={`${i % 2 === 0 ? "bg-white" : "bg-gray-50"} transition duration-200 hover:-translate-y-[1px] hover:bg-emerald-50/60 active:scale-[0.995]`}
                 >
                   {columns.map((col, j) => (
                     <td
                       key={col}
-                      className={`px-4 py-2 border border-gray-200 text-gray-700 whitespace-nowrap transition-colors duration-200 ${j === 0 ? "text-left font-medium" : "text-right"}`}
+                      className={`px-4 ${rowPad} border border-gray-200 text-gray-700 whitespace-nowrap transition-colors duration-200 ${j === 0 ? "text-left font-medium" : "text-right"}`}
                     >
                       {j === 0 ? row[col] : (row[col] != null && row[col] !== "" ? formatNumber(row[col]) : <span className="text-gray-300">—</span>)}
                     </td>
@@ -113,7 +129,7 @@ export default function PivotTableRenderer({ data }) {
                 {columns.map((col, j) => (
                   <td
                     key={col}
-                    className={`px-4 py-2.5 border border-gray-300 font-bold text-emerald-700 whitespace-nowrap ${j === 0 ? "text-left" : "text-right"}`}
+                    className={`px-4 ${rowPad} border border-gray-300 font-bold text-emerald-700 whitespace-nowrap ${j === 0 ? "text-left" : "text-right"}`}
                   >
                     {j === 0 ? "Grand Total" : formatNumber(totalRow[col])}
                   </td>
@@ -131,7 +147,8 @@ export default function PivotTableRenderer({ data }) {
       </div>
 
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-1.5 mt-4">
+        <div className="flex justify-center items-center gap-1.5 mt-4 bg-white/85 backdrop-blur rounded-xl px-3 py-2 shadow-sm sticky bottom-2 sm:static">
+          <span className="hidden sm:inline text-xs text-gray-400 mr-2">Navigate</span>
           <PagBtn onClick={() => goTo(0)} disabled={page === 0}>«</PagBtn>
           <PagBtn onClick={() => goTo(page - 1)} disabled={page === 0}>‹</PagBtn>
           {getPageNumbers(page, totalPages).map((p, i) =>
