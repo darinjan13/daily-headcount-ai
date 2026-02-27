@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ExcelUploader from "./components/ExcelUploader";
 import Dashboard from "./components/Dashboard";
-import lifewoodIcon from "./assets/branding/lifewood-icon.png";
+import lifewoodIconText from "./assets/branding/lifewood-icon-text.png";
 
 function App() {
   const [data, setData] = useState(null);
@@ -47,12 +47,12 @@ function App() {
       <div className="sticky top-0 z-50 glass-panel backdrop-blur-xl border-b border-[rgba(4,98,65,0.08)]">
         <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center overflow-hidden">
-              <img src={lifewoodIcon} alt="Lifewood" className="w-9 h-9 object-contain" />
-            </div>
-            <div>
-              <div className="text-[var(--color-primary)] font-extrabold text-lg leading-tight">Daily Headcount Monitor</div>
-              <div className="text-slate-500 text-sm">Lifewood Data Technology</div>
+            <div className="h-10 flex items-center justify-center overflow-hidden">
+              <img
+                src={lifewoodIconText}
+                alt="Lifewood Data Technology"
+                className="h-6 w-auto object-contain"
+              />
             </div>
           </div>
 
