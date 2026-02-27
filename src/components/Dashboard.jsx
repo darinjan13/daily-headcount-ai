@@ -233,6 +233,23 @@ export default function Dashboard({ data, blueprint }) {
 
   const removeCustom = (id) => setCustomCharts((prev) => prev.filter((c) => c.id !== id));
 
+  // Called by chatbot when user clicks "Add to Dashboard"
+  const handleAddFromChat = (spec) => {
+    let result;
+    const id = Date.now();
+    const title = spec.title || `${spec.measure || spec.y || ""} by ${spec.rowDim || spec.x || ""}`;
+    if (spec.type === "pivot") {
+      result = { id, type: "pivot", title, pivotData: generatePivot(objectData, spec.rowDim, spec.colDim || null, spec.measure, spec.aggregation || "sum") };
+    } else if (spec.type === "bar") {
+      result = { id, type: "bar", title, chartData: groupForBar(objectData, spec.x, spec.y, 20) };
+    } else if (spec.type === "line") {
+      result = { id, type: "line", title, config: { x: spec.x, y: spec.y } };
+    } else if (spec.type === "donut") {
+      result = { id, type: "donut", title, config: { x: spec.x, y: spec.y } };
+    }
+    if (result) setCustomCharts((prev) => [result, ...prev]);
+  };
+
   const periodData = analytics ? analyticsToObjects(analytics.periodTotals) : [];
   const primaryCol = analytics?.primaryCol || "Entity";
   const valueCol = analytics?.valueCol || "Value";
@@ -368,7 +385,12 @@ export default function Dashboard({ data, blueprint }) {
       )}
 
       {/* Floating Data Chatbot */}
-      <DataChatbot headers={headers} rows={rows} blueprint={blueprint} />
+      <DataChatbot
+        headers={headers}
+        rows={rows}
+        blueprint={blueprint}
+        onAddChart={handleAddFromChat}
+      />
 
     </div>
   );

@@ -9,8 +9,7 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
   const [transformNote, setTransformNote] = useState(null);
   const fileInputRef = useRef(null);
 
-  // const host = 'https://daily-headcount-ai-backend.onrender.com';
-  const host = "http://127.0.0.1:8000";
+  const host = 'https://daily-headcount-ai-backend.onrender.com';
   const handleFileUpload = async (uploadedFile) => {
     if (!uploadedFile) return;
     setFile(uploadedFile);
