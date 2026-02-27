@@ -76,7 +76,7 @@ function App() {
           {data && blueprint ? (
             <Dashboard data={data} blueprint={blueprint} />
           ) : (
-            <div className="card-elevated p-10 text-center" id="summary">
+            <div className="card-elevated p-10 text-center w-full min-h-[60vh] flex flex-col items-center justify-center" id="summary">
               <div className="text-6xl mb-4">📂</div>
               <h2 className="text-2xl font-extrabold text-[var(--color-primary)] mb-2">
                 Upload an Excel file to get started
