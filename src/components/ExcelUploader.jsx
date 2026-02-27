@@ -67,11 +67,28 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
       <div className="flex items-center gap-3 flex-wrap">
         {/* File picker button */}
         <button
-          onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/90 text-[var(--color-ink)] border border-[rgba(4,98,65,0.12)] shadow-[0_8px_24px_rgba(0,0,0,0.06)] text-sm font-bold hover:border-[var(--color-primary)] hover:shadow-[0_12px_32px_rgba(4,98,65,0.12)] cursor-pointer"
+          onClick={() => !loading && fileInputRef.current?.click()}
+          disabled={loading}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl bg-white/90 text-[var(--color-ink)] border border-[rgba(4,98,65,0.12)] shadow-[0_8px_24px_rgba(0,0,0,0.06)] text-sm font-bold ${
+            loading
+              ? "opacity-70 cursor-not-allowed"
+              : "hover:border-[var(--color-primary)] hover:shadow-[0_12px_32px_rgba(4,98,65,0.12)] cursor-pointer"
+          }`}
         >
-          <span>📁</span>
-          <span>{file ? file.name : "Choose File"}</span>
+          {loading ? (
+            <>
+              <svg className="animate-spin h-4 w-4 text-[var(--color-primary)]" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              <span>Analyzing with AI...</span>
+            </>
+          ) : (
+            <>
+              <span>📁</span>
+              <span>{file ? "Choose Another File" : "Choose File"}</span>
+            </>
+          )}
         </button>
         <input
           ref={fileInputRef}
@@ -107,17 +124,6 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
           </>
         )}
 
-        {/* Loading spinner */}
-        {loading && (
-          <div className="flex items-center gap-2 text-[var(--color-primary)] text-xs">
-            <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
-            Analyzing with AI...
-          </div>
-        )}
-
         {/* Transform note */}
         {transformNote && !loading && (
           <span className="text-[var(--color-primary)] text-xs">✨ {transformNote}</span>
@@ -130,12 +136,12 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
 
         {/* Current file info badge */}
         {file && !loading && sheets.length > 0 && (
-          <div className="ml-auto flex items-center gap-2 text-slate-500 text-xs shrink-0">
-            <span className="text-[var(--color-primary)]">✓</span>
-            <span>{file.name}</span>
-            {sheets.length > 1 && <span className="bg-[rgba(4,98,65,0.08)] px-1.5 py-0.5 rounded text-xs text-[var(--color-primary)]">{selectedSheet}</span>}
-          </div>
-        )}
+           <div className="ml-auto flex items-center gap-2 text-slate-500 text-xs shrink-0">
+             <span className="text-[var(--color-primary)]">✓</span>
+             <span>{file.name}</span>
+             {sheets.length > 1 && <span className="bg-[rgba(4,98,65,0.08)] px-1.5 py-0.5 rounded text-xs text-[var(--color-primary)]">{selectedSheet}</span>}
+           </div>
+         )}
       </div>
     );
   }
