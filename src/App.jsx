@@ -45,7 +45,7 @@ function App() {
 
       {/* Top glass bar */}
       <div className="sticky top-0 z-50 glass-panel backdrop-blur-xl border-b border-[rgba(4,98,65,0.08)]">
-        <div className="max-w-screen-2xl mx-auto px-6 py-4 flex items-center gap-6">
+        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
           <div className="flex items-center gap-3">
             <div className="h-10 flex items-center justify-center overflow-hidden">
               <img
@@ -58,7 +58,7 @@ function App() {
 
           <div className="hidden md:block h-10 w-px bg-[rgba(4,98,65,0.12)]" />
 
-          <div className="flex-1">
+          <div className="w-full sm:flex-1">
             <ExcelUploader
               compact
               onDataReady={(extracted, bp) => {
@@ -71,7 +71,7 @@ function App() {
         </div>
       </div>
 
-      <div className="max-w-screen-2xl mx-auto px-6 py-10 flex gap-10">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 py-8 sm:py-10 flex flex-col lg:flex-row gap-10">
         <main className="flex-1">
           {data && blueprint ? (
             <Dashboard data={data} blueprint={blueprint} />
