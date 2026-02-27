@@ -134,7 +134,7 @@ function App() {
       {showTop && (
         <button
           onClick={() => scrollTo("top")}
-          className="fixed bottom-6 right-4 sm:right-6 z-40 glass-panel rounded-full px-4 py-2 text-sm font-semibold text-[var(--color-primary)] shadow-lg backdrop-blur btn-soft"
+          className="fixed bottom-20 right-4 sm:bottom-20 sm:right-6 z-40 glass-panel rounded-full px-4 py-2 text-sm font-semibold text-[var(--color-primary)] shadow-lg backdrop-blur btn-soft"
           aria-label="Back to top"
         >
           ↑ Back to top
