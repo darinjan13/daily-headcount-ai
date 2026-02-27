@@ -30,7 +30,6 @@ function App() {
     ];
     return [
       { id: "summary", label: "Summary" },
-      { id: "kpis", label: "Highlights" },
       { id: "builder", label: "Custom Builder" },
       { id: "data-table", label: "Data Table" },
       { id: "analytics", label: "Analytics" },
