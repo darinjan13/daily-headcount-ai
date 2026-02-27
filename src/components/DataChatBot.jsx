@@ -30,6 +30,10 @@ export default function DataChatbot({ headers, rows, blueprint }) {
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
+    if (!headers?.length || !rows?.length) {
+      setMessages((prev) => [...prev, { role: "assistant", content: "Upload data first, then ask me anything about it." }]);
+      return;
+    }
 
     const userMsg = { role: "user", content: text };
     const newMessages = [...messages, userMsg];
@@ -48,12 +52,16 @@ export default function DataChatbot({ headers, rows, blueprint }) {
           datasetSummary: blueprint?.datasetSummary || null,
         }),
       });
+
+      if (!response.ok) throw new Error(`Status ${response.status}`);
       const data = await response.json();
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+      const reply = data?.reply || data?.message;
+      if (!reply) throw new Error("Empty reply");
+      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
     } catch (err) {
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: "Couldn't reach the server. Is the backend running?" },
+        { role: "assistant", content: "Sorry, I couldn't process that right now. Please try again." },
       ]);
     }
     setLoading(false);
