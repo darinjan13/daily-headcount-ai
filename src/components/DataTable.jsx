@@ -162,7 +162,7 @@ export default function DataTable({ headers, rows }) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-1.5 mt-4 bg-white/85 backdrop-blur rounded-xl px-3 py-2 shadow-sm sticky bottom-2 sm:static">
+        <div className="flex flex-wrap justify-center items-center gap-1.5 mt-4 bg-white/90 backdrop-blur rounded-xl px-3 py-2 shadow-sm sticky bottom-2 sm:static w-full">
           <span className="hidden sm:inline text-xs text-gray-400 mr-2">Navigate</span>
           <PagBtn onClick={() => goTo(0)} disabled={page === 0}>«</PagBtn>
           <PagBtn onClick={() => goTo(page - 1)} disabled={page === 0}>‹</PagBtn>
