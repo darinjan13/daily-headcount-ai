@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 
+const LW = { dark: "#133020", green: "#046241", saffron: "#FFB347", paper: "#f5eedb", salt: "#F9F7F7" };
 const PAGE_SIZE = 15;
 
 export default function DataTable({ headers, rows }) {
@@ -7,21 +8,18 @@ export default function DataTable({ headers, rows }) {
   const [search, setSearch] = useState("");
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
+  const [searchFocus, setSearchFocus] = useState(false);
 
   const normalizedRows = useMemo(() => {
     if (!rows || rows.length === 0) return [];
     const first = rows[0];
-    // Already arrays → use directly
     if (Array.isArray(first)) return rows;
-    // Objects → convert using headers as keys
-    if (typeof first === "object" && first !== null)
-      return rows.map((row) => headers.map((h) => row[h] ?? null));
-    // Fallback: wrap primitive in array
-    return rows.map((row) => [row]);
+    if (typeof first === "object" && first !== null) return rows.map(row => headers.map(h => row[h] ?? null));
+    return rows.map(row => [row]);
   }, [rows, headers]);
 
   const handleSort = (col) => {
-    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortCol(col); setSortDir("asc"); }
     setPage(0);
   };
@@ -30,9 +28,7 @@ export default function DataTable({ headers, rows }) {
     let result = normalizedRows;
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      result = normalizedRows.filter((row) =>
-        row.some((cell) => cell !== null && cell !== undefined && String(cell).toLowerCase().includes(q))
-      );
+      result = normalizedRows.filter(row => row.some(cell => cell !== null && cell !== undefined && String(cell).toLowerCase().includes(q)));
     }
     if (sortCol !== null) {
       const idx = headers.indexOf(sortCol);
@@ -52,45 +48,50 @@ export default function DataTable({ headers, rows }) {
   const goTo = (p) => setPage(Math.max(0, Math.min(totalPages - 1, p)));
 
   return (
-    <div>
-      {/* Search bar */}
-      <div className="flex justify-between items-center mb-3">
-        <span className="text-sm text-gray-400">
+    <div style={{ fontFamily: "'Manrope', sans-serif" }}>
+      {/* Toolbar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 12, color: "#9cafa4", fontWeight: 600 }}>
           {filtered.length.toLocaleString()} of {normalizedRows.length.toLocaleString()} rows · {headers.length} columns
-          {search && filtered.length !== normalizedRows.length && (
-            <span className="text-emerald-600 font-semibold ml-1">· filtered</span>
-          )}
+          {search && filtered.length !== normalizedRows.length && <span style={{ color: LW.saffron, marginLeft: 6, fontWeight: 700 }}>· filtered</span>}
         </span>
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-sm">🔍</span>
-          <input
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search all columns..."
-            className="pl-8 pr-8 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 w-56"
-          />
+        <div style={{ position: "relative" }}>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, pointerEvents: "none" }}>🔍</span>
+          <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
+            onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)}
+            placeholder="Search all columns…"
+            style={{
+              paddingLeft: 34, paddingRight: 32, paddingTop: 8, paddingBottom: 8, borderRadius: 10,
+              border: `1.5px solid ${searchFocus ? LW.green : "#e8e3d9"}`, fontSize: 12, outline: "none",
+              background: LW.salt, color: LW.dark, fontFamily: "'Manrope', sans-serif", width: 220,
+              transition: "border-color 0.2s",
+            }} />
           {search && (
-            <button
-              onClick={() => { setSearch(""); setPage(0); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 text-sm border-none bg-transparent cursor-pointer"
-            >✕</button>
+            <button onClick={() => { setSearch(""); setPage(0); }} style={{
+              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+              background: "none", border: "none", color: "#9cafa4", cursor: "pointer", fontSize: 13, padding: 0,
+            }}>✕</button>
           )}
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl shadow-sm">
-        <table className="w-full text-sm border-collapse">
+      <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "0 1px 8px rgba(19,48,32,0.07)", border: "1px solid #e8e3d9" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
-              {headers.map((h) => (
-                <th
-                  key={h}
-                  onClick={() => handleSort(h)}
-                  className="bg-emerald-700 text-white px-4 py-2.5 text-left font-semibold border border-emerald-800 whitespace-nowrap cursor-pointer select-none hover:bg-emerald-800 transition-colors"
+              {headers.map(h => (
+                <th key={h} onClick={() => handleSort(h)} style={{
+                  background: LW.dark, color: "#ffffff", padding: "11px 14px", textAlign: "left",
+                  fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", cursor: "pointer",
+                  letterSpacing: "0.04em", borderRight: "1px solid rgba(255,255,255,0.08)",
+                  userSelect: "none", transition: "background 0.15s",
+                }}
+                  onMouseEnter={e => e.currentTarget.style.background = LW.green}
+                  onMouseLeave={e => e.currentTarget.style.background = LW.dark}
                 >
                   {h}
-                  <span className={`ml-1.5 text-xs ${sortCol === h ? "opacity-100" : "opacity-30"}`}>
+                  <span style={{ marginLeft: 6, fontSize: 9, opacity: sortCol === h ? 1 : 0.3 }}>
                     {sortCol === h ? (sortDir === "asc" ? "▲" : "▼") : "▲"}
                   </span>
                 </th>
@@ -99,45 +100,37 @@ export default function DataTable({ headers, rows }) {
           </thead>
           <tbody>
             {visibleRows.length === 0 ? (
-              <tr>
-                <td colSpan={headers.length} className="text-center py-10 text-gray-400">
-                  {search ? "No results match your search" : "No data available"}
-                </td>
+              <tr><td colSpan={headers.length} style={{ textAlign: "center", padding: "40px 0", color: "#9cafa4", fontSize: 13 }}>
+                {search ? "No results match your search" : "No data available"}
+              </td></tr>
+            ) : visibleRows.map((row, i) => (
+              <tr key={i} style={{ background: i % 2 === 0 ? "#ffffff" : LW.salt, transition: "background 0.1s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#f0ece4"}
+                onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#ffffff" : LW.salt}
+              >
+                {row.map((cell, j) => (
+                  <td key={j} style={{ padding: "9px 14px", borderBottom: "1px solid #f0ece4", borderRight: "1px solid #f0ece4", color: LW.dark, whiteSpace: "nowrap", fontWeight: 400 }}>
+                    {cell === null || cell === undefined ? "" : typeof cell === "object" ? String(cell) : cell}
+                  </td>
+                ))}
               </tr>
-            ) : (
-              visibleRows.map((row, i) => (
-                <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                  {row.map((cell, j) => (
-                    <td key={j} className="px-4 py-2 border border-gray-100 text-gray-700 whitespace-nowrap">
-                      {cell === null || cell === undefined
-                        ? ""
-                        : typeof cell === "object"
-                        ? String(cell)
-                        : cell}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-1.5 mt-4">
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, marginTop: 16 }}>
           <PagBtn onClick={() => goTo(0)} disabled={page === 0}>«</PagBtn>
           <PagBtn onClick={() => goTo(page - 1)} disabled={page === 0}>‹</PagBtn>
           {getPageNumbers(page, totalPages).map((p, i) =>
-            p === "..." ? (
-              <span key={i} className="px-1 text-gray-400">…</span>
-            ) : (
-              <PagBtn key={i} onClick={() => goTo(p)} active={p === page}>{p + 1}</PagBtn>
-            )
+            p === "..." ? <span key={i} style={{ color: "#9cafa4", padding: "0 2px" }}>…</span>
+              : <PagBtn key={i} onClick={() => goTo(p)} active={p === page}>{p + 1}</PagBtn>
           )}
           <PagBtn onClick={() => goTo(page + 1)} disabled={page === totalPages - 1}>›</PagBtn>
           <PagBtn onClick={() => goTo(totalPages - 1)} disabled={page === totalPages - 1}>»</PagBtn>
-          <span className="text-xs text-gray-400 ml-2">Page {page + 1} of {totalPages}</span>
+          <span style={{ fontSize: 11, color: "#9cafa4", marginLeft: 6, fontWeight: 600 }}>Page {page + 1} of {totalPages}</span>
         </div>
       )}
     </div>
@@ -146,15 +139,13 @@ export default function DataTable({ headers, rows }) {
 
 function PagBtn({ onClick, disabled, active, children }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors
-        ${active ? "bg-emerald-700 border-emerald-700 text-white font-bold" : ""}
-        ${disabled ? "bg-gray-50 border-gray-200 text-gray-300 cursor-not-allowed" : ""}
-        ${!active && !disabled ? "bg-white border-gray-200 text-gray-600 hover:border-emerald-400 cursor-pointer" : ""}
-      `}
-    >
+    <button onClick={onClick} disabled={disabled} style={{
+      padding: "6px 12px", borderRadius: 8, border: `1.5px solid ${active ? LW.green : disabled ? "#e8e3d9" : "#e8e3d9"}`,
+      background: active ? LW.green : disabled ? LW.salt : "#ffffff",
+      color: active ? "#ffffff" : disabled ? "#d1d5db" : LW.dark,
+      fontSize: 12, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
+      fontFamily: "'Manrope', sans-serif", transition: "all 0.15s",
+    }}>
       {children}
     </button>
   );
