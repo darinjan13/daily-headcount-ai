@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useDrivePicker } from "../hooks/useDrivePicker";
 import { useDriveFiles } from "../hooks/useDriveFiles";
 
-const HOST = "http://127.0.0.1:8000";
+const HOST = "https://daily-headcount-ai-backend.onrender.com";
 
 function formatSize(bytes) {
   if (!bytes) return "—";
