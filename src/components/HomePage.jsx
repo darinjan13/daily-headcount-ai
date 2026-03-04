@@ -444,8 +444,9 @@ export default function HomePage() {
   // Login state
   if (!user) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center p-6" style={{ backgroundColor: "var(--color-white)" }}>
+      <div className="min-h-screen w-full flex flex-col items-center justify-center p-6" style={{ backgroundColor: "var(--color-white)" }}>
         <ScrollProgressBar />
+        <img src={lifewoodIconText} alt="Lifewood" className="w-48 h-16 mb-2" />
         <div
           className="rounded-2xl w-full max-w-md border"
           style={{
@@ -455,7 +456,6 @@ export default function HomePage() {
             padding: "48px 48px",
           }}
         >
-          <img src={lifewoodVerticalIcon} alt="DataViz" className="w-25 h-25 mx-auto mb-10" />
           <h1 className="text-2xl font-bold mb-4 text-center" style={{ color: "var(--color-dark-serpent)" }}>
             DataViz
           </h1>
