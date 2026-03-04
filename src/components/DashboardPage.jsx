@@ -85,23 +85,9 @@ export default function DashboardPage() {
         }}
       >
         <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4">
-          <button
-            onClick={() => navigate("/")}
-            className="flex items-center gap-1.5 text-sm font-semibold transition-colors cursor-pointer bg-transparent border-none shrink-0"
-            style={{ color: "var(--color-dark-serpent)" }}
-          >
-            ← Home
-          </button>
-
-          <div className="w-px h-6 shrink-0" style={{ backgroundColor: "rgba(19, 48, 32, 0.12)" }} />
-
           <div className="flex items-center gap-3 shrink-0">
-            <img src={lifewoodIconSquared} alt="Lifewood icon" className="w-8 h-8 rounded-lg" />
             <div>
-              <img src={lifewoodIconText} alt="Lifewood" className="h-6 w-auto" />
-              <div className="text-xs font-semibold" style={{ color: "var(--color-castleton-green)" }}>
-                Headcount Dashboard
-              </div>
+              <img src={lifewoodIconText} alt="Lifewood" className="h-6 w-32" />
             </div>
           </div>
 
