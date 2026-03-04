@@ -84,7 +84,7 @@ function FileCard({ file, onOpen, loading }) {
           <h4
             className="font-semibold text-sm leading-tight truncate mb-2"
             title={file.name}
-            style={{ color: "var(--color-dark-serpent)" }}
+            style={{ color: "var(--color-dark-serpent)", marginBottom: "4px" }}
           >
             {file.name}
           </h4>
@@ -395,7 +395,7 @@ export default function HomePage() {
           {/* Page Title */}
           {folder ? (
             <div className="mb-12">
-              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-dark-serpent)" }}>
+              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-dark-serpent)", marginBottom: "4px" }}>
                 {folder.name}
               </h1>
               <p style={{ color: "var(--color-text-light)" }}>
