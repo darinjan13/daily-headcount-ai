@@ -1,6 +1,14 @@
 import { useState, useMemo } from "react";
 
-const LW = { dark: "#133020", green: "#046241", saffron: "#FFB347", paper: "#f5eedb", salt: "#F9F7F7" };
+const BRAND = {
+  dark: "var(--color-dark-serpent)",
+  green: "var(--color-castleton-green)",
+  saffron: "var(--color-saffron)",
+  white: "var(--color-white)",
+  muted: "var(--color-text-light)",
+  border: "rgba(19, 48, 32, 0.14)",
+  soft: "rgba(4, 98, 65, 0.04)",
+};
 const PAGE_SIZE = 15;
 
 export default function DataTable({ headers, rows }) {
@@ -51,44 +59,44 @@ export default function DataTable({ headers, rows }) {
     <div style={{ fontFamily: "'Manrope', sans-serif" }}>
       {/* Toolbar */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 12, color: "#9cafa4", fontWeight: 600 }}>
+        <span style={{ fontSize: 12, color: BRAND.muted, fontWeight: 600 }}>
           {filtered.length.toLocaleString()} of {normalizedRows.length.toLocaleString()} rows · {headers.length} columns
-          {search && filtered.length !== normalizedRows.length && <span style={{ color: LW.saffron, marginLeft: 6, fontWeight: 700 }}>· filtered</span>}
+          {search && filtered.length !== normalizedRows.length && <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>· filtered</span>}
         </span>
         <div style={{ position: "relative" }}>
-          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, pointerEvents: "none" }}>🔍</span>
+          <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, pointerEvents: "none", color: BRAND.muted }}>🔍</span>
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
             onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)}
-            placeholder="Search all columns…"
+            placeholder="Search all columns..."
             style={{
               paddingLeft: 34, paddingRight: 32, paddingTop: 8, paddingBottom: 8, borderRadius: 10,
-              border: `1.5px solid ${searchFocus ? LW.green : "#e8e3d9"}`, fontSize: 12, outline: "none",
-              background: LW.salt, color: LW.dark, fontFamily: "'Manrope', sans-serif", width: 220,
+              border: `1.5px solid ${searchFocus ? BRAND.green : BRAND.border}`, fontSize: 12, outline: "none",
+              background: BRAND.white, color: BRAND.dark, fontFamily: "'Manrope', sans-serif", width: 220,
               transition: "border-color 0.2s",
             }} />
           {search && (
             <button onClick={() => { setSearch(""); setPage(0); }} style={{
               position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-              background: "none", border: "none", color: "#9cafa4", cursor: "pointer", fontSize: 13, padding: 0,
+              background: "none", border: "none", color: BRAND.muted, cursor: "pointer", fontSize: 13, padding: 0,
             }}>✕</button>
           )}
         </div>
       </div>
 
       {/* Table */}
-      <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "0 1px 8px rgba(19,48,32,0.07)", border: "1px solid #e8e3d9" }}>
+      <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "0 1px 8px rgba(19,48,32,0.07)", border: `1px solid ${BRAND.border}` }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
               {headers.map(h => (
                 <th key={h} onClick={() => handleSort(h)} style={{
-                  background: LW.dark, color: "#ffffff", padding: "11px 14px", textAlign: "left",
+                  background: BRAND.dark, color: BRAND.white, padding: "11px 14px", textAlign: "left",
                   fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", cursor: "pointer",
                   letterSpacing: "0.04em", borderRight: "1px solid rgba(255,255,255,0.08)",
                   userSelect: "none", transition: "background 0.15s",
                 }}
-                  onMouseEnter={e => e.currentTarget.style.background = LW.green}
-                  onMouseLeave={e => e.currentTarget.style.background = LW.dark}
+                  onMouseEnter={e => e.currentTarget.style.background = BRAND.green}
+                  onMouseLeave={e => e.currentTarget.style.background = BRAND.dark}
                 >
                   {h}
                   <span style={{ marginLeft: 6, fontSize: 9, opacity: sortCol === h ? 1 : 0.3 }}>
@@ -100,16 +108,16 @@ export default function DataTable({ headers, rows }) {
           </thead>
           <tbody>
             {visibleRows.length === 0 ? (
-              <tr><td colSpan={headers.length} style={{ textAlign: "center", padding: "40px 0", color: "#9cafa4", fontSize: 13 }}>
+              <tr><td colSpan={headers.length} style={{ textAlign: "center", padding: "40px 0", color: BRAND.muted, fontSize: 13 }}>
                 {search ? "No results match your search" : "No data available"}
               </td></tr>
             ) : visibleRows.map((row, i) => (
-              <tr key={i} style={{ background: i % 2 === 0 ? "#ffffff" : LW.salt, transition: "background 0.1s" }}
-                onMouseEnter={e => e.currentTarget.style.background = "#f0ece4"}
-                onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#ffffff" : LW.salt}
+              <tr key={i} style={{ background: i % 2 === 0 ? BRAND.white : BRAND.soft, transition: "background 0.1s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(4, 98, 65, 0.08)"}
+                onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? BRAND.white : BRAND.soft}
               >
                 {row.map((cell, j) => (
-                  <td key={j} style={{ padding: "9px 14px", borderBottom: "1px solid #f0ece4", borderRight: "1px solid #f0ece4", color: LW.dark, whiteSpace: "nowrap", fontWeight: 400 }}>
+                  <td key={j} style={{ padding: "9px 14px", borderBottom: `1px solid ${BRAND.border}`, borderRight: `1px solid ${BRAND.border}`, color: BRAND.dark, whiteSpace: "nowrap", fontWeight: 400 }}>
                     {cell === null || cell === undefined ? "" : typeof cell === "object" ? String(cell) : cell}
                   </td>
                 ))}
@@ -125,12 +133,12 @@ export default function DataTable({ headers, rows }) {
           <PagBtn onClick={() => goTo(0)} disabled={page === 0}>«</PagBtn>
           <PagBtn onClick={() => goTo(page - 1)} disabled={page === 0}>‹</PagBtn>
           {getPageNumbers(page, totalPages).map((p, i) =>
-            p === "..." ? <span key={i} style={{ color: "#9cafa4", padding: "0 2px" }}>…</span>
+            p === "..." ? <span key={i} style={{ color: BRAND.muted, padding: "0 2px" }}>…</span>
               : <PagBtn key={i} onClick={() => goTo(p)} active={p === page}>{p + 1}</PagBtn>
           )}
           <PagBtn onClick={() => goTo(page + 1)} disabled={page === totalPages - 1}>›</PagBtn>
           <PagBtn onClick={() => goTo(totalPages - 1)} disabled={page === totalPages - 1}>»</PagBtn>
-          <span style={{ fontSize: 11, color: "#9cafa4", marginLeft: 6, fontWeight: 600 }}>Page {page + 1} of {totalPages}</span>
+          <span style={{ fontSize: 11, color: BRAND.muted, marginLeft: 6, fontWeight: 600 }}>Page {page + 1} of {totalPages}</span>
         </div>
       )}
     </div>
@@ -140,9 +148,10 @@ export default function DataTable({ headers, rows }) {
 function PagBtn({ onClick, disabled, active, children }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      padding: "6px 12px", borderRadius: 8, border: `1.5px solid ${active ? LW.green : disabled ? "#e8e3d9" : "#e8e3d9"}`,
-      background: active ? LW.green : disabled ? LW.salt : "#ffffff",
-      color: active ? "#ffffff" : disabled ? "#d1d5db" : LW.dark,
+      padding: "6px 12px", borderRadius: 8, border: `1.5px solid ${active ? BRAND.green : BRAND.border}`,
+      background: active ? BRAND.green : BRAND.white,
+      color: active ? BRAND.white : disabled ? "rgba(19, 48, 32, 0.4)" : BRAND.dark,
+      opacity: disabled ? 0.6 : 1,
       fontSize: 12, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
       fontFamily: "'Manrope', sans-serif", transition: "all 0.15s",
     }}>

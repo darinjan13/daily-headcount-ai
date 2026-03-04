@@ -12,9 +12,18 @@ import {
   ResponsiveContainer, Cell, AreaChart, Area,
 } from "recharts";
 
-const LW = { dark:"#133020", green:"#046241", saffron:"#FFB347", yellow:"#FFC370", paper:"#f5eedb", salt:"#F9F7F7" };
-const CHART_COLORS = ["#046241","#059669","#10b981","#34d399","#6ee7b7","#a7f3d0","#FFB347","#f97316","#3b82f6","#8b5cf6"];
-const CMP = { a:"#046241", b:"#FFB347" };
+const LW = {
+  dark: "var(--color-dark-serpent)",
+  green: "var(--color-castleton-green)",
+  saffron: "var(--color-saffron)",
+  white: "var(--color-white)",
+  border: "rgba(19, 48, 32, 0.14)",
+  soft: "rgba(4, 98, 65, 0.04)",
+  softStrong: "rgba(4, 98, 65, 0.08)",
+  muted: "var(--color-text-light)",
+};
+const CHART_COLORS = ["#046241", "#133020", "#2F6A4D", "#3C7A5A", "#548E71", "#6EA186", "#FFB347"];
+const CMP = { a: "#046241", b: "#133020" };
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -143,38 +152,44 @@ function getMonthRange(dateKey) {
 
 function Section({ children, accent, pinned }) {
   return (
-    <div style={{ background:"#fff", borderRadius:16, padding:24, marginBottom:20,
-      boxShadow: pinned?"0 2px 16px rgba(4,98,65,0.12)":"0 1px 8px rgba(19,48,32,0.06)",
-      border: pinned?`1.5px solid ${LW.green}`:"1px solid #e8e3d9",
-      borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid ${LW.green}`:"1px solid #e8e3d9",
-      fontFamily:"'Manrope',sans-serif" }}>
+    <div style={{ background: LW.white, borderRadius: 16, padding: 24, marginBottom: 20,
+      boxShadow: pinned ? "0 2px 16px rgba(4,98,65,0.12)" : "0 1px 8px rgba(19,48,32,0.06)",
+      border: pinned ? `1.5px solid ${LW.green}` : `1px solid ${LW.border}`,
+      borderLeft: accent ? `4px solid ${accent}` : pinned ? `4px solid ${LW.green}` : `1px solid ${LW.border}`,
+      fontFamily: "'Manrope',sans-serif" }}>
       {children}
     </div>
   );
 }
 
 function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove }) {
-  const bs = { AI:{bg:LW.dark,color:LW.saffron}, AUTO:{bg:LW.green,color:"#fff"}, "RAW DATA":{bg:LW.paper,color:LW.dark}, CUSTOM:{bg:"#fff3dc",color:"#c17110"}, PINNED:{bg:LW.green,color:"#fff"} };
-  const b = bs[badge]||{bg:LW.paper,color:LW.dark};
+  const bs = {
+    AI: { bg: LW.dark, color: LW.saffron },
+    AUTO: { bg: LW.green, color: LW.white },
+    "RAW DATA": { bg: LW.softStrong, color: LW.dark },
+    CUSTOM: { bg: "rgba(255, 179, 71, 0.14)", color: LW.dark },
+    PINNED: { bg: LW.green, color: LW.white },
+  };
+  const b = bs[badge] || { bg: LW.softStrong, color: LW.dark };
   return (
-    <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:20 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
       <div>
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <h3 style={{ fontSize:15, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em" }}>{title}</h3>
-          {badge && <span style={{ fontSize:10, padding:"2px 8px", borderRadius:100, fontWeight:700, letterSpacing:"0.08em", background:b.bg, color:b.color }}>{badge}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 800, color: LW.dark, margin: 0, letterSpacing: "-0.02em" }}>{title}</h3>
+          {badge && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 100, fontWeight: 700, letterSpacing: "0.08em", background: b.bg, color: b.color }}>{badge}</span>}
         </div>
-        {subtitle && <p style={{ fontSize:12, color:"#9cafa4", margin:"4px 0 0", fontWeight:500 }}>{subtitle}</p>}
+        {subtitle && <p style={{ fontSize: 12, color: LW.muted, margin: "4px 0 0", fontWeight: 500 }}>{subtitle}</p>}
       </div>
-      <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         {onPin && (
-          <button onClick={onPin} style={{ background:"none", border:`1px solid ${pinned?LW.green:"#e8e3d9"}`, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, color:pinned?LW.green:"#9cafa4" }}>
-            {pinned?"📌 Pinned":"📌 Pin"}
+          <button onClick={onPin} style={{ background: "none", border: `1px solid ${pinned ? LW.green : LW.border}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: pinned ? LW.green : LW.muted }}>
+            {pinned ? "📌 Pinned" : "📌 Pin"}
           </button>
         )}
         {onRemove && (
-          <button onClick={onRemove} style={{ background:"none", border:"none", color:"#d1d5db", cursor:"pointer", fontSize:18, padding:"0 4px" }}
-            onMouseEnter={e=>e.currentTarget.style.color="#9cafa4"}
-            onMouseLeave={e=>e.currentTarget.style.color="#d1d5db"}>×</button>
+          <button onClick={onRemove} style={{ background: "none", border: "none", color: LW.muted, cursor: "pointer", fontSize: 18, padding: "0 4px" }}
+            onMouseEnter={e => e.currentTarget.style.color = LW.dark}
+            onMouseLeave={e => e.currentTarget.style.color = LW.muted}>×</button>
         )}
       </div>
     </div>
@@ -183,10 +198,10 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove }) {
 
 function DashboardNav({ activeView, setActiveView, pinnedCount }) {
   return (
-    <div style={{ display:"flex", gap:8, marginBottom:18 }}>
-      {[{id:"home",label:"Home"},{id:"charts",label:`Charts${pinnedCount>0?` · ${pinnedCount} pinned`:""}`}].map(tab=>{
-        const active=activeView===tab.id;
-        return <button key={tab.id} onClick={()=>setActiveView(tab.id)} style={{ padding:"8px 14px", borderRadius:10, border:`1px solid ${active?LW.green:"#e8e3d9"}`, background:active?LW.green:"#fff", color:active?"#fff":LW.dark, fontSize:12, fontWeight:700, cursor:"pointer" }}>{tab.label}</button>;
+    <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+      {[{ id: "home", label: "Home" }, { id: "charts", label: `Charts${pinnedCount > 0 ? ` · ${pinnedCount} pinned` : ""}` }].map(tab => {
+        const active = activeView === tab.id;
+        return <button key={tab.id} onClick={() => setActiveView(tab.id)} style={{ padding: "8px 14px", borderRadius: 10, border: `1px solid ${active ? LW.green : LW.border}`, background: active ? LW.green : LW.white, color: active ? LW.white : LW.dark, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{tab.label}</button>;
       })}
     </div>
   );
@@ -342,8 +357,8 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
           const positive = vA >= vB;
           const hint = card.formatHint||"number";
           return (
-            <div key={card.id||idx} style={{ background:LW.salt, borderRadius:14, padding:"18px 20px", border:"1px solid #e8e3d9" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#9cafa4", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{card.label}</div>
+            <div key={card.id||idx} style={{ background:LW.white, borderRadius:14, padding:"18px 20px", border:`1px solid ${LW.border}` }}>
+              <div style={{ fontSize:10, fontWeight:700, color:LW.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{card.label}</div>
               <div style={{ display:"flex", gap:12, alignItems:"flex-end", marginBottom:8, flexWrap:"wrap" }}>
                 <div>
                   <div style={{ fontSize:9, color:CMP.a, fontWeight:700, marginBottom:2 }}>Period A</div>
@@ -439,11 +454,9 @@ function StaticSummaryCards({ cards }) {
       {cards.map((card,idx)=>{
         const accent=accents[idx%accents.length];
         return (
-          <div key={card.id||idx} style={{background:"#fff",borderRadius:14,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"0 1px 6px rgba(19,48,32,0.06)",transition:"transform 0.2s,box-shadow 0.2s"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(19,48,32,0.10)"}}
-            onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
-            <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{card.label}</div>
-            <div style={{fontSize:30,fontWeight:800,color:accent,letterSpacing:"-0.03em",lineHeight:1}}>{formatNum(card.value,card.formatHint)}</div>
+          <div key={card.id||idx} style={{ background:LW.white, borderRadius:14, padding:"18px 20px", border:`1px solid ${LW.border}` }}>
+            <div style={{ fontSize:10, fontWeight:700, color:LW.muted, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{card.label}</div>
+            <div style={{ fontSize:30, fontWeight:800, color:accent, letterSpacing:"-0.03em", lineHeight:1 }}>{formatNum(card.value,card.formatHint)}</div>
           </div>
         );
       })}
@@ -656,8 +669,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
 
   const Divider = ({label}) => (
     <div style={{position:"relative",margin:"8px 0 24px",textAlign:"center"}}>
-      <div style={{height:1,background:"#e8e3d9"}}/>
-      <span style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:LW.salt,padding:"0 16px",fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.12em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>
+      <div style={{height:1,background:LW.border}}/>
+      <span style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:LW.white,padding:"0 16px",fontSize:10,fontWeight:700,color:LW.muted,letterSpacing:"0.12em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>
     </div>
   );
 
@@ -852,3 +865,6 @@ export default function Dashboard({ data, blueprint, fileId }) {
     </div>
   );
 }
+
+
+

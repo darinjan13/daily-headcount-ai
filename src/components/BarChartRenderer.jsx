@@ -1,10 +1,10 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 
-const COLORS = ["#046241", "#059669", "#10b981", "#34d399", "#6ee7b7", "#a7f3d0"];
+const COLORS = ["#046241", "#133020", "#2F6A4D", "#3C7A5A", "#548E71", "#FFB347"];
 
 export default function BarChartRenderer({ data, config }) {
   if (!data || data.length === 0)
-    return <p className="text-gray-400 text-sm">No data available.</p>;
+    return <p className="text-sm" style={{ color: "var(--color-text-light)" }}>No data available.</p>;
 
   const xKey = config?.x || "name";
   const yKey = config?.y || "value";
@@ -12,21 +12,21 @@ export default function BarChartRenderer({ data, config }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 60 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(19, 48, 32, 0.12)" vertical={false} />
         <XAxis
           dataKey={xKey}
-          tick={{ fontSize: 11, fill: "#6b7280" }}
+          tick={{ fontSize: 11, fill: "#133020" }}
           angle={-35}
           textAnchor="end"
           interval={0}
         />
         <YAxis
-          tick={{ fontSize: 12, fill: "#6b7280" }}
+          tick={{ fontSize: 12, fill: "#133020" }}
           tickFormatter={(v) => v.toLocaleString()}
         />
         <Tooltip
           formatter={(v) => v.toLocaleString()}
-          contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+          contentStyle={{ borderRadius: 8, border: "1px solid rgba(19, 48, 32, 0.15)", fontSize: 13, backgroundColor: "#FFFFFF" }}
         />
         <Bar dataKey={yKey} radius={[4, 4, 0, 0]}>
           {data.map((_, i) => (

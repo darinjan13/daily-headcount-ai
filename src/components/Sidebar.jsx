@@ -27,7 +27,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
   }, []);
 
   return (
-    <div className="h-full flex flex-col px-6 py-6" style={{ color: "#000000" }}>
+    <div className="h-full flex flex-col px-6 py-6" style={{ color: "var(--color-dark-serpent)" }}>
       {/* Top brand */}
       <div className="pb-6 border-b" style={{ borderColor: "rgba(19, 48, 32, 0.08)" }}>
         <img src={lifewoodIconText} alt="Lifewood" className="h-8 w-32" />
@@ -36,7 +36,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
       {/* Middle content */}
       <div className="pt-6 space-y-5">
         <section>
-          <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "#000000", marginBottom: "8px" }}>
+          <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-dark-serpent)", marginBottom: "8px" }}>
             Folder
           </p>
           <div
@@ -46,24 +46,28 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
               borderColor: "rgba(4, 98, 65, 0.12)",
             }}
           >
-            <p className="text-sm font-semibold truncate" style={{ color: "#000000" }}>
+            <p className="text-sm font-semibold truncate" style={{ color: "var(--color-dark-serpent)" }}>
               {folder ? ".../" + folder.name : "No folder selected"}
             </p>
-            <p className="text-xs mt-1" style={{ color: "#000000" }}>
+            <p className="text-xs mt-1" style={{ color: "var(--color-text-light)" }}>
               {folder && files ? `${files.length || 0} file${files.length !== 1 ? "s" : ""} available` : "Select a folder to begin"}
             </p>
           </div>
         </section>
 
-          <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "#000000", marginBottom: "8px" }}>
-              ACTIONS
-          </p>
+        <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-dark-serpent)", marginBottom: "8px" }}>
+          Actions
+        </p>
 
         {onSelectFolder && (
           <button
             onClick={onSelectFolder}
             className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all"
-            style={{ backgroundColor: "var(--color-saffron)", color: "#000000", border: "none" }}
+            style={{
+              backgroundColor: "var(--color-white)",
+              color: "var(--color-dark-serpent)",
+              border: "1.5px solid var(--color-saffron)",
+            }}
           >
             {folder ? "Change folder" : "Select folder"}
           </button>
@@ -100,7 +104,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
           <button
             onClick={() => setIsProfileMenuOpen((prev) => !prev)}
             className="w-full p-2.5 rounded-xl border flex items-center gap-3 text-left"
-            style={{ backgroundColor: "var(--color-white)", borderColor: "rgba(19, 48, 32, 0.14)", color: "#000000" }}
+            style={{ backgroundColor: "var(--color-white)", borderColor: "rgba(19, 48, 32, 0.14)", color: "var(--color-dark-serpent)" }}
           >
             {user.photoURL && (
               <img
@@ -111,8 +115,8 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
               />
             )}
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm truncate" style={{ color: "#000000" }}>{user.displayName}</p>
-              <p className="text-xs truncate" style={{ color: "#000000" }}>{user.email}</p>
+              <p className="font-semibold text-sm truncate" style={{ color: "var(--color-dark-serpent)" }}>{user.displayName}</p>
+              <p className="text-xs truncate" style={{ color: "var(--color-text-light)" }}>{user.email}</p>
             </div>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -130,7 +134,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
                   logout();
                 }}
                 className="w-full text-left px-4 py-2.5 text-sm font-semibold rounded-xl"
-                style={{ color: "#000000", backgroundColor: "transparent", border: "none" }}
+                style={{ color: "var(--color-dark-serpent)", backgroundColor: "transparent", border: "none" }}
               >
                 Sign Out
               </button>

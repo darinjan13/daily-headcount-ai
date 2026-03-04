@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Dashboard from "./Dashboard";
+import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
+import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
 
@@ -72,58 +74,79 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen w-screen bg-gray-50">
+    <div className="min-h-screen w-screen" style={{ backgroundColor: "var(--color-white)" }}>
       {/* Top bar */}
-      <div className="bg-emerald-800 shadow-lg sticky top-0 z-50">
+      <div
+        className="sticky top-0 z-50"
+        style={{
+          backgroundColor: "var(--color-white)",
+          borderBottom: "1px solid rgba(19, 48, 32, 0.12)",
+          boxShadow: "0 4px 12px rgba(19, 48, 32, 0.05)",
+        }}
+      >
         <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4">
-
           <button
             onClick={() => navigate("/")}
-            className="flex items-center gap-1.5 text-emerald-300 hover:text-white text-sm font-medium transition-colors cursor-pointer bg-transparent border-none shrink-0"
+            className="flex items-center gap-1.5 text-sm font-semibold transition-colors cursor-pointer bg-transparent border-none shrink-0"
+            style={{ color: "var(--color-dark-serpent)" }}
           >
             ← Home
           </button>
 
-          <div className="w-px h-6 bg-emerald-600 shrink-0" />
+          <div className="w-px h-6 shrink-0" style={{ backgroundColor: "rgba(19, 48, 32, 0.12)" }} />
 
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xl">📊</span>
+          <div className="flex items-center gap-3 shrink-0">
+            <img src={lifewoodIconSquared} alt="Lifewood icon" className="w-8 h-8 rounded-lg" />
             <div>
-              <div className="text-white font-extrabold text-sm leading-tight">AI Dashboard</div>
-              <div className="text-emerald-300 text-xs">Generator</div>
+              <img src={lifewoodIconText} alt="Lifewood" className="h-6 w-auto" />
+              <div className="text-xs font-semibold" style={{ color: "var(--color-castleton-green)" }}>
+                Headcount Dashboard
+              </div>
             </div>
           </div>
 
-          <div className="w-px h-6 bg-emerald-600 shrink-0" />
+          <div className="w-px h-6 shrink-0" style={{ backgroundColor: "rgba(19, 48, 32, 0.12)" }} />
 
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-lg shrink-0">📗</span>
-            <span className="text-white text-sm font-semibold truncate">{fileName}</span>
+            <img src={lifewoodIconSquared} alt="Workbook" className="w-5 h-5 shrink-0" />
+            <span className="text-sm font-semibold truncate" style={{ color: "var(--color-dark-serpent)" }}>
+              {fileName}
+            </span>
           </div>
 
           {/* Sheet switcher — full dropdown when multiple sheets */}
           {allSheets.length > 1 && (
             <>
-              <div className="w-px h-6 bg-emerald-600 shrink-0" />
+              <div className="w-px h-6 shrink-0" style={{ backgroundColor: "rgba(19, 48, 32, 0.12)" }} />
               <div className="flex items-center gap-2 shrink-0">
-                <label className="text-emerald-300 text-xs font-bold uppercase tracking-wide">Sheet</label>
+                <label
+                  className="text-xs font-bold uppercase tracking-wide"
+                  style={{ color: "var(--color-dark-serpent)" }}
+                >
+                  Sheet
+                </label>
                 <select
                   value={currentSheet}
                   onChange={(e) => switchSheet(e.target.value)}
                   disabled={switching}
-                  className="px-3 py-1.5 rounded-lg border border-emerald-600 text-sm text-white bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer disabled:opacity-60"
+                  className="px-3 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 cursor-pointer disabled:opacity-60"
+                  style={{
+                    border: "1px solid rgba(4, 98, 65, 0.25)",
+                    color: "var(--color-dark-serpent)",
+                    backgroundColor: "var(--color-white)",
+                  }}
                 >
                   {allSheets.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
                 {switching && (
-                  <svg className="animate-spin w-4 h-4 text-emerald-300" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-castleton-green)" }}>
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                   </svg>
                 )}
-                {switchError && <span className="text-red-300 text-xs">{switchError}</span>}
+                {switchError && <span className="text-xs" style={{ color: "var(--color-saffron)" }}>{switchError}</span>}
               </div>
             </>
           )}

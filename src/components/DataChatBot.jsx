@@ -2,6 +2,14 @@ import { useState, useRef, useEffect } from "react";
 
 const WELCOME = "Hi! I have access to your full dataset and can answer precise questions — totals, rankings, breakdowns, anything. What would you like to know?";
 
+const BRAND = {
+  dark: "var(--color-dark-serpent)",
+  green: "var(--color-castleton-green)",
+  saffron: "var(--color-saffron)",
+  white: "var(--color-white)",
+  muted: "var(--color-text-light)",
+};
+
 export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME, chartSpec: null }]);
@@ -76,9 +84,12 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
       {/* Floating Button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-white text-2xl transition-all duration-200 cursor-pointer border-none ${
-          open ? "bg-gray-500 scale-90" : "bg-emerald-700 hover:bg-emerald-800 hover:scale-110"
-        }`}
+        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl transition-all duration-200 cursor-pointer border-none"
+        style={{
+          color: BRAND.white,
+          backgroundColor: open ? "rgba(19, 48, 32, 0.55)" : BRAND.green,
+          transform: open ? "scale(0.92)" : "scale(1)",
+        }}
         title="Ask about your data"
       >
         {open ? "✕" : "💬"}
@@ -87,36 +98,39 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
       {/* Chat Panel */}
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-50 w-[420px] max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden"
-          style={{ height: "560px" }}
+          className="fixed bottom-24 right-6 z-50 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          style={{
+            height: "560px",
+            backgroundColor: BRAND.white,
+            border: "1px solid rgba(19, 48, 32, 0.12)",
+          }}
         >
           {/* Header */}
-          <div className="bg-emerald-700 px-4 py-3 flex items-center gap-3 shrink-0">
-            <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center text-base">🤖</div>
+          <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: BRAND.dark }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-base" style={{ backgroundColor: BRAND.green }}>🤖</div>
             <div>
-              <div className="text-white font-bold text-sm leading-tight">Data Assistant</div>
-              <div className="text-emerald-300 text-xs">Full dataset access · {rows.length.toLocaleString()} rows</div>
+              <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>Data Assistant</div>
+              <div className="text-xs" style={{ color: "rgba(255, 255, 255, 0.75)" }}>Full dataset access · {rows.length.toLocaleString()} rows</div>
             </div>
             <div className="ml-auto flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-emerald-300 text-xs">Live</span>
+              <div className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: BRAND.saffron }} />
+              <span className="text-xs" style={{ color: "rgba(255, 255, 255, 0.75)" }}>Live</span>
             </div>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50">
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ backgroundColor: "rgba(4, 98, 65, 0.04)" }}>
             {messages.map((msg, i) => (
               <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
                 <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} w-full`}>
                   {msg.role === "assistant" && (
-                    <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0">🤖</div>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.12)" }}>🤖</div>
                   )}
                   <div
-                    className={`max-w-[82%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                      msg.role === "user"
-                        ? "bg-emerald-700 text-white rounded-br-sm"
-                        : "bg-white text-gray-700 shadow-sm border border-gray-100 rounded-bl-sm"
-                    }`}
+                    className="max-w-[82%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap"
+                    style={msg.role === "user"
+                      ? { backgroundColor: BRAND.green, color: BRAND.white, borderBottomRightRadius: 8 }
+                      : { backgroundColor: BRAND.white, color: BRAND.dark, border: "1px solid rgba(19, 48, 32, 0.1)", borderBottomLeftRadius: 8 }}
                   >
                     {msg.content}
                   </div>
@@ -128,14 +142,14 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
                     <button
                       onClick={() => {
                         onAddChart(msg.chartSpec);
-                        // Visual feedback — replace spec with confirmation
                         setMessages((prev) =>
                           prev.map((m, idx) =>
                             idx === i ? { ...m, chartSpec: null, added: true } : m
                           )
                         );
                       }}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-700 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-colors cursor-pointer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                      style={{ backgroundColor: "rgba(4, 98, 65, 0.08)", border: "1px solid rgba(4, 98, 65, 0.28)", color: BRAND.green }}
                     >
                       <span>📊</span>
                       Add to Dashboard
@@ -143,7 +157,7 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
                   </div>
                 )}
                 {msg.role === "assistant" && msg.added && (
-                  <div className="ml-8 mt-1 text-xs text-emerald-600 font-medium">✓ Added to dashboard</div>
+                  <div className="ml-8 mt-1 text-xs font-medium" style={{ color: BRAND.green }}>✓ Added to dashboard</div>
                 )}
               </div>
             ))}
@@ -151,12 +165,13 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
             {/* Suggested questions */}
             {messages.length === 1 && (
               <div className="space-y-1.5 mt-2">
-                <p className="text-xs text-gray-400 font-medium px-1">Try asking:</p>
+                <p className="text-xs font-medium px-1" style={{ color: BRAND.muted }}>Try asking:</p>
                 {suggestedQuestions.map((q, i) => (
                   <button
                     key={i}
                     onClick={() => { setInput(q); inputRef.current?.focus(); }}
-                    className="w-full text-left px-3 py-2 rounded-xl bg-white border border-gray-200 text-xs text-gray-600 hover:border-emerald-400 hover:text-emerald-700 transition-colors cursor-pointer"
+                    className="w-full text-left px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer"
+                    style={{ backgroundColor: BRAND.white, border: "1px solid rgba(19, 48, 32, 0.14)", color: BRAND.dark }}
                   >
                     {q}
                   </button>
@@ -167,11 +182,11 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
             {/* Loading dots */}
             {loading && (
               <div className="flex justify-start">
-                <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0">🤖</div>
-                <div className="bg-white border border-gray-100 shadow-sm px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.12)" }}>🤖</div>
+                <div className="px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5" style={{ backgroundColor: BRAND.white, border: "1px solid rgba(19, 48, 32, 0.1)" }}>
+                  <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: BRAND.saffron, animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: BRAND.saffron, animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: BRAND.saffron, animationDelay: "300ms" }} />
                 </div>
               </div>
             )}
@@ -179,7 +194,7 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
           </div>
 
           {/* Input */}
-          <div className="px-3 py-3 border-t border-gray-100 bg-white flex gap-2 items-end shrink-0">
+          <div className="px-3 py-3 flex gap-2 items-end shrink-0" style={{ borderTop: "1px solid rgba(19, 48, 32, 0.1)", backgroundColor: BRAND.white }}>
             <textarea
               ref={inputRef}
               value={input}
@@ -187,15 +202,20 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
               onKeyDown={handleKey}
               placeholder="Ask about your data..."
               rows={1}
-              className="flex-1 px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-emerald-400 leading-snug"
-              style={{ maxHeight: "100px", overflowY: "auto" }}
+              className="flex-1 px-3.5 py-2.5 rounded-xl text-sm resize-none leading-snug"
+              style={{
+                maxHeight: "100px",
+                overflowY: "auto",
+                border: "1px solid rgba(19, 48, 32, 0.18)",
+                color: BRAND.dark,
+                outline: "none",
+              }}
             />
             <button
               onClick={send}
               disabled={!input.trim() || loading}
-              className={`w-9 h-9 rounded-xl flex items-center justify-center text-white text-base transition-all shrink-0 border-none cursor-pointer ${
-                input.trim() && !loading ? "bg-emerald-700 hover:bg-emerald-800" : "bg-gray-200 cursor-not-allowed"
-              }`}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-base transition-all shrink-0 border-none cursor-pointer"
+              style={{ backgroundColor: input.trim() && !loading ? BRAND.green : "rgba(19, 48, 32, 0.25)" }}
             >
               {loading ? (
                 <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -206,8 +226,8 @@ export default function DataChatbot({ headers, rows, blueprint, onAddChart }) {
             </button>
           </div>
 
-          <div className="px-4 py-1.5 bg-gray-50 border-t border-gray-100 text-center shrink-0">
-            <span className="text-xs text-gray-300">Enter to send · Shift+Enter for new line</span>
+          <div className="px-4 py-1.5 text-center shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.04)", borderTop: "1px solid rgba(19, 48, 32, 0.08)" }}>
+            <span className="text-xs" style={{ color: BRAND.muted }}>Enter to send · Shift+Enter for new line</span>
           </div>
         </div>
       )}

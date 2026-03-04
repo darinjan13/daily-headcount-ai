@@ -33,14 +33,25 @@ export default function PivotTableRenderer({ data }) {
             {columns.map((col, i) => (
               <th
                 key={col}
-                className={`px-4 py-2.5 font-semibold text-white border border-emerald-800 bg-emerald-700 whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`}
+                className={`px-4 py-2.5 font-semibold whitespace-nowrap ${i === 0 ? "text-left" : "text-right"}`}
+                style={{
+                  color: "var(--color-white)",
+                  border: "1px solid rgba(19, 48, 32, 0.18)",
+                  backgroundColor: "var(--color-castleton-green)",
+                }}
               >
                 {col}
               </th>
             ))}
-            {/* Total header — only for cross-tabs */}
             {showColumnTotals && (
-              <th className="px-4 py-2.5 font-semibold text-white border border-emerald-800 bg-emerald-800 whitespace-nowrap text-right">
+              <th
+                className="px-4 py-2.5 font-semibold whitespace-nowrap text-right"
+                style={{
+                  color: "var(--color-white)",
+                  border: "1px solid rgba(19, 48, 32, 0.2)",
+                  backgroundColor: "var(--color-dark-serpent)",
+                }}
+              >
                 Total
               </th>
             )}
@@ -53,17 +64,28 @@ export default function PivotTableRenderer({ data }) {
               : null;
 
             return (
-              <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+              <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "var(--color-white)" : "rgba(4, 98, 65, 0.04)" }}>
                 {columns.map((col, j) => (
                   <td
                     key={col}
-                    className={`px-4 py-2 border border-gray-200 text-gray-700 whitespace-nowrap ${j === 0 ? "text-left font-medium" : "text-right"}`}
+                    className={`px-4 py-2 whitespace-nowrap ${j === 0 ? "text-left font-medium" : "text-right"}`}
+                    style={{
+                      border: "1px solid rgba(19, 48, 32, 0.1)",
+                      color: "var(--color-dark-serpent)",
+                    }}
                   >
-                    {j === 0 ? row[col] : (row[col] != null && row[col] !== "" ? formatNumber(row[col]) : <span className="text-gray-300">—</span>)}
+                    {j === 0 ? row[col] : (row[col] != null && row[col] !== "" ? formatNumber(row[col]) : <span style={{ color: "rgba(19, 48, 32, 0.35)" }}>—</span>)}
                   </td>
                 ))}
                 {showColumnTotals && (
-                  <td className="px-4 py-2 border border-gray-200 font-semibold text-emerald-700 text-right whitespace-nowrap bg-emerald-50">
+                  <td
+                    className="px-4 py-2 font-semibold text-right whitespace-nowrap"
+                    style={{
+                      border: "1px solid rgba(19, 48, 32, 0.1)",
+                      color: "var(--color-castleton-green)",
+                      backgroundColor: "rgba(4, 98, 65, 0.08)",
+                    }}
+                  >
                     {formatNumber(rowTotal)}
                   </td>
                 )}
@@ -73,18 +95,28 @@ export default function PivotTableRenderer({ data }) {
 
           {/* Grand Total Row */}
           {totalRow && (
-            <tr className="bg-emerald-50">
+            <tr style={{ backgroundColor: "rgba(4, 98, 65, 0.08)" }}>
               {columns.map((col, j) => (
                 <td
                   key={col}
-                  className={`px-4 py-2.5 border border-gray-300 font-bold text-emerald-700 whitespace-nowrap ${j === 0 ? "text-left" : "text-right"}`}
+                  className={`px-4 py-2.5 font-bold whitespace-nowrap ${j === 0 ? "text-left" : "text-right"}`}
+                  style={{
+                    border: "1px solid rgba(19, 48, 32, 0.15)",
+                    color: "var(--color-dark-serpent)",
+                  }}
                 >
                   {j === 0 ? "Grand Total" : formatNumber(totalRow[col])}
                 </td>
               ))}
-              {/* Grand total of grand totals — bottom-right corner */}
               {showColumnTotals && (
-                <td className="px-4 py-2.5 border border-gray-300 font-bold text-white bg-emerald-700 text-right whitespace-nowrap">
+                <td
+                  className="px-4 py-2.5 font-bold text-right whitespace-nowrap"
+                  style={{
+                    border: "1px solid rgba(19, 48, 32, 0.2)",
+                    color: "var(--color-white)",
+                    backgroundColor: "var(--color-dark-serpent)",
+                  }}
+                >
                   {formatNumber(colTotals["__grandTotal"])}
                 </td>
               )}
