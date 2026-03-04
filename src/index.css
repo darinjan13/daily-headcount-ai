@@ -1,4 +1,158 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
+
+:root {
+  /* Brand Colors */
+  --color-dark-serpent: #133020;
+  --color-saffron: #FFB347;
+  --color-white: #FFFFFF;
+  --color-light-gray: #F5F5F5;
+  --color-medium-gray: #E8E8E8;
+  --color-text: #333333;
+  --color-text-light: #666666;
+
+  /* Typography */
+  font-family: "Manrope", system-ui, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: var(--color-text);
+  background-color: var(--color-white);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-light-gray);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-dark-serpent);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-saffron);
+}
+
+/* Scroll Progress Bar */
+.scroll-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(to right, var(--color-dark-serpent), var(--color-saffron));
+  z-index: 9999;
+  transition: width 0.1s ease-out;
+}
+
+a {
+  font-weight: 500;
+  color: var(--color-dark-serpent);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--color-saffron);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: var(--color-white);
+  display: flex;
+  flex-direction: column;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-dark-serpent);
+}
+
+h1 { font-size: 3.2rem; line-height: 1.2; }
+h2 { font-size: 1.6rem; line-height: 1.2; }
+h3 { font-size: 0.8rem; line-height: 1.2; }
+
+p {
+  margin: 0;
+  color: var(--color-text-light);
+  font-weight: 400;
+}
+
+button {
+  border-radius: 12px;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: var(--color-dark-serpent);
+  color: var(--color-white);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+button:hover {
+  background-color: var(--color-saffron);
+  color: var(--color-dark-serpent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(255, 179, 71, 0.2);
+}
+
+button:focus,
+button:focus-visible {
+  outline: 2px solid var(--color-saffron);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Icon Styling */
+img[src*="icon"],
+img[alt*="icon"],
+.icon {
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+/* Glassmorphism Components */
+.glass-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(19, 48, 32, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 179, 71, 0.3);
+  transform: translateY(-2px);
+}
 
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
