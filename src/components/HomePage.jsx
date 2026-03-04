@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useDrivePicker } from "../hooks/useDrivePicker";
 import { useDriveFiles } from "../hooks/useDriveFiles";
-import lifewoodVerticalIcon from "../assets/branding/lifewood-vertical.png";
-import lifewoodIconText from "../assets/branding/lifewood-icon-text.png"
+import Sidebar from "./Sidebar";
+import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
 
@@ -45,176 +45,6 @@ function ScrollProgressBar() {
       style={{ width: `${scrollProgress}%` }}
       aria-hidden="true"
     />
-  );
-}
-
-// Right-side Navigation Sidebar
-function RightNavSidebar({ user, onLogout, onSelectFolder, onRefresh, folder, filesLoading, files }) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <>
-      {/* Floating Action Button */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-8 right-8 w-14 h-14 rounded-full flex items-center justify-center shadow-xl transition-all hover:scale-110 z-40"
-        style={{
-          backgroundColor: "var(--color-dark-serpent)",
-          color: "var(--color-white)",
-        }}
-        aria-label="Toggle navigation"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-
-      {/* Sidebar Panel */}
-      <div
-        className={`fixed right-0 top-0 h-screen w-80 transform transition-transform duration-300 z-50 overflow-y-auto`}
-        style={{
-          transform: isOpen ? "translateX(0)" : "translateX(100%)",
-          background: "rgba(255, 255, 255, 0.98)",
-          backdropFilter: "blur(10px)",
-          borderLeft: "1px solid rgba(19, 48, 32, 0.1)",
-        }}
-      >
-        <div className="p-6 space-y-6">
-          {/* Close Button */}
-          <button
-            onClick={() => setIsOpen(false)}
-            className="absolute top-6 right-6 p-2 hover:opacity-70 transition-opacity"
-            style={{ backgroundColor: "transparent", color: "var(--color-dark-serpent)" }}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          {/* User Section */}
-          <div className="pt-6">
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: "var(--color-dark-serpent)" }}>
-              Account
-            </h3>
-            {user?.photoURL && (
-              <div className="flex items-center gap-3 mb-4">
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName}
-                  className="w-12 h-12 rounded-full border-2"
-                  style={{ borderColor: "var(--color-saffron)", marginTop: "16px" }}
-                />
-                <div className="min-w-0">
-                  <div className="font-semibold text-sm" style={{ color: "var(--color-dark-serpent)" }}>
-                    {user.displayName}
-                  </div>
-                  <div className="text-xs truncate" style={{ color: "var(--color-text-light)" }}>
-                    {user.email}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Folder Section */}
-          <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider mb-3" style={{ color: "var(--color-dark-serpent)" }}>
-              Current folder
-            </h3>
-            <div
-              className="p-4 rounded-lg border transition-all"
-              style={{
-                backgroundColor: "rgba(19, 48, 32, 0.05)",
-                borderColor: "rgba(19, 48, 32, 0.1)",
-                  marginTop: "12px",
-              }}
-            >
-              <div className="text-sm font-semibold" style={{ color: "var(--color-dark-serpent)" }}>
-                {folder ? folder.name : "No folder selected"}
-              </div>
-              {folder && (
-                <div className="text-xs mt-1" style={{ color: "var(--color-text-light)" }}>
-                  {files?.length || 0} file{files?.length !== 1 ? "s" : ""} available
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                onSelectFolder();
-                setIsOpen(false);
-              }}
-              className="w-full text-sm font-semibold mt-3 py-2.5 rounded-lg transition-all"
-              style={{
-                backgroundColor: "var(--color-saffron)",
-                color: "var(--color-dark-serpent)",
-                border: "none",
-              }}
-            >
-              {folder ? "Change folder" : "Select folder"}
-            </button>
-          </div>
-
-          {/* Actions Section */}
-          {folder && (
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider mb-5" style={{ color: "var(--color-dark-serpent)" }}>
-                Actions
-              </h3>
-              <button
-                onClick={() => {
-                  onRefresh();
-                  setIsOpen(false);
-                }}
-                disabled={filesLoading}
-                className="w-full text-sm font-semibold py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all"
-                style={{
-                  backgroundColor: "var(--color-dark-serpent)",
-                  color: "var(--color-white)",
-                  border: "none",
-                  opacity: filesLoading ? 0.7 : 1,
-                    marginTop: "12px",
-                }}
-              >
-                {filesLoading && (
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                  </svg>
-                )}
-                Refresh files
-              </button>
-            </div>
-          )}
-
-          {/* Logout Section */}
-          <div className="pt-4 border-t" style={{ borderColor: "var(--color-medium-gray)" }}>
-            <button
-              onClick={() => {
-                onLogout();
-                setIsOpen(false);
-              }}
-              className="w-full text-sm font-semibold py-2.5 rounded-lg transition-all"
-              style={{
-                backgroundColor: "transparent",
-                color: "var(--color-dark-serpent)",
-                border: `2px solid var(--color-saffron)`,
-              }}
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Backdrop */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black z-40 transition-opacity"
-          style={{ opacity: 0.3 }}
-          onClick={() => setIsOpen(false)}
-        />
-      )}
-    </>
   );
 }
 
@@ -362,7 +192,7 @@ function EmptyState({ folderName, onChangeFolder }) {
 // Main Component
 export default function HomePage() {
   const navigate = useNavigate();
-  const { user, accessToken, loading: authLoading, login, logout } = useAuth();
+  const { user, accessToken, loading: authLoading, login } = useAuth();
   const { openFolderPicker } = useDrivePicker();
   const { files, loading: filesLoading, error, listFiles, downloadFile } = useDriveFiles();
 
@@ -377,7 +207,7 @@ export default function HomePage() {
     if (folder && accessToken) {
       listFiles(folder.id, accessToken);
     }
-  }, [folder, accessToken]);
+  }, [folder, accessToken, listFiles]);
 
   const handleFolderSelect = (selectedFolder) => {
     setFolder(selectedFolder);
@@ -496,125 +326,105 @@ export default function HomePage() {
 
   // Main logged-in view
   return (
-    <div style={{ backgroundColor: "var(--color-white)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ backgroundColor: "var(--color-white)", minHeight: "100vh" }}>
       <ScrollProgressBar />
 
-      {/* Header */}
-      <header
-        className="sticky top-0 z-40 border-b"
+      <aside
         style={{
-          background: "rgba(255, 255, 255, 0.95)",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "320px",
+          height: "100vh",
+          zIndex: 50,
+          background: "rgba(255, 255, 255, 0.98)",
           backdropFilter: "blur(10px)",
-          borderColor: "rgba(19, 48, 32, 0.1)",
+          borderRight: "1px solid rgba(19, 48, 32, 0.1)",
+          overflowY: "auto",
         }}
       >
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={lifewoodIconText} alt="DataViz" className="w-32 h-8" />
-          </div>
+        <Sidebar
+          folder={folder}
+          files={files}
+          filesLoading={filesLoading}
+          onSelectFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
+          onRefresh={() => folder && listFiles(folder.id, accessToken)}
+        />
+      </aside>
 
-          {/* Center info */}
-          <div className="hidden md:block text-center">
-            <p className="text-xs font-medium" style={{ color: "var(--color-text-light)" }}>
-              {folder ? `Folder: ${folder.name}` : "No folder selected"}
-            </p>
-          </div>
-
-          {/* User info */}
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:block text-right">
-              <div className="text-xs font-semibold" style={{ color: "var(--color-dark-serpent)" }}>
-                {user.displayName}
-              </div>
-              <div className="text-xs" style={{ color: "var(--color-text-light)" }}>
-                {user.email}
-              </div>
+      <div style={{ marginLeft: "320px", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        {/* Header */}
+        <header
+          className="sticky top-0 z-40 border-b"
+          style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(10px)",
+            borderColor: "rgba(19, 48, 32, 0.1)",
+          }}
+        >
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="hidden md:block text-center">
+              <p className="text-xs font-medium" style={{ color: "var(--color-text-light)" }}>
+                {folder ? `Folder: ${folder.name}` : "No folder selected"}
+              </p>
             </div>
+
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:block text-right">
+                <div className="text-xs font-semibold" style={{ color: "var(--color-dark-serpent)" }}>
+                  {user.displayName}
+                </div>
+                <div className="text-xs" style={{ color: "var(--color-text-light)" }}>
+                  {user.email}
+                </div>
+              </div>
               {user?.photoURL && (
-                  <img
-                      src={user.photoURL}
-                      alt={user.displayName}
-                      className="w-8 h-8 rounded-full border-2"
-                      style={{ borderColor: "var(--color-saffron)" }}
-                  />
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName}
+                  className="w-8 h-8 rounded-full border-2"
+                  style={{ borderColor: "var(--color-saffron)" }}
+                />
               )}
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full">
-        {/* Page Title */}
-        {folder ? (
-          <div className="mb-12">
-            <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-dark-serpent)" }}>
-              {folder.name}
-            </h1>
-            <p style={{ color: "var(--color-text-light)" }}>
-              {files.length} file{files.length !== 1 ? "s" : ""} available for analysis
-            </p>
-          </div>
-        ) : (
-          <div className="mb-12">
-            <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-dark-serpent)" }}>
-              Welcome to DataViz
-            </h1>
-            <p style={{ color: "var(--color-text-light)" }}>
-              Select a Google Drive folder to begin exploring your data
-            </p>
-          </div>
-        )}
-
-        {/* Error Alert */}
-        {(error || openError) && (
-          <div
-            className="rounded-lg p-4 mb-8 flex gap-3 border"
-            style={{
-              backgroundColor: "rgba(255, 179, 71, 0.08)",
-              borderColor: "rgba(255, 179, 71, 0.3)",
-              borderLeft: `4px solid var(--color-saffron)`,
-            }}
-          >
-            <svg
-              className="w-5 h-5 flex-shrink-0 mt-0.5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              style={{ color: "var(--color-dark-serpent)" }}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <div className="text-sm" style={{ color: "var(--color-dark-serpent)" }}>
-              {error || openError}
             </div>
           </div>
-        )}
+        </header>
 
-        {/* Loading State */}
-        {filesLoading && (
-          <div className="flex flex-col items-center justify-center py-24">
-            <svg className="animate-spin w-10 h-10 mb-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-dark-serpent)" }}>
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
-            <p style={{ color: "var(--color-text-light)" }}>Loading files from Google Drive</p>
-          </div>
-        )}
+        {/* Main Content */}
+        <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full">
+          {/* Page Title */}
+          {folder ? (
+            <div className="mb-12">
+              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-dark-serpent)" }}>
+                {folder.name}
+              </h1>
+              <p style={{ color: "var(--color-text-light)" }}>
+                {files.length} file{files.length !== 1 ? "s" : ""} available for analysis
+              </p>
+            </div>
+          ) : (
+            <div className="mb-12">
+              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-dark-serpent)" }}>
+                Welcome to DataViz
+              </h1>
+              <p style={{ color: "var(--color-text-light)" }}>
+                Select a Google Drive folder to begin exploring your data
+              </p>
+            </div>
+          )}
 
-        {/* No Folder Selected */}
-        {!folder && !filesLoading && (
-          <div className="flex flex-col items-center justify-center py-24">
+          {/* Error Alert */}
+          {(error || openError) && (
             <div
-              className="w-24 h-24 rounded-2xl flex items-center justify-center mb-8"
-              style={{ backgroundColor: "rgba(19, 48, 32, 0.08)" }}
+              className="rounded-lg p-4 mb-8 flex gap-3 border"
+              style={{
+                backgroundColor: "rgba(255, 179, 71, 0.08)",
+                borderColor: "rgba(255, 179, 71, 0.3)",
+                borderLeft: `4px solid var(--color-saffron)`,
+              }}
             >
               <svg
-                className="w-12 h-12"
+                className="w-5 h-5 flex-shrink-0 mt-0.5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -624,66 +434,94 @@ export default function HomePage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                  d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
+              <div className="text-sm" style={{ color: "var(--color-dark-serpent)" }}>
+                {error || openError}
+              </div>
             </div>
-            <h2 className="text-xl font-bold mb-4 text-center" style={{ color: "var(--color-dark-serpent)" }}>
-              Select a folder to get started
-            </h2>
-            <p className="text-sm mb-12 text-center max-w-sm leading-relaxed" style={{ color: "var(--color-text-light)" }}>
-              Choose a Google Drive folder containing your Excel files to start analyzing
-            </p>
-            <button
-              onClick={() => openFolderPicker(accessToken, handleFolderSelect)}
-              className="text-sm font-semibold px-8 py-3 flex items-center gap-2 rounded-lg transition-all"
-              style={{
-                backgroundColor: "var(--color-dark-serpent)",
-                color: "var(--color-white)",
-                border: "none",
-              }}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+          )}
+
+          {/* Loading State */}
+          {filesLoading && (
+            <div className="flex flex-col items-center justify-center py-24">
+              <svg className="animate-spin w-10 h-10 mb-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-dark-serpent)" }}>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Select Google Drive Folder
-            </button>
-          </div>
-        )}
+              <p style={{ color: "var(--color-text-light)" }}>Loading files from Google Drive</p>
+            </div>
+          )}
 
-        {/* File Grid */}
-        {!filesLoading && folder && files.length > 0 && (
-          <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
-            {files.map((file) => (
-              <FileCard
-                key={file.id}
-                file={file}
-                onOpen={handleOpenFile}
-                loading={openingFile === file.id}
-              />
-            ))}
-          </div>
-        )}
+          {/* No Folder Selected */}
+          {!folder && !filesLoading && (
+            <div className="flex flex-col items-center justify-center py-24">
+              <div
+                className="w-24 h-24 rounded-2xl flex items-center justify-center mb-8"
+                style={{ backgroundColor: "rgba(19, 48, 32, 0.08)" }}
+              >
+                <svg
+                  className="w-12 h-12"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  style={{ color: "var(--color-dark-serpent)" }}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold mb-4 text-center" style={{ color: "var(--color-dark-serpent)" }}>
+                Select a folder to get started
+              </h2>
+              <p className="text-sm mb-12 text-center max-w-sm leading-relaxed" style={{ color: "var(--color-text-light)" }}>
+                Choose a Google Drive folder containing your Excel files to start analyzing
+              </p>
+              <button
+                onClick={() => openFolderPicker(accessToken, handleFolderSelect)}
+                className="text-sm font-semibold px-8 py-3 flex items-center gap-2 rounded-lg transition-all"
+                style={{
+                  backgroundColor: "var(--color-dark-serpent)",
+                  color: "var(--color-white)",
+                  border: "none",
+                }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                Select Google Drive Folder
+              </button>
+            </div>
+          )}
 
-        {/* Empty Folder State */}
-        {!filesLoading && folder && files.length === 0 && (
-          <EmptyState
-            folderName={folder.name}
-            onChangeFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
-          />
-        )}
-      </main>
+          {/* File Grid */}
+          {!filesLoading && folder && files.length > 0 && (
+            <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+              {files.map((file) => (
+                <FileCard
+                  key={file.id}
+                  file={file}
+                  onOpen={handleOpenFile}
+                  loading={openingFile === file.id}
+                />
+              ))}
+            </div>
+          )}
 
-      {/* Right Navigation Sidebar */}
-      <RightNavSidebar
-        user={user}
-        onLogout={logout}
-        onSelectFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
-        onRefresh={() => folder && listFiles(folder.id, accessToken)}
-        folder={folder}
-        filesLoading={filesLoading}
-        files={files}
-      />
+          {/* Empty Folder State */}
+          {!filesLoading && folder && files.length === 0 && (
+            <EmptyState
+              folderName={folder.name}
+              onChangeFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
+            />
+          )}
+        </main>
+      </div>
     </div>
   );
 }
