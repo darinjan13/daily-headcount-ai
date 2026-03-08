@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useDrivePicker } from "../hooks/useDrivePicker";
@@ -6,6 +6,7 @@ import { useDriveFiles } from "../hooks/useDriveFiles";
 import Sidebar from "./Sidebar";
 import Grainient from "./Grainient";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
+import excelFileIcon from "../assets/icons/excel-file-icon.png";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
 
@@ -22,6 +23,18 @@ function formatDate(isoString) {
     month: "short", day: "numeric", year: "numeric",
     hour: "2-digit", minute: "2-digit",
   });
+}
+
+function getSheetBasedTags(sheetNames) {
+  const exactSheetNames = Array.isArray(sheetNames)
+    ? sheetNames.filter((name) => typeof name === "string" && name.trim().length > 0)
+    : [];
+  if (exactSheetNames.length) return exactSheetNames.slice(0, 3);
+  return ["No Sheets Found"];
+}
+
+function getErrorTags() {
+  return ["Sheets Unavailable"];
 }
 
 // Scroll Progress Indicator
@@ -50,10 +63,10 @@ function ScrollProgressBar() {
 }
 
 // File Card Component
-function FileCard({ file, onOpen, loading }) {
+function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
   return (
     <div
-      className="rounded-2xl p-6 flex flex-col gap-4 transition-all hover:shadow-xl border"
+      className="rounded-2xl p-6 flex flex-col transition-all hover:shadow-xl border"
       style={{
         backgroundColor: "var(--color-white)",
         borderColor: "rgba(19, 48, 32, 0.1)",
@@ -61,25 +74,14 @@ function FileCard({ file, onOpen, loading }) {
       }}
     >
       {/* Icon and Header */}
-      <div className="flex items-start gap-4">
-        <div
-          className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-          style={{ backgroundColor: "rgba(19, 48, 32, 0.1)" }}
-        >
-          <svg
-            className="w-6 h-6"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            style={{ color: "var(--color-dark-serpent)" }}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-          </svg>
+      <div className="flex items-start gap-4" style={{ marginBottom: "10px" }}>
+        <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
+          <img
+            src={excelFileIcon}
+            alt="Excel file"
+            className="w-11 h-11"
+            style={{ objectFit: "contain" }}
+          />
         </div>
         <div className="min-w-0 flex-1">
           <h4
@@ -95,8 +97,49 @@ function FileCard({ file, onOpen, loading }) {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center" style={{ gap: "6px", marginBottom: "14px" }}>
+        {isTagLoading ? (
+          <span
+            className="inline-flex items-center animate-pulse"
+            style={{
+              borderRadius: "20px",
+              backgroundColor: "#f0f4f0",
+              color: "#3a6b4a",
+              border: "1px solid #d1e5d8",
+              fontSize: "11px",
+              fontWeight: 500,
+              padding: "3px 9px",
+              gap: "6px",
+            }}
+          >
+            <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+            </svg>
+            Loading Sheets
+          </span>
+        ) : (
+          tags.map((tag) => (
+            <span
+              key={`${file.id}-${tag}`}
+              style={{
+                borderRadius: "20px",
+                backgroundColor: "#f0f4f0",
+                color: "#3a6b4a",
+                border: "1px solid #d1e5d8",
+                fontSize: "11px",
+                fontWeight: 500,
+                padding: "3px 9px",
+              }}
+            >
+              {tag}
+            </span>
+          ))
+        )}
+      </div>
+
       {/* Metadata */}
-      <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text-light)" }}>
+      <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text-light)", marginBottom: "16px" }}>
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
@@ -203,12 +246,71 @@ export default function HomePage() {
   });
   const [openingFile, setOpeningFile] = useState(null);
   const [openError, setOpenError] = useState("");
+  const [fileTagsById, setFileTagsById] = useState({});
+  const tagLoadInProgress = useRef(new Set());
 
   useEffect(() => {
     if (folder && accessToken) {
       listFiles(folder.id, accessToken);
     }
   }, [folder, accessToken, listFiles]);
+
+  useEffect(() => {
+    if (!files.length || !accessToken) return;
+
+    let isCancelled = false;
+    const pendingFiles = files.filter(
+      (file) => !fileTagsById[file.id] && !tagLoadInProgress.current.has(file.id)
+    );
+    if (!pendingFiles.length) return;
+
+    const loadTagsForFile = async (file) => {
+      tagLoadInProgress.current.add(file.id);
+
+      try {
+        const arrayBuffer = await downloadFile(file.id, accessToken);
+        const blob = new Blob([arrayBuffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const formData = new FormData();
+        formData.append("file", blob, file.name);
+
+        const res = await fetch(`${HOST}/get-sheets`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) throw new Error(`Sheet scan failed: ${res.status}`);
+
+        const data = await res.json();
+        const tags = getSheetBasedTags(data?.sheets || []);
+        if (!isCancelled) {
+          setFileTagsById((prev) => ({ ...prev, [file.id]: tags }));
+        }
+      } catch {
+        if (!isCancelled) {
+          setFileTagsById((prev) => ({ ...prev, [file.id]: getErrorTags() }));
+        }
+      } finally {
+        tagLoadInProgress.current.delete(file.id);
+      }
+    };
+
+    const queue = [...pendingFiles];
+    const workerCount = Math.min(2, queue.length);
+    const workers = Array.from({ length: workerCount }, async () => {
+      while (queue.length && !isCancelled) {
+        const nextFile = queue.shift();
+        if (!nextFile) break;
+        await loadTagsForFile(nextFile);
+      }
+    });
+
+    Promise.all(workers).catch(() => {});
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [files, accessToken, downloadFile, fileTagsById]);
 
   const handleFolderSelect = (selectedFolder) => {
     setFolder(selectedFolder);
@@ -544,6 +646,8 @@ export default function HomePage() {
                   file={file}
                   onOpen={handleOpenFile}
                   loading={openingFile === file.id}
+                  tags={fileTagsById[file.id] || []}
+                  isTagLoading={!fileTagsById[file.id]}
                 />
               ))}
             </div>
@@ -561,3 +665,4 @@ export default function HomePage() {
     </div>
   );
 }
+
