@@ -566,7 +566,7 @@ export default function HomePage() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full">
+        <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full flex flex-col">
           {/* Page Title */}
           {folder ? (
             <div className="mb-12">
@@ -694,10 +694,12 @@ export default function HomePage() {
           {!filesLoading && folder && files.length === 0 && (
             <div
               style={{
-                minHeight: "calc(100vh - 320px)",
+                flex: 1,
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
+                marginTop: "calc(-1 * (40px + 60px))",
               }}
             >
               <EmptyState

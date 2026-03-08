@@ -86,9 +86,16 @@ export default function DashboardPage() {
       >
         <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4">
           <div className="flex items-center gap-3 shrink-0">
-            <div>
+            <button
+              type="button"
+              onClick={() => navigate("/")}
+              className="cursor-pointer"
+              style={{ background: "none", border: "none", padding: 0 }}
+              title="Go to homepage"
+              aria-label="Go to homepage"
+            >
               <img src={lifewoodIconText} alt="Lifewood" className="h-6 w-32" />
-            </div>
+            </button>
           </div>
 
           <div className="w-px h-6 shrink-0" style={{ backgroundColor: "rgba(19, 48, 32, 0.12)" }} />
