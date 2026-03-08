@@ -186,17 +186,25 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
 // Empty State Component
 function EmptyState({ folderName, onChangeFolder }) {
   return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
+    <div
+      className="w-full flex flex-col items-center text-center"
+      style={{ maxWidth: "400px" }}
+    >
       <div
-        className="w-24 h-24 rounded-2xl flex items-center justify-center mb-8"
-        style={{ backgroundColor: "rgba(19, 48, 32, 0.08)" }}
+        className="flex items-center justify-center"
+        style={{
+          width: "90px",
+          height: "90px",
+          borderRadius: "16px",
+          backgroundColor: "#f3f4f6",
+        }}
       >
         <svg
-          className="w-12 h-12"
+          className="w-8 h-8"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          style={{ color: "var(--color-dark-serpent)" }}
+          style={{ color: "#374151" }}
         >
           <path
             strokeLinecap="round"
@@ -206,25 +214,54 @@ function EmptyState({ folderName, onChangeFolder }) {
           />
         </svg>
       </div>
-      <h3 className="text-lg font-bold mb-3" style={{ color: "var(--color-dark-serpent)" }}>
+      <h3
+        style={{
+          marginTop: "20px",
+          fontSize: "15px",
+          fontWeight: 600,
+          color: "#1a1a1a",
+          lineHeight: 1.35,
+        }}
+      >
         No Excel files found
       </h3>
-      <p className="text-sm mb-3 max-w-sm" style={{ color: "var(--color-text-light)" }}>
+      <p
+        style={{
+          marginTop: "6px",
+          fontSize: "13px",
+          color: "#6b7280",
+          lineHeight: 1.4,
+        }}
+      >
         No .xlsx or .xls files in{" "}
-        <span className="font-semibold" style={{ color: "var(--color-dark-serpent)" }}>
+        <span style={{ fontWeight: 700, color: "#1a1a1a" }}>
           {folderName || "this folder"}
         </span>
       </p>
-      <p className="text-xs mb-12 max-w-sm" style={{ color: "var(--color-text-light)" }}>
+      <p
+        style={{
+          marginTop: "4px",
+          fontSize: "13px",
+          color: "#6b7280",
+          lineHeight: 1.4,
+        }}
+      >
         Upload Excel files to this folder and refresh to get started
       </p>
       <button
         onClick={onChangeFolder}
-        className="text-sm font-semibold py-2.5 px-6 rounded-lg transition-all"
+        className="rounded-lg transition-all"
         style={{
-          backgroundColor: "transparent",
-          color: "var(--color-dark-serpent)",
-          border: `2px solid var(--color-saffron)`,
+          marginTop: "16px",
+          backgroundColor: "#ffffff",
+          color: "#1a1a1a",
+          border: "1.5px solid #f5a623",
+          borderRadius: "8px",
+          padding: "10px 20px",
+          fontSize: "14px",
+          fontWeight: 500,
+          width: "auto",
+          boxShadow: "none",
         }}
       >
         Choose different folder
@@ -655,10 +692,19 @@ export default function HomePage() {
 
           {/* Empty Folder State */}
           {!filesLoading && folder && files.length === 0 && (
-            <EmptyState
-              folderName={folder.name}
-              onChangeFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
-            />
+            <div
+              style={{
+                minHeight: "calc(100vh - 320px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <EmptyState
+                folderName={folder.name}
+                onChangeFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
+              />
+            </div>
           )}
         </main>
       </div>
