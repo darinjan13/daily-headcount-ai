@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
+import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 
 export default function Sidebar({ folder, files, filesLoading, onSelectFolder, onRefresh }) {
   const { user, logout } = useAuth();
+  const { theme } = useTheme();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
+  const lifewoodLogoSrc = theme === "dark" ? LIFEWOOD_DARK_LOGO_URL : lifewoodIconText;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -27,26 +31,31 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
   }, []);
 
   return (
-    <div className="h-full flex flex-col px-6 py-6" style={{ color: "var(--color-dark-serpent)" }}>
+    <div className="h-full flex flex-col px-6 py-6" style={{ color: "var(--color-text)" }}>
       {/* Top brand */}
-      <div className="pb-6 border-b" style={{ borderColor: "rgba(19, 48, 32, 0.08)" }}>
-        <img src={lifewoodIconText} alt="Lifewood" className="h-8 w-32" />
+      <div className="pb-6 border-b" style={{ borderColor: "var(--color-border)" }}>
+        <img
+          src={lifewoodLogoSrc}
+          alt="Lifewood"
+          className="h-8 w-32"
+          style={{ objectFit: "contain" }}
+        />
       </div>
 
       {/* Middle content */}
       <div className="pt-6 space-y-5">
         <section>
-          <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-dark-serpent)", marginBottom: "8px" }}>
+          <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-text)", marginBottom: "8px" }}>
             Folder
           </p>
           <div
             className="rounded-xl border p-3"
             style={{
-              backgroundColor: "rgba(4, 98, 65, 0.04)",
-              borderColor: "rgba(4, 98, 65, 0.12)",
+              backgroundColor: "var(--color-surface-soft)",
+              borderColor: "var(--color-border)",
             }}
           >
-            <p className="text-sm font-semibold truncate" style={{ color: "var(--color-dark-serpent)" }}>
+            <p className="text-sm font-semibold truncate" style={{ color: "var(--color-text)" }}>
               {folder ? ".../" + folder.name : "No folder selected"}
             </p>
             <p className="text-xs mt-1" style={{ color: "var(--color-text-light)" }}>
@@ -55,7 +64,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
           </div>
         </section>
 
-        <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-dark-serpent)", marginBottom: "8px" }}>
+        <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-text)", marginBottom: "8px" }}>
           Actions
         </p>
 
@@ -64,8 +73,8 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
             onClick={onSelectFolder}
             className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all"
             style={{
-              backgroundColor: "var(--color-white)",
-              color: "var(--color-dark-serpent)",
+              backgroundColor: "var(--color-saffron)",
+              color: "#000000",
               border: "1.5px solid var(--color-saffron)",
             }}
           >
@@ -80,7 +89,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
             className="w-full text-sm font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all"
             style={{
               backgroundColor: "var(--color-castleton-green)",
-              color: "var(--color-white)",
+              color: "#FFFFFF",
               border: "none",
               opacity: filesLoading ? 0.6 : 1,
             }}
@@ -100,11 +109,11 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
 
       {/* Bottom profile menu */}
       {user && (
-        <div className="mt-auto relative pt-4 border-t" style={{ borderColor: "rgba(19, 48, 32, 0.08)" }} ref={profileMenuRef}>
+        <div className="mt-auto relative pt-4 border-t" style={{ borderColor: "var(--color-border)" }} ref={profileMenuRef}>
           <button
             onClick={() => setIsProfileMenuOpen((prev) => !prev)}
             className="w-full p-2.5 rounded-xl border flex items-center gap-3 text-left"
-            style={{ backgroundColor: "var(--color-white)", borderColor: "rgba(19, 48, 32, 0.14)", color: "var(--color-dark-serpent)" }}
+            style={{ backgroundColor: "var(--color-surface-elevated)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
           >
             {user.photoURL && (
               <img
@@ -115,7 +124,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
               />
             )}
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm truncate" style={{ color: "var(--color-dark-serpent)" }}>{user.displayName}</p>
+              <p className="font-semibold text-sm truncate" style={{ color: "var(--color-text)" }}>{user.displayName}</p>
               <p className="text-xs truncate" style={{ color: "var(--color-text-light)" }}>{user.email}</p>
             </div>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +135,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
           {isProfileMenuOpen && (
             <div
               className="absolute bottom-[calc(100%+8px)] left-0 w-full rounded-xl border shadow-md"
-              style={{ backgroundColor: "var(--color-white)", borderColor: "rgba(19, 48, 32, 0.14)", zIndex: 20 }}
+              style={{ backgroundColor: "var(--color-surface-elevated)", borderColor: "var(--color-border)", zIndex: 20 }}
             >
               <button
                 onClick={() => {
@@ -134,7 +143,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
                   logout();
                 }}
                 className="w-full text-left px-4 py-2.5 text-sm font-semibold rounded-xl"
-                style={{ color: "var(--color-dark-serpent)", backgroundColor: "transparent", border: "none" }}
+                style={{ color: "var(--color-text)", backgroundColor: "transparent", border: "none" }}
               >
                 Sign Out
               </button>

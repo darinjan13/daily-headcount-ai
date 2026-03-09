@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useTheme } from "../context/ThemeContext";
 import Dashboard from "./Dashboard";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
+import ThemeToggle from "./ThemeToggle";
+import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
 
 export default function DashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const state = location.state;
 
   const [data, setData] = useState(state?.tableData || null);
@@ -18,6 +22,7 @@ export default function DashboardPage() {
   const [fileName] = useState(state?.fileName || "");
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState("");
+  const lifewoodLogoSrc = theme === "dark" ? LIFEWOOD_DARK_LOGO_URL : lifewoodIconText;
 
   // Drive info for sheet switching + real-time (future)
   const driveFileId = state?.driveFileId || null;
@@ -74,14 +79,14 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen w-screen" style={{ backgroundColor: "var(--color-white)" }}>
+    <div className="min-h-screen w-screen" style={{ backgroundColor: "var(--color-bg)" }}>
       {/* Top bar */}
       <div
         className="sticky top-0 z-50"
         style={{
-          backgroundColor: "var(--color-white)",
-          borderBottom: "1px solid rgba(19, 48, 32, 0.12)",
-          boxShadow: "0 4px 12px rgba(19, 48, 32, 0.05)",
+          backgroundColor: "var(--color-surface)",
+          borderBottom: "1px solid var(--color-border)",
+          boxShadow: "var(--color-shadow-soft)",
         }}
       >
         <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4">
@@ -94,15 +99,20 @@ export default function DashboardPage() {
               title="Go to homepage"
               aria-label="Go to homepage"
             >
-              <img src={lifewoodIconText} alt="Lifewood" className="h-6 w-32" />
+              <img
+                src={lifewoodLogoSrc}
+                alt="Lifewood"
+                className="h-6 w-32"
+                style={{ objectFit: "contain" }}
+              />
             </button>
           </div>
 
-          <div className="w-px h-6 shrink-0" style={{ backgroundColor: "rgba(19, 48, 32, 0.12)" }} />
+          <div className="w-px h-6 shrink-0" style={{ backgroundColor: "var(--color-border)" }} />
 
           <div className="flex items-center gap-2 min-w-0">
             <img src={lifewoodIconSquared} alt="Workbook" className="w-5 h-5 shrink-0" />
-            <span className="text-sm font-semibold truncate" style={{ color: "var(--color-dark-serpent)" }}>
+            <span className="text-sm font-semibold truncate" style={{ color: "var(--color-text)" }}>
               {fileName}
             </span>
           </div>
@@ -110,11 +120,11 @@ export default function DashboardPage() {
           {/* Sheet switcher — full dropdown when multiple sheets */}
           {allSheets.length > 1 && (
             <>
-              <div className="w-px h-6 shrink-0" style={{ backgroundColor: "rgba(19, 48, 32, 0.12)" }} />
+              <div className="w-px h-6 shrink-0" style={{ backgroundColor: "var(--color-border)" }} />
               <div className="flex items-center gap-2 shrink-0">
                 <label
                   className="text-xs font-bold uppercase tracking-wide"
-                  style={{ color: "var(--color-dark-serpent)" }}
+                  style={{ color: "var(--color-text)" }}
                 >
                   Sheet
                 </label>
@@ -124,9 +134,9 @@ export default function DashboardPage() {
                   disabled={switching}
                   className="px-3 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 cursor-pointer disabled:opacity-60"
                   style={{
-                    border: "1px solid rgba(4, 98, 65, 0.25)",
-                    color: "var(--color-dark-serpent)",
-                    backgroundColor: "var(--color-white)",
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text)",
+                    backgroundColor: "var(--color-surface-elevated)",
                   }}
                 >
                   {allSheets.map((s) => (
@@ -143,6 +153,10 @@ export default function DashboardPage() {
               </div>
             </>
           )}
+
+          <div className="ml-auto shrink-0">
+            <ThemeToggle />
+          </div>
         </div>
       </div>
 

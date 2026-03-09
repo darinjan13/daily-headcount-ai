@@ -45,10 +45,10 @@ export default function DonutChartRenderer({ data, config }) {
         </Pie>
         <Tooltip
           formatter={(v) => [v.toLocaleString(), `${((v / total) * 100).toFixed(1)}%`]}
-          contentStyle={{ borderRadius: 8, border: "1px solid rgba(19, 48, 32, 0.15)", fontSize: 13, backgroundColor: "#FFFFFF" }}
+          contentStyle={{ borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 13, backgroundColor: "var(--color-surface-elevated)" }}
         />
         <Legend
-          formatter={(value) => <span style={{ fontSize: 12, color: "#133020" }}>{value}</span>}
+          formatter={(value) => <span style={{ fontSize: 12, color: "var(--color-text)" }}>{value}</span>}
         />
       </PieChart>
     </ResponsiveContainer>

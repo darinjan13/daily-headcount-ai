@@ -71,34 +71,34 @@ export default function LineChartRenderer({ data, config }) {
   return (
     <ResponsiveContainer width="100%" height={340}>
       <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: marginBottom }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(19, 48, 32, 0.12)" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-grid)" />
         <XAxis
           dataKey="name"
-          tick={{ fontSize: 11, fill: "#133020" }}
+          tick={{ fontSize: 11, fill: "var(--color-chart-axis)" }}
           angle={angle}
           textAnchor={angle !== 0 ? "end" : "middle"}
           interval={chartData.length > 30 ? Math.floor(chartData.length / 15) : 0}
         />
         <YAxis
-          tick={{ fontSize: 12, fill: "#133020" }}
+          tick={{ fontSize: 12, fill: "var(--color-chart-axis)" }}
           tickFormatter={(v) => v.toLocaleString()}
         />
         <Tooltip
           formatter={(v) => v.toLocaleString()}
           contentStyle={{
             borderRadius: 8,
-            border: "1px solid rgba(19, 48, 32, 0.15)",
+            border: "1px solid var(--color-border)",
             fontSize: 13,
-            backgroundColor: "#FFFFFF",
+            backgroundColor: "var(--color-surface-elevated)",
           }}
         />
         <Line
           type="monotone"
           dataKey="value"
-          stroke="#046241"
+          stroke="var(--color-chart-line-primary)"
           strokeWidth={2.5}
-          dot={{ fill: "#046241", r: chartData.length > 30 ? 2 : 4 }}
-          activeDot={{ r: 6, fill: "#FFB347", stroke: "#133020", strokeWidth: 2 }}
+          dot={{ fill: "var(--color-chart-line-primary)", r: chartData.length > 30 ? 2 : 4 }}
+          activeDot={{ r: 6, fill: "#FFB347", stroke: "var(--color-chart-line-primary)", strokeWidth: 2 }}
         />
       </LineChart>
     </ResponsiveContainer>

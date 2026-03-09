@@ -6,12 +6,32 @@
   --color-castleton-green: #046241;
   --color-dark-serpent: #133020;
   --color-saffron: #FFB347;
+  --color-paper: #F5EEDB;
   --color-white: #FFFFFF;
   --color-sea-salt: #F9F7F7;
   --color-light-gray: #F5F5F5;
   --color-medium-gray: #E8E8E8;
-  --color-text: #333333;
-  --color-text-light: #666666;
+  --color-text: #1C2B23;
+  --color-text-light: #5F7267;
+
+  /* Semantic Tokens */
+  --color-bg: var(--color-white);
+  --color-surface: var(--color-white);
+  --color-surface-elevated: #FFFFFF;
+  --color-surface-soft: rgba(4, 98, 65, 0.04);
+  --color-border: rgba(19, 48, 32, 0.14);
+  --color-border-strong: rgba(19, 48, 32, 0.22);
+  --color-grid: rgba(19, 48, 32, 0.12);
+  --color-chart-axis: #5E7167;
+  --color-chart-line-primary: var(--color-castleton-green);
+  --color-shadow-soft: 0 8px 24px rgba(19, 48, 32, 0.08);
+  --color-shadow-strong: 0 14px 30px rgba(19, 48, 32, 0.16);
+  --color-chip-bg: rgba(4, 98, 65, 0.08);
+  --color-chip-text: var(--color-castleton-green);
+  --color-chip-border: rgba(4, 98, 65, 0.2);
+  --color-meta-text: var(--color-text-light);
+  --color-alert-bg: rgba(255, 179, 71, 0.08);
+  --color-alert-border: rgba(255, 179, 71, 0.3);
 
   /* Typography */
   font-family: "Manrope", system-ui, sans-serif;
@@ -26,6 +46,35 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme="dark"] {
+  --color-white: #16261E;
+  --color-sea-salt: #0E1914;
+  --color-light-gray: #1D2F26;
+  --color-medium-gray: #294036;
+  --color-text: #F5EEDB;
+  --color-text-light: #B7C9BC;
+
+  --color-bg: #0B1511;
+  --color-surface: #16261E;
+  --color-surface-elevated: #1E3128;
+  --color-surface-soft: rgba(245, 238, 219, 0.06);
+  --color-border: rgba(245, 238, 219, 0.18);
+  --color-border-strong: rgba(245, 238, 219, 0.28);
+  --color-grid: rgba(245, 238, 219, 0.16);
+  --color-chart-axis: #CDD9D0;
+  --color-chart-line-primary: #FFFFFF;
+  --color-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.32);
+  --color-shadow-strong: 0 14px 30px rgba(0, 0, 0, 0.45);
+  --color-chip-bg: rgba(255, 195, 112, 0.24);
+  --color-chip-text: #F5EEDB;
+  --color-chip-border: rgba(255, 195, 112, 0.5);
+  --color-meta-text: #F5EEDB;
+  --color-alert-bg: rgba(255, 179, 71, 0.14);
+  --color-alert-border: rgba(255, 179, 71, 0.36);
+
+  color-scheme: dark;
 }
 
 /* Custom Scrollbar */
@@ -72,7 +121,8 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--color-white);
+  background-color: var(--color-bg);
+  color: var(--color-text);
   display: flex;
   flex-direction: column;
 }
@@ -87,7 +137,7 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-weight: 700;
   margin: 0;
-  color: var(--color-dark-serpent);
+  color: var(--color-text);
 }
 
 h1 { font-size: 3.2rem; line-height: 1.2; }
@@ -137,6 +187,13 @@ button:disabled {
     radial-gradient(120% 90% at 5% 10%, rgba(245, 238, 219, 0.72), transparent 60%),
     radial-gradient(90% 70% at 95% 0%, rgba(4, 98, 65, 0.14), transparent 65%),
     linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(249, 247, 247, 0.66));
+}
+
+:root[data-theme="dark"] .login-glass-card {
+  background:
+    radial-gradient(120% 90% at 5% 10%, rgba(255, 195, 112, 0.12), transparent 60%),
+    radial-gradient(90% 70% at 95% 0%, rgba(4, 98, 65, 0.25), transparent 65%),
+    linear-gradient(145deg, rgba(22, 38, 30, 0.85), rgba(30, 49, 40, 0.7));
 }
 
 .login-google-wave-btn {
@@ -282,16 +339,16 @@ img[alt*="icon"],
 
 /* Glassmorphism Components */
 .glass-card {
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--color-surface-elevated);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(19, 48, 32, 0.1);
+  border: 1px solid var(--color-border);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--color-shadow-soft);
   transition: all 0.3s ease;
 }
 
 .glass-card:hover {
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--color-shadow-strong);
   border: 1px solid rgba(255, 179, 71, 0.3);
   transform: translateY(-2px);
 }
