@@ -57,13 +57,13 @@ export default function LineChartRenderer({ data, config }) {
   const dates = data.map((r) => parseDate(r[config.x])).filter(Boolean);
 
   if (dates.length === 0)
-    return <p className="text-gray-400 text-sm">No date data available.</p>;
+    return <p className="text-sm" style={{ color: "var(--color-text-light)" }}>No date data available.</p>;
 
   const period = detectPeriod(dates);
   const chartData = groupByPeriod(data, config.x, config.y, period);
 
   if (chartData.length === 0)
-    return <p className="text-gray-400 text-sm">No data to display.</p>;
+    return <p className="text-sm" style={{ color: "var(--color-text-light)" }}>No data to display.</p>;
 
   const angle = chartData.length > 14 ? -45 : 0;
   const marginBottom = angle !== 0 ? 60 : 10;
@@ -71,29 +71,34 @@ export default function LineChartRenderer({ data, config }) {
   return (
     <ResponsiveContainer width="100%" height={340}>
       <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: marginBottom }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-grid)" />
         <XAxis
           dataKey="name"
-          tick={{ fontSize: 11, fill: "#6b7280" }}
+          tick={{ fontSize: 11, fill: "var(--color-chart-axis)" }}
           angle={angle}
           textAnchor={angle !== 0 ? "end" : "middle"}
           interval={chartData.length > 30 ? Math.floor(chartData.length / 15) : 0}
         />
         <YAxis
-          tick={{ fontSize: 12, fill: "#6b7280" }}
+          tick={{ fontSize: 12, fill: "var(--color-chart-axis)" }}
           tickFormatter={(v) => v.toLocaleString()}
         />
         <Tooltip
           formatter={(v) => v.toLocaleString()}
-          contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+          contentStyle={{
+            borderRadius: 8,
+            border: "1px solid var(--color-border)",
+            fontSize: 13,
+            backgroundColor: "var(--color-surface-elevated)",
+          }}
         />
         <Line
           type="monotone"
           dataKey="value"
-          stroke="#046241"
+          stroke="var(--color-chart-line-primary)"
           strokeWidth={2.5}
-          dot={{ fill: "#046241", r: chartData.length > 30 ? 2 : 4 }}
-          activeDot={{ r: 6 }}
+          dot={{ fill: "var(--color-chart-line-primary)", r: chartData.length > 30 ? 2 : 4 }}
+          activeDot={{ r: 6, fill: "#FFB347", stroke: "var(--color-chart-line-primary)", strokeWidth: 2 }}
         />
       </LineChart>
     </ResponsiveContainer>
