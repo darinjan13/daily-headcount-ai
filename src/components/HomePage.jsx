@@ -7,6 +7,7 @@ import { useDriveFiles } from "../hooks/useDriveFiles";
 import Sidebar from "./Sidebar";
 import Grainient from "./Grainient";
 import ThemeToggle from "./ThemeToggle";
+import UserAvatar from "./UserAvatar";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
@@ -564,14 +565,11 @@ export default function HomePage() {
                   {user.email}
                 </div>
               </div>
-              {user?.photoURL && (
-                <img
-                  src={user.photoURL}
-                  alt={user.displayName}
-                  className="w-8 h-8 rounded-full border-2"
-                  style={{ borderColor: "var(--color-saffron)" }}
-                />
-              )}
+              <UserAvatar
+                user={user}
+                size={32}
+                borderColor="var(--color-saffron)"
+              />
             </div>
           </div>
         </header>

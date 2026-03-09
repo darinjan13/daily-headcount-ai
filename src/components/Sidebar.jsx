@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
+import UserAvatar from "./UserAvatar";
 
 export default function Sidebar({ folder, files, filesLoading, onSelectFolder, onRefresh }) {
   const { user, logout } = useAuth();
@@ -115,14 +116,11 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
             className="w-full p-2.5 rounded-xl border flex items-center gap-3 text-left"
             style={{ backgroundColor: "var(--color-surface-elevated)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
           >
-            {user.photoURL && (
-              <img
-                src={user.photoURL}
-                alt={user.displayName}
-                className="w-10 h-10 rounded-full border-2"
-                style={{ borderColor: "var(--color-saffron)" }}
-              />
-            )}
+            <UserAvatar
+              user={user}
+              size={40}
+              borderColor="var(--color-saffron)"
+            />
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-sm truncate" style={{ color: "var(--color-text)" }}>{user.displayName}</p>
               <p className="text-xs truncate" style={{ color: "var(--color-text-light)" }}>{user.email}</p>
