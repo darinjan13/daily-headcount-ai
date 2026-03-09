@@ -1,13 +1,13 @@
 import { useState, useMemo } from "react";
 
 const BRAND = {
-  dark: "var(--color-dark-serpent)",
+  dark: "var(--color-text)",
   green: "var(--color-castleton-green)",
   saffron: "var(--color-saffron)",
   white: "var(--color-white)",
   muted: "var(--color-text-light)",
-  border: "rgba(19, 48, 32, 0.14)",
-  soft: "rgba(4, 98, 65, 0.04)",
+  border: "var(--color-border)",
+  soft: "var(--color-surface-soft)",
 };
 const PAGE_SIZE = 15;
 
@@ -84,19 +84,19 @@ export default function DataTable({ headers, rows }) {
       </div>
 
       {/* Table */}
-      <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "0 1px 8px rgba(19,48,32,0.07)", border: `1px solid ${BRAND.border}` }}>
+      <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "var(--color-shadow-soft)", border: `1px solid ${BRAND.border}` }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
               {headers.map(h => (
                 <th key={h} onClick={() => handleSort(h)} style={{
-                  background: BRAND.dark, color: BRAND.white, padding: "11px 14px", textAlign: "left",
+                  background: BRAND.green, color: "#FFFFFF", padding: "11px 14px", textAlign: "left",
                   fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", cursor: "pointer",
                   letterSpacing: "0.04em", borderRight: "1px solid rgba(255,255,255,0.08)",
                   userSelect: "none", transition: "background 0.15s",
                 }}
-                  onMouseEnter={e => e.currentTarget.style.background = BRAND.green}
-                  onMouseLeave={e => e.currentTarget.style.background = BRAND.dark}
+                  onMouseEnter={e => e.currentTarget.style.background = "var(--color-dark-serpent)"}
+                  onMouseLeave={e => e.currentTarget.style.background = BRAND.green}
                 >
                   {h}
                   <span style={{ marginLeft: 6, fontSize: 9, opacity: sortCol === h ? 1 : 0.3 }}>
@@ -113,7 +113,7 @@ export default function DataTable({ headers, rows }) {
               </td></tr>
             ) : visibleRows.map((row, i) => (
               <tr key={i} style={{ background: i % 2 === 0 ? BRAND.white : BRAND.soft, transition: "background 0.1s" }}
-                onMouseEnter={e => e.currentTarget.style.background = "rgba(4, 98, 65, 0.08)"}
+                onMouseEnter={e => e.currentTarget.style.background = "var(--color-chip-bg)"}
                 onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? BRAND.white : BRAND.soft}
               >
                 {row.map((cell, j) => (
@@ -150,7 +150,7 @@ function PagBtn({ onClick, disabled, active, children }) {
     <button onClick={onClick} disabled={disabled} style={{
       padding: "6px 12px", borderRadius: 8, border: `1.5px solid ${active ? BRAND.green : BRAND.border}`,
       background: active ? BRAND.green : BRAND.white,
-      color: active ? BRAND.white : disabled ? "rgba(19, 48, 32, 0.4)" : BRAND.dark,
+      color: active ? "#FFFFFF" : disabled ? "var(--color-text-light)" : BRAND.dark,
       opacity: disabled ? 0.6 : 1,
       fontSize: 12, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",
       fontFamily: "'Manrope', sans-serif", transition: "all 0.15s",

@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import { useDrivePicker } from "../hooks/useDrivePicker";
 import { useDriveFiles } from "../hooks/useDriveFiles";
 import Sidebar from "./Sidebar";
 import Grainient from "./Grainient";
+import ThemeToggle from "./ThemeToggle";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
+import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
 
@@ -69,7 +72,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
       className="rounded-2xl p-6 flex flex-col transition-all hover:shadow-xl border"
       style={{
         backgroundColor: "var(--color-white)",
-        borderColor: "rgba(19, 48, 32, 0.1)",
+        borderColor: "var(--color-border)",
         backdropFilter: "blur(10px)",
       }}
     >
@@ -87,7 +90,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
           <h4
             className="font-semibold text-sm leading-tight truncate mb-2"
             title={file.name}
-            style={{ color: "var(--color-dark-serpent)", marginBottom: "4px" }}
+            style={{ color: "var(--color-text)", marginBottom: "4px" }}
           >
             {file.name}
           </h4>
@@ -103,11 +106,11 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
             className="inline-flex items-center animate-pulse"
             style={{
               borderRadius: "20px",
-              backgroundColor: "#f0f4f0",
-              color: "#3a6b4a",
-              border: "1px solid #d1e5d8",
+              backgroundColor: "var(--color-chip-bg)",
+              color: "var(--color-chip-text)",
+              border: "1px solid var(--color-chip-border)",
               fontSize: "11px",
-              fontWeight: 500,
+              fontWeight: 600,
               padding: "3px 9px",
               gap: "6px",
             }}
@@ -124,11 +127,11 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
               key={`${file.id}-${tag}`}
               style={{
                 borderRadius: "20px",
-                backgroundColor: "#f0f4f0",
-                color: "#3a6b4a",
-                border: "1px solid #d1e5d8",
+                backgroundColor: "var(--color-chip-bg)",
+                color: "var(--color-chip-text)",
+                border: "1px solid var(--color-chip-border)",
                 fontSize: "11px",
-                fontWeight: 500,
+                fontWeight: 600,
                 padding: "3px 9px",
               }}
             >
@@ -139,7 +142,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
       </div>
 
       {/* Metadata */}
-      <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text-light)", marginBottom: "16px" }}>
+      <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-meta-text)", marginBottom: "16px" }}>
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             strokeLinecap="round"
@@ -157,8 +160,8 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
         disabled={loading}
         className="w-full text-sm font-semibold py-3 flex items-center justify-center gap-2 rounded-lg transition-all"
         style={{
-          backgroundColor: loading ? "rgba(19, 48, 32, 0.5)" : "var(--color-dark-serpent)",
-          color: "var(--color-white)",
+          backgroundColor: loading ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
+          color: "#FFFFFF",
           border: "none",
         }}
       >
@@ -196,7 +199,7 @@ function EmptyState({ folderName, onChangeFolder }) {
           width: "90px",
           height: "90px",
           borderRadius: "16px",
-          backgroundColor: "#f3f4f6",
+          backgroundColor: "var(--color-surface-soft)",
         }}
       >
         <svg
@@ -204,7 +207,7 @@ function EmptyState({ folderName, onChangeFolder }) {
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          style={{ color: "#374151" }}
+          style={{ color: "var(--color-text)" }}
         >
           <path
             strokeLinecap="round"
@@ -219,7 +222,7 @@ function EmptyState({ folderName, onChangeFolder }) {
           marginTop: "20px",
           fontSize: "15px",
           fontWeight: 600,
-          color: "#1a1a1a",
+          color: "var(--color-text)",
           lineHeight: 1.35,
         }}
       >
@@ -229,12 +232,12 @@ function EmptyState({ folderName, onChangeFolder }) {
         style={{
           marginTop: "6px",
           fontSize: "13px",
-          color: "#6b7280",
+          color: "var(--color-text-light)",
           lineHeight: 1.4,
         }}
       >
         No .xlsx or .xls files in{" "}
-        <span style={{ fontWeight: 700, color: "#1a1a1a" }}>
+        <span style={{ fontWeight: 700, color: "var(--color-text)" }}>
           {folderName || "this folder"}
         </span>
       </p>
@@ -242,7 +245,7 @@ function EmptyState({ folderName, onChangeFolder }) {
         style={{
           marginTop: "4px",
           fontSize: "13px",
-          color: "#6b7280",
+          color: "var(--color-text-light)",
           lineHeight: 1.4,
         }}
       >
@@ -253,9 +256,9 @@ function EmptyState({ folderName, onChangeFolder }) {
         className="rounded-lg transition-all"
         style={{
           marginTop: "16px",
-          backgroundColor: "#ffffff",
-          color: "#1a1a1a",
-          border: "1.5px solid #f5a623",
+          backgroundColor: "var(--color-surface-elevated)",
+          color: "var(--color-text)",
+          border: "1.5px solid var(--color-saffron)",
           borderRadius: "8px",
           padding: "10px 20px",
           fontSize: "14px",
@@ -273,9 +276,11 @@ function EmptyState({ folderName, onChangeFolder }) {
 // Main Component
 export default function HomePage() {
   const navigate = useNavigate();
+  const { theme } = useTheme();
   const { user, accessToken, loading: authLoading, login } = useAuth();
   const { openFolderPicker } = useDrivePicker();
   const { files, loading: filesLoading, error, listFiles, downloadFile } = useDriveFiles();
+  const lifewoodLogoSrc = theme === "dark" ? LIFEWOOD_DARK_LOGO_URL : lifewoodIconText;
 
   const [folder, setFolder] = useState(() => {
     const saved = localStorage.getItem("lastFolder");
@@ -399,9 +404,9 @@ export default function HomePage() {
   // Loading state
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--color-white)" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--color-bg)" }}>
         <div className="flex flex-col items-center gap-4">
-          <svg className="animate-spin w-10 h-10" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-dark-serpent)" }}>
+          <svg className="animate-spin w-10 h-10" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-text)" }}>
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
           </svg>
@@ -452,17 +457,22 @@ export default function HomePage() {
         />
 
         <div className="relative z-10 w-full flex flex-col items-center justify-center">
-          <img src={lifewoodIconText} alt="Lifewood" className="w-48 h-16 mb-2" />
+          <img
+            src={lifewoodLogoSrc}
+            alt="Lifewood"
+            className="w-48 h-16 mb-2"
+            style={{ objectFit: "contain" }}
+          />
           <div
             className="login-glass-card rounded-2xl w-full max-w-md border"
             style={{
               backdropFilter: "blur(8px)",
-              borderColor: "rgba(19, 48, 32, 0.16)",
-              boxShadow: "0 22px 48px rgba(19, 48, 32, 0.14)",
+              borderColor: "var(--color-border)",
+              boxShadow: "var(--color-shadow-strong)",
               padding: "48px 48px",
             }}
           >
-            <h1 className="text-2xl font-bold mb-4 text-center" style={{ color: "var(--color-dark-serpent)" }}>
+            <h1 className="text-2xl font-bold mb-4 text-center" style={{ color: "var(--color-text)" }}>
               DataViz
             </h1>
             <div className="mb-5">
@@ -501,7 +511,7 @@ export default function HomePage() {
 
   // Main logged-in view
   return (
-    <div style={{ backgroundColor: "var(--color-white)", minHeight: "100vh" }}>
+    <div style={{ backgroundColor: "var(--color-bg)", minHeight: "100vh" }}>
       <ScrollProgressBar />
 
       <aside
@@ -512,9 +522,9 @@ export default function HomePage() {
           width: "320px",
           height: "100vh",
           zIndex: 50,
-          background: "rgba(255, 255, 255, 0.98)",
+          background: "var(--color-surface)",
           backdropFilter: "blur(10px)",
-          borderRight: "1px solid rgba(19, 48, 32, 0.1)",
+          borderRight: "1px solid var(--color-border)",
           overflowY: "auto",
         }}
       >
@@ -532,9 +542,9 @@ export default function HomePage() {
         <header
           className="sticky top-0 z-40 border-b"
           style={{
-            background: "rgba(255, 255, 255, 0.95)",
+            background: "var(--color-surface)",
             backdropFilter: "blur(10px)",
-            borderColor: "rgba(19, 48, 32, 0.1)",
+            borderColor: "var(--color-border)",
           }}
         >
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
@@ -545,8 +555,9 @@ export default function HomePage() {
             </div>
 
             <div className="flex items-center gap-3">
+              <ThemeToggle />
               <div className="hidden sm:block text-right">
-                <div className="text-xs font-semibold" style={{ color: "var(--color-dark-serpent)" }}>
+                <div className="text-xs font-semibold" style={{ color: "var(--color-text)" }}>
                   {user.displayName}
                 </div>
                 <div className="text-xs" style={{ color: "var(--color-text-light)" }}>
@@ -570,7 +581,7 @@ export default function HomePage() {
           {/* Page Title */}
           {folder ? (
             <div className="mb-12">
-              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-dark-serpent)", marginBottom: "4px" }}>
+              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-text)", marginBottom: "4px" }}>
                 {folder.name}
               </h1>
               <p style={{ color: "var(--color-text-light)" }}>
@@ -579,7 +590,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="mb-12">
-              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-dark-serpent)" }}>
+              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-text)" }}>
                 Welcome to DataViz
               </h1>
               <p style={{ color: "var(--color-text-light)" }}>
@@ -593,8 +604,8 @@ export default function HomePage() {
             <div
               className="rounded-lg p-4 mb-8 flex gap-3 border"
               style={{
-                backgroundColor: "rgba(255, 179, 71, 0.08)",
-                borderColor: "rgba(255, 179, 71, 0.3)",
+                backgroundColor: "var(--color-alert-bg)",
+                borderColor: "var(--color-alert-border)",
                 borderLeft: `4px solid var(--color-saffron)`,
               }}
             >
@@ -603,7 +614,7 @@ export default function HomePage() {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
-                style={{ color: "var(--color-dark-serpent)" }}
+                style={{ color: "var(--color-text)" }}
               >
                 <path
                   strokeLinecap="round"
@@ -612,7 +623,7 @@ export default function HomePage() {
                   d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <div className="text-sm" style={{ color: "var(--color-dark-serpent)" }}>
+              <div className="text-sm" style={{ color: "var(--color-text)" }}>
                 {error || openError}
               </div>
             </div>
@@ -621,7 +632,7 @@ export default function HomePage() {
           {/* Loading State */}
           {filesLoading && (
             <div className="flex flex-col items-center justify-center py-24">
-              <svg className="animate-spin w-10 h-10 mb-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-dark-serpent)" }}>
+              <svg className="animate-spin w-10 h-10 mb-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-text)" }}>
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
@@ -634,14 +645,14 @@ export default function HomePage() {
             <div className="flex flex-col items-center justify-center py-24">
               <div
                 className="w-24 h-24 rounded-2xl flex items-center justify-center mb-8"
-                style={{ backgroundColor: "rgba(19, 48, 32, 0.08)" }}
+                style={{ backgroundColor: "var(--color-surface-soft)" }}
               >
                 <svg
                   className="w-12 h-12"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
-                  style={{ color: "var(--color-dark-serpent)" }}
+                  style={{ color: "var(--color-text)" }}
                 >
                   <path
                     strokeLinecap="round"
@@ -651,7 +662,7 @@ export default function HomePage() {
                   />
                 </svg>
               </div>
-              <h2 className="text-xl font-bold mb-4 text-center" style={{ color: "var(--color-dark-serpent)" }}>
+              <h2 className="text-xl font-bold mb-4 text-center" style={{ color: "var(--color-text)" }}>
                 Select a folder to get started
               </h2>
               <p className="text-sm mb-12 text-center max-w-sm leading-relaxed" style={{ color: "var(--color-text-light)" }}>
@@ -662,7 +673,7 @@ export default function HomePage() {
                 className="text-sm font-semibold px-8 py-3 flex items-center gap-2 rounded-lg transition-all"
                 style={{
                   backgroundColor: "var(--color-dark-serpent)",
-                  color: "var(--color-white)",
+                  color: "#FFFFFF",
                   border: "none",
                 }}
               >

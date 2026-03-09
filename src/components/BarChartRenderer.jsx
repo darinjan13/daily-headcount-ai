@@ -12,21 +12,21 @@ export default function BarChartRenderer({ data, config }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 60 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(19, 48, 32, 0.12)" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-grid)" vertical={false} />
         <XAxis
           dataKey={xKey}
-          tick={{ fontSize: 11, fill: "#133020" }}
+          tick={{ fontSize: 11, fill: "var(--color-chart-axis)" }}
           angle={-35}
           textAnchor="end"
           interval={0}
         />
         <YAxis
-          tick={{ fontSize: 12, fill: "#133020" }}
+          tick={{ fontSize: 12, fill: "var(--color-chart-axis)" }}
           tickFormatter={(v) => v.toLocaleString()}
         />
         <Tooltip
           formatter={(v) => v.toLocaleString()}
-          contentStyle={{ borderRadius: 8, border: "1px solid rgba(19, 48, 32, 0.15)", fontSize: 13, backgroundColor: "#FFFFFF" }}
+          contentStyle={{ borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 13, backgroundColor: "var(--color-surface-elevated)" }}
         />
         <Bar dataKey={yKey} radius={[4, 4, 0, 0]}>
           {data.map((_, i) => (

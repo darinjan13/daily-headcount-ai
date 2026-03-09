@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { useTheme } from "../context/ThemeContext";
 
 const BRAND = {
-  dark: "var(--color-dark-serpent)",
+  dark: "var(--color-text)",
   green: "var(--color-castleton-green)",
   saffron: "var(--color-saffron)",
   white: "var(--color-white)",
-  border: "rgba(19, 48, 32, 0.16)",
+  border: "var(--color-border)",
   muted: "var(--color-text-light)",
 };
 
@@ -40,6 +41,8 @@ function inferColumnType(col, sampleData) {
 }
 
 export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [groupBy, setGroupBy] = useState("");
   const [metric, setMetric] = useState("");
   const [aggregation, setAggregation] = useState("sum");
@@ -143,14 +146,17 @@ export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
         onGenerate({ rowGroup: groupBy, columnGroup, metric, aggregation, outputType, topN, title: chartTitle.trim() || `${metric} by ${groupBy}` });
       }} style={{
         padding: "9px 20px", borderRadius: 8, border: "none",
-        background: canGenerate ? BRAND.dark : "rgba(19, 48, 32, 0.18)",
-        color: canGenerate ? BRAND.white : "rgba(19, 48, 32, 0.45)",
+        background: canGenerate
+          ? "var(--color-castleton-green)"
+          : (isDark ? "rgba(4, 98, 65, 0.45)" : "#2D8C6A"),
+        color: "#FFFFFF",
+        WebkitTextFillColor: "#FFFFFF",
         fontSize: 13, fontWeight: 700, cursor: canGenerate ? "pointer" : "not-allowed",
         fontFamily: "'Manrope', sans-serif", transition: "background 0.2s",
         letterSpacing: "0.02em",
       }}
-        onMouseEnter={e => { if (canGenerate) e.currentTarget.style.background = BRAND.green; }}
-        onMouseLeave={e => { if (canGenerate) e.currentTarget.style.background = BRAND.dark; }}
+        onMouseEnter={e => { if (canGenerate) e.currentTarget.style.background = isDark ? "var(--color-dark-serpent)" : "var(--color-castleton-green)"; }}
+        onMouseLeave={e => { if (canGenerate) e.currentTarget.style.background = "var(--color-castleton-green)"; }}
       >
         Generate
       </button>

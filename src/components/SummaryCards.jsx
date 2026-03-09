@@ -1,5 +1,7 @@
+import { useTheme } from "../context/ThemeContext";
+
 const BRAND = {
-  dark: "var(--color-dark-serpent)",
+  dark: "var(--color-text)",
   green: "var(--color-castleton-green)",
   saffron: "var(--color-saffron)",
   white: "var(--color-white)",
@@ -7,6 +9,9 @@ const BRAND = {
 };
 
 export default function SummaryCards({ data, cards }) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+
   if (!cards || cards.length === 0) return null;
 
   const calculate = (column, agg) => {
@@ -27,7 +32,9 @@ export default function SummaryCards({ data, cards }) {
     return value % 1 === 0 ? value.toLocaleString() : value.toFixed(2);
   };
 
-  const accents = [BRAND.green, BRAND.dark, BRAND.saffron, BRAND.green, BRAND.dark];
+  const accents = isDark
+    ? ["#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF"]
+    : [BRAND.green, BRAND.green, BRAND.green, BRAND.green, BRAND.green];
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 24, fontFamily: "'Manrope', sans-serif" }}>
@@ -40,15 +47,15 @@ export default function SummaryCards({ data, cards }) {
             background: BRAND.white,
             borderRadius: 14,
             padding: "20px 22px",
-            border: "1px solid rgba(19, 48, 32, 0.08)",
+            border: "1px solid var(--color-border)",
             borderLeft: `4px solid ${accent}`,
-            boxShadow: "0 1px 8px rgba(19, 48, 32, 0.06)",
+            boxShadow: "var(--color-shadow-soft)",
             cursor: "default", transition: "transform 0.2s, box-shadow 0.2s",
           }}
-            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(19, 48, 32, 0.1)"; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 8px rgba(19, 48, 32, 0.06)"; }}
+            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "var(--color-shadow-strong)"; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "var(--color-shadow-soft)"; }}
           >
-            <div style={{ fontSize: 10, fontWeight: 700, color: BRAND.textLight, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>{card.label}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#FFFFFF" : BRAND.textLight, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>{card.label}</div>
             <div style={{ fontSize: 30, fontWeight: 800, color: accent, letterSpacing: "-0.03em", lineHeight: 1 }}>{formatted}</div>
           </div>
         );
