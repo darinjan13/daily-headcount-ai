@@ -944,7 +944,7 @@ export default function HomePage() {
               )}
 
               {filteredFiles.length > 0 && viewMode === "cards" && (
-                <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+                <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
                   {paginatedFiles.map((file) => (
                     <FileCard
                       key={file.id}
