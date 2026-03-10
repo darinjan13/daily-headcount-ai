@@ -90,7 +90,10 @@ export default function LineChartRenderer({ data, config }) {
             border: "1px solid var(--color-border)",
             fontSize: 13,
             backgroundColor: "var(--color-surface-elevated)",
+            color: "var(--color-text)",
           }}
+          labelStyle={{ color: "var(--color-text)" }}
+          itemStyle={{ color: "var(--color-text)" }}
         />
         <Line
           type="monotone"

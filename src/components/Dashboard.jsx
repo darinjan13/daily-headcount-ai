@@ -12,7 +12,15 @@ import {
   ResponsiveContainer, Cell, AreaChart, Area,
 } from "recharts";
 
-const LW = { dark:"#133020", green:"#046241", saffron:"#FFB347", yellow:"#FFC370", paper:"#f5eedb", salt:"#F9F7F7" };
+const LW = { dark:"var(--color-text)", green:"#046241", saffron:"#FFB347", yellow:"#FFC370", paper:"var(--color-surface)", salt:"var(--color-surface-soft)" };
+const UI = {
+  surface: "var(--color-surface)",
+  surfaceElevated: "var(--color-surface-elevated)",
+  surfaceSoft: "var(--color-surface-soft)",
+  border: "var(--color-border)",
+  text: "var(--color-text)",
+  textLight: "var(--color-text-light)",
+};
 const CHART_COLORS = ["#046241","#059669","#10b981","#34d399","#6ee7b7","#a7f3d0","#FFB347","#f97316","#3b82f6","#8b5cf6"];
 const CMP = { a:"#046241", b:"#FFB347" };
 
@@ -147,10 +155,10 @@ function getMonthRange(dateKey) {
 
 function Section({ children, accent, pinned }) {
   return (
-    <div style={{ background:"#fff", borderRadius:16, padding:24, marginBottom:20,
-      boxShadow: pinned?"0 2px 16px rgba(4,98,65,0.12)":"0 1px 8px rgba(19,48,32,0.06)",
-      border: pinned?`1.5px solid ${LW.green}`:"1px solid #e8e3d9",
-      borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid ${LW.green}`:"1px solid #e8e3d9",
+    <div style={{ background:UI.surfaceElevated, borderRadius:16, padding:24, marginBottom:20,
+      boxShadow: pinned?"0 2px 16px rgba(4,98,65,0.18)":"var(--color-shadow-soft)",
+      border: pinned?`1.5px solid ${LW.green}`:`1px solid ${UI.border}`,
+      borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid ${LW.green}`:`1px solid ${UI.border}`,
       fontFamily:"'Manrope',sans-serif" }}>
       {children}
     </div>
@@ -190,7 +198,7 @@ function DashboardNav({ activeView, setActiveView, pinnedCount, filteredTableCou
     <div style={{ display:"flex", gap:8, marginBottom:18 }}>
       {[{id:"home",label:`Home${filteredTableCount>0?` · ${filteredTableCount} filtered`:""}`},{id:"charts",label:`Charts${pinnedCount>0?` · ${pinnedCount} pinned`:""}`}].map(tab=>{
         const active=activeView===tab.id;
-        return <button key={tab.id} onClick={()=>setActiveView(tab.id)} style={{ padding:"8px 14px", borderRadius:10, border:`1px solid ${active?LW.green:"#e8e3d9"}`, background:active?LW.green:"#fff", color:active?"#fff":LW.dark, fontSize:12, fontWeight:700, cursor:"pointer" }}>{tab.label}</button>;
+        return <button key={tab.id} onClick={()=>setActiveView(tab.id)} style={{ padding:"8px 14px", borderRadius:10, border:`1px solid ${active?LW.green:UI.border}`, background:active?LW.green:UI.surface, color:active?"#fff":UI.text, fontSize:12, fontWeight:700, cursor:"pointer", boxShadow:"var(--color-shadow-soft)" }}>{tab.label}</button>;
       })}
     </div>
   );
@@ -255,13 +263,13 @@ function WideFilterBar({ wideDateCols, objectData, wideFilters, setWideFilters, 
   const activeCount = (wideFilters.section !== "all" ? 1 : 0) + (wideFilters.name !== "all" ? 1 : 0) + (wideFilters.dateFrom !== "all" || wideFilters.dateTo !== "all" ? 1 : 0);
 
   return (
-    <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e8e3d9", marginBottom:20, overflow:"hidden", fontFamily:"'Manrope',sans-serif" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", flexWrap:"wrap" }}>
-        <span style={{ fontSize:11, fontWeight:700, color:"#9cafa4", textTransform:"uppercase", letterSpacing:"0.08em", flexShrink:0 }}>🔍 Filters</span>
+    <div style={{ background:UI.surfaceElevated, borderRadius:14, border:`1px solid ${UI.border}`, marginBottom:20, overflow:"hidden", fontFamily:"'Manrope',sans-serif" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", flexWrap:"wrap", color:UI.text }}>
+        <span style={{ fontSize:11, fontWeight:700, color:UI.textLight, textTransform:"uppercase", letterSpacing:"0.08em", flexShrink:0 }}>🔍 Filters</span>
 
         {effectiveSectionCol && sections.length > 0 && (
           <select value={wideFilters.section} onChange={e => setWideFilters(f => ({ ...f, section: e.target.value, name: "all" }))}
-            style={{ padding:"6px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer", fontWeight:600 }}>
+            style={{ padding:"6px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer", fontWeight:600 }}>
             <option value="all">All Sections</option>
             {sections.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -269,7 +277,7 @@ function WideFilterBar({ wideDateCols, objectData, wideFilters, setWideFilters, 
 
         {effectivePrimaryCol && names.length > 0 && (
           <select value={wideFilters.name} onChange={e => setWideFilters(f => ({ ...f, name: e.target.value }))}
-            style={{ padding:"6px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer", fontWeight:600 }}>
+            style={{ padding:"6px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer", fontWeight:600 }}>
             <option value="all">All {effectivePrimaryCol}s</option>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
           </select>
@@ -291,7 +299,7 @@ function WideFilterBar({ wideDateCols, objectData, wideFilters, setWideFilters, 
                   return { ...f, dateFrom: val, dateTo: newTo };
                 });
               }}
-              style={{ padding:"6px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer", fontWeight:600 }}>
+              style={{ padding:"6px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer", fontWeight:600 }}>
               <option value="all">From</option>
               {wideDateCols.map(dc => <option key={dc} value={dc}>{dc}</option>)}
             </select>
@@ -302,13 +310,13 @@ function WideFilterBar({ wideDateCols, objectData, wideFilters, setWideFilters, 
                 const val = e.target.value;
                 setWideFilters(f => {
                   // If new "to" is before current "from", reset "from"
-                  const fromIdx = wideDateCols.indexOf(f.dateFrom);
+                  const fromIdx = wideFilters.dateFrom === "all" ? 0 : wideDateCols.indexOf(wideFilters.dateFrom);
                   const toIdx = wideDateCols.indexOf(val);
                   const newFrom = (f.dateFrom !== "all" && toIdx < fromIdx) ? val : f.dateFrom;
                   return { ...f, dateTo: val, dateFrom: newFrom };
                 });
               }}
-              style={{ padding:"6px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer", fontWeight:600 }}>
+              style={{ padding:"6px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer", fontWeight:600 }}>
               <option value="all">To</option>
               {wideDateCols.map(dc => {
                 const fromIdx = wideFilters.dateFrom === "all" ? 0 : wideDateCols.indexOf(wideFilters.dateFrom);
@@ -321,29 +329,29 @@ function WideFilterBar({ wideDateCols, objectData, wideFilters, setWideFilters, 
 
         {activeCount > 0 && (
           <button onClick={() => setWideFilters({ section:"all", name:"all", dateFrom:"all", dateTo:"all" })}
-            style={{ marginLeft:"auto", padding:"5px 12px", borderRadius:8, border:"1px solid #e8e3d9", background:"#fff", fontSize:11, fontWeight:700, color:"#9cafa4", cursor:"pointer" }}>
-            Clear all
-          </button>
-        )}
-      </div>
+            style={{ marginLeft:"auto", padding:"5px 12px", borderRadius:8, border:`1px solid ${UI.border}`, background:UI.surface, fontSize:11, fontWeight:700, color:UI.textLight, cursor:"pointer" }}>
+             Clear all
+           </button>
+         )}
+       </div>
 
-      {/* Active filter pills */}
-      {(wideFilters.section !== "all" || wideFilters.name !== "all") && (
-        <div style={{ borderTop:"1px solid #f0ece4", padding:"8px 16px", display:"flex", gap:8, flexWrap:"wrap" }}>
-          {wideFilters.section !== "all" && (
-            <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px", borderRadius:100, background:LW.green, color:"#fff", fontSize:11, fontWeight:700 }}>
+       {/* Active filter pills */}
+       {(wideFilters.section !== "all" || wideFilters.name !== "all") && (
+         <div style={{ borderTop:`1px solid ${UI.border}`, padding:"8px 16px", display:"flex", gap:8, flexWrap:"wrap" }}>
+           {wideFilters.section !== "all" && (
+             <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px", borderRadius:100, background:LW.green, color:"#fff", fontSize:11, fontWeight:700 }}>
               Section: {wideFilters.section}
               <button onClick={() => setWideFilters(f => ({ ...f, section:"all", name:"all" }))} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.7)", cursor:"pointer", padding:0, fontSize:13 }}>×</button>
             </span>
-          )}
-          {wideFilters.name !== "all" && (
-            <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px", borderRadius:100, background:LW.green, color:"#fff", fontSize:11, fontWeight:700 }}>
+           )}
+           {wideFilters.name !== "all" && (
+             <span style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"3px 10px", borderRadius:100, background:LW.green, color:"#fff", fontSize:11, fontWeight:700 }}>
               {wideFilters.name}
               <button onClick={() => setWideFilters(f => ({ ...f, name:"all" }))} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.7)", cursor:"pointer", padding:0, fontSize:13 }}>×</button>
             </span>
-          )}
-        </div>
-      )}
+           )}
+         </div>
+       )}
     </div>
   );
 }
@@ -364,9 +372,9 @@ function GlobalFilterBar({ dateCol, dateOptions, filters, setFilters, categoryCo
   const dateOptionsAsc = [...dateOptions].reverse();
 
   return (
-    <div style={{ background:"#fff", borderRadius:14, border:"1px solid #e8e3d9", marginBottom:20, overflow:"hidden", fontFamily:"'Manrope',sans-serif" }}>
+    <div style={{ background:UI.surfaceElevated, borderRadius:14, border:`1px solid ${UI.border}`, marginBottom:20, overflow:"hidden", fontFamily:"'Manrope',sans-serif" }}>
       <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", flexWrap:"wrap" }}>
-        <span style={{ fontSize:11, fontWeight:700, color:"#9cafa4", textTransform:"uppercase", letterSpacing:"0.08em", flexShrink:0 }}>🔍 Filters</span>
+        <span style={{ fontSize:11, fontWeight:700, color:UI.textLight, textTransform:"uppercase", letterSpacing:"0.08em", flexShrink:0 }}>🔍 Filters</span>
 
         {dateCol && dateOptionsAsc.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
@@ -381,7 +389,7 @@ function GlobalFilterBar({ dateCol, dateOptions, filters, setFilters, categoryCo
                 const newTo=f.dateTo==="all"?val:(fromIdx>toIdx?val:f.dateTo);
                 return{...f,dateFrom:val,dateTo:newTo};
               });
-            }} style={{ padding:"6px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer", fontWeight:600 }}>
+            }} style={{ padding:"6px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer", fontWeight:600 }}>
               <option value="all">From</option>
               {dateOptionsAsc.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
             </select>
@@ -394,7 +402,7 @@ function GlobalFilterBar({ dateCol, dateOptions, filters, setFilters, categoryCo
                 const newFrom=(f.dateFrom!=="all"&&toIdx<fromIdx)?val:f.dateFrom;
                 return{...f,dateTo:val,dateFrom:newFrom};
               });
-            }} style={{ padding:"6px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer", fontWeight:600 }}>
+            }} style={{ padding:"6px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer", fontWeight:600 }}>
               <option value="all">To</option>
               {dateOptionsAsc.map(d=>{
                 const fromIdx=filters.dateFrom==="all"?0:dateOptionsAsc.indexOf(filters.dateFrom);
@@ -413,20 +421,20 @@ function GlobalFilterBar({ dateCol, dateOptions, filters, setFilters, categoryCo
         ))}
 
         <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
-          {activeCount>0 && <button onClick={()=>setFilters({dateFrom:"all",dateTo:"all",categories:{}})} style={{ padding:"5px 12px", borderRadius:8, border:"1px solid #e8e3d9", background:"#fff", fontSize:11, fontWeight:700, color:"#9cafa4", cursor:"pointer" }}>Clear all</button>}
-          {categoryColumns.length>0 && <button onClick={()=>setExpanded(v=>!v)} style={{ padding:"5px 12px", borderRadius:8, border:`1px solid ${expanded?LW.green:"#e8e3d9"}`, background:expanded?LW.green:"#fff", fontSize:11, fontWeight:700, color:expanded?"#fff":"#9cafa4", cursor:"pointer" }}>{expanded?"▲ Less":"▼ More filters"}</button>}
+          {activeCount>0 && <button onClick={()=>setFilters({dateFrom:"all",dateTo:"all",categories:{}})} style={{ padding:"5px 12px", borderRadius:8, border:`1px solid ${UI.border}`, background:UI.surface, fontSize:11, fontWeight:700, color:UI.textLight, cursor:"pointer" }}>Clear all</button>}
+          {categoryColumns.length>0 && <button onClick={()=>setExpanded(v=>!v)} style={{ padding:"5px 12px", borderRadius:8, border:`1px solid ${expanded?LW.green:UI.border}`, background:expanded?LW.green:UI.surface, fontSize:11, fontWeight:700, color:expanded?"#fff":UI.textLight, cursor:"pointer" }}>{expanded?"▲ Less":"▼ More filters"}</button>}
         </div>
       </div>
 
       {expanded && (
-        <div style={{ borderTop:"1px solid #f0ece4", padding:"14px 16px", display:"flex", flexWrap:"wrap", gap:16 }}>
+        <div style={{ borderTop:`1px solid ${UI.border}`, padding:"14px 16px", display:"flex", flexWrap:"wrap", gap:16 }}>
           {categoryColumns.slice(0,6).map(col=>(
             <div key={col}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#9cafa4", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>{col}</div>
+              <div style={{ fontSize:10, fontWeight:700, color:UI.textLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>{col}</div>
               <select value={filters.categories[col]||""} onChange={e=>{
                 const val=e.target.value;
                 setFilters(f=>({...f,categories:val?{...f.categories,[col]:val}:(()=>{const c={...f.categories};delete c[col];return c;})()}));
-              }} style={{ padding:"6px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer", fontWeight:500 }}>
+              }} style={{ padding:"6px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer", fontWeight:500 }}>
                 <option value="">All</option>
                 {getCategoryValues(col).map(v=><option key={v} value={v}>{v}</option>)}
               </select>
@@ -501,20 +509,20 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
       <SectionHeader title="Compare Periods" subtitle="Select two periods to compare KPIs side by side" badge="AUTO" />
       <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:20 }}>
         {["day","week","month"].map(m=>(
-          <button key={m} onClick={()=>setMode(m)} style={{ padding:"5px 12px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`1px solid ${mode===m?LW.green:"#e8e3d9"}`, background:mode===m?LW.green:"#fff", color:mode===m?"#fff":LW.dark }}>{m.charAt(0).toUpperCase()+m.slice(1)}</button>
+          <button key={m} onClick={()=>setMode(m)} style={{ padding:"5px 12px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`1px solid ${mode===m?LW.green:UI.border}`, background:mode===m?LW.green:UI.surface, color:mode===m?"#fff":UI.text }}>{m.charAt(0).toUpperCase()+m.slice(1)}</button>
         ))}
         <div style={{ display:"flex", gap:8, alignItems:"center", marginLeft:8 }}>
           <span style={{ width:10,height:10,borderRadius:2,background:CMP.a,display:"inline-block" }}/>
-          <select value={dateA} onChange={e=>setDateA(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer" }}>
+          <select value={dateA} onChange={e=>setDateA(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}>
             {dateOptions.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
           </select>
           <span style={{ fontSize:12, color:"#9cafa4", fontWeight:700 }}>vs</span>
           <span style={{ width:10,height:10,borderRadius:2,background:CMP.b,display:"inline-block" }}/>
-          <select value={dateB} onChange={e=>setDateB(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:"1.5px solid #e8e3d9", fontSize:12, color:LW.dark, background:"#fff", outline:"none", cursor:"pointer" }}>
+          <select value={dateB} onChange={e=>setDateB(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}>
             {dateOptions.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
           </select>
         </div>
-        <span style={{ fontSize:11, color:"#9cafa4" }}>{dataA.length} vs {dataB.length} rows</span>
+        <span style={{ fontSize:11, color:UI.textLight }}>{dataA.length} vs {dataB.length} rows</span>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
         {displayCards.map((card,idx)=>{
@@ -524,8 +532,8 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
           const positive = vA >= vB;
           const hint = card.formatHint||"number";
           return (
-            <div key={card.id||idx} style={{ background:LW.salt, borderRadius:14, padding:"18px 20px", border:"1px solid #e8e3d9" }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#9cafa4", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{card.label}</div>
+            <div key={card.id||idx} style={{ background:UI.surfaceElevated, borderRadius:14, padding:"18px 20px", border:`1px solid ${UI.border}` }}>
+              <div style={{ fontSize:10, fontWeight:700, color:UI.textLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{card.label}</div>
               <div style={{ display:"flex", gap:12, alignItems:"flex-end", marginBottom:8, flexWrap:"wrap" }}>
                 <div>
                   <div style={{ fontSize:9, color:CMP.a, fontWeight:700, marginBottom:2 }}>Period A</div>
@@ -932,7 +940,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
 
           {!isWide&&dateCol&&dateOptions.length>=2&&(
             <div style={{marginBottom:20}}>
-              <button onClick={()=>setShowCompare(v=>!v)} style={{padding:"8px 16px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",border:`1px solid ${showCompare?LW.green:"#e8e3d9"}`,background:showCompare?LW.green:"#fff",color:showCompare?"#fff":LW.dark}}>
+              <button onClick={()=>setShowCompare(v=>!v)} style={{padding:"8px 16px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",border:`1px solid ${showCompare?LW.green:UI.border}`,background:showCompare?LW.green:UI.surface,color:showCompare?"#fff":UI.text,boxShadow:"var(--color-shadow-soft)"}}>
                 {showCompare?"▲ Hide Comparison":"⚖️ Compare Periods"}
               </button>
             </div>

@@ -4,7 +4,8 @@ const BRAND = {
   dark: "var(--color-text)",
   green: "var(--color-castleton-green)",
   saffron: "var(--color-saffron)",
-  white: "var(--color-white)",
+  white: "var(--color-surface)",
+  elevated: "var(--color-surface-elevated)",
   muted: "var(--color-text-light)",
   border: "var(--color-border)",
   soft: "var(--color-surface-soft)",
@@ -66,14 +67,14 @@ export default function DataTable({ headers, rows }) {
         <div style={{ position: "relative" }}>
           <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, pointerEvents: "none", color: BRAND.muted }}>🔍</span>
           <input value={search} onChange={e => { setSearch(e.target.value); setPage(0); }}
-            onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)}
-            placeholder="Search all columns..."
-            style={{
-              paddingLeft: 34, paddingRight: 32, paddingTop: 8, paddingBottom: 8, borderRadius: 10,
-              border: `1.5px solid ${searchFocus ? BRAND.green : BRAND.border}`, fontSize: 12, outline: "none",
-              background: BRAND.white, color: BRAND.dark, fontFamily: "'Manrope', sans-serif", width: 220,
-              transition: "border-color 0.2s",
-            }} />
+             onFocus={() => setSearchFocus(true)} onBlur={() => setSearchFocus(false)}
+             placeholder="Search all columns..."
+             style={{
+               paddingLeft: 34, paddingRight: 32, paddingTop: 8, paddingBottom: 8, borderRadius: 10,
+               border: `1.5px solid ${searchFocus ? BRAND.green : BRAND.border}`, fontSize: 12, outline: "none",
+               background: BRAND.elevated, color: BRAND.dark, fontFamily: "'Manrope', sans-serif", width: 220,
+               transition: "border-color 0.2s",
+             }} />
           {search && (
             <button onClick={() => { setSearch(""); setPage(0); }} style={{
               position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
@@ -84,7 +85,7 @@ export default function DataTable({ headers, rows }) {
       </div>
 
       {/* Table */}
-      <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "var(--color-shadow-soft)", border: `1px solid ${BRAND.border}` }}>
+      <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "var(--color-shadow-soft)", border: `1px solid ${BRAND.border}`, background: BRAND.elevated }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr>
@@ -149,7 +150,7 @@ function PagBtn({ onClick, disabled, active, children }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       padding: "6px 12px", borderRadius: 8, border: `1.5px solid ${active ? BRAND.green : BRAND.border}`,
-      background: active ? BRAND.green : BRAND.white,
+      background: active ? BRAND.green : BRAND.elevated,
       color: active ? "#FFFFFF" : disabled ? "var(--color-text-light)" : BRAND.dark,
       opacity: disabled ? 0.6 : 1,
       fontSize: 12, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer",

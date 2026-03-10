@@ -1,6 +1,13 @@
 import { useMemo } from "react";
 
-const LW = { dark: "#133020", green: "#046241", saffron: "#FFB347", salt: "#F9F7F7" };
+const LW = { dark: "var(--color-text)", green: "var(--color-castleton-green)", saffron: "var(--color-saffron)", salt: "var(--color-surface-soft)" };
+const UI = {
+  surface: "var(--color-surface)",
+  elevated: "var(--color-surface-elevated)",
+  border: "var(--color-border)",
+  text: "var(--color-text)",
+  textLight: "var(--color-text-light)",
+};
 const ACCENTS = [LW.green, LW.dark, LW.saffron, "#417256", "#034E34"];
 
 const fmt = (value, hint) => {
@@ -97,26 +104,27 @@ function SummaryCard({ card, data, accent }) {
   return (
     <div
       style={{
-        background: "#fff",
+        background: UI.elevated,
         borderRadius: 16,
         padding: "20px 22px",
         borderLeft: `4px solid ${accent}`,
-        boxShadow: "0 1px 6px rgba(19,48,32,0.06)",
+        boxShadow: "var(--color-shadow-soft)",
         display: "flex",
         flexDirection: "column",
         gap: 0,
         transition: "transform 0.18s, box-shadow 0.18s",
         cursor: "default",
         fontFamily: "'Manrope', sans-serif",
+        border: `1px solid ${UI.border}`,
       }}
     >
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "#9cafa4", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 3 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: UI.textLight, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 3 }}>
             {card.label}
           </div>
-          <div style={{ fontSize: 11, color: "#b8c8c0", fontWeight: 500 }}>
+          <div style={{ fontSize: 11, color: UI.textLight, fontWeight: 500 }}>
             Top {rankings.length} ranking
           </div>
         </div>
@@ -125,7 +133,7 @@ function SummaryCard({ card, data, accent }) {
         </div>
       </div>
 
-      <div style={{ height: 1, background: "rgba(19,48,32,0.07)", marginBottom: 12 }} />
+      <div style={{ height: 1, background: UI.border, opacity: 0.6, marginBottom: 12 }} />
 
       {/* Rankings list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -153,7 +161,7 @@ function SummaryCard({ card, data, accent }) {
                   flex: 1,
                   fontSize: 12,
                   fontWeight: i === 0 ? 700 : 500,
-                  color: i === 0 ? LW.dark : "#4a6358",
+                  color: i === 0 ? UI.text : UI.textLight,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
@@ -165,14 +173,14 @@ function SummaryCard({ card, data, accent }) {
                 <div style={{
                   fontSize: 12,
                   fontWeight: 700,
-                  color: i === 0 ? accent : LW.dark,
+                  color: i === 0 ? accent : UI.text,
                   flexShrink: 0,
                 }}>
                   {item.display}
                 </div>
               </div>
               <div style={{ paddingLeft: 30 }}>
-                <RankBar pct={pct} accent={i === 0 ? accent : "rgba(19,48,32,0.15)"} />
+                <RankBar pct={pct} accent={i === 0 ? accent : "rgba(19,48,32,0.25)"} />
               </div>
             </div>
           );

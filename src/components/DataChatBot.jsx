@@ -3,10 +3,14 @@ import { useState, useRef, useEffect, useMemo } from "react";
 const WELCOME = "Hi! I have access to your full dataset and can answer precise questions — totals, rankings, breakdowns, anything. What would you like to know?";
 
 const BRAND = {
-  dark: "var(--color-dark-serpent)",
+  dark: "var(--color-text)",
+  header: "var(--color-dark-serpent)",
   green: "var(--color-castleton-green)",
   saffron: "var(--color-saffron)",
-  white: "var(--color-white)",
+  white: "var(--color-surface-elevated)",
+  soft: "var(--color-surface-soft)",
+  surface: "var(--color-surface)",
+  border: "var(--color-border)",
   muted: "var(--color-text-light)",
 };
 
@@ -442,9 +446,9 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl transition-all duration-200 cursor-pointer border-none"
         style={{
           color: BRAND.white,
-          backgroundColor: open ? "rgba(19, 48, 32, 0.55)" : BRAND.green,
-          transform: open ? "scale(0.92)" : "scale(1)",
-        }}
+          backgroundColor: open ? "rgba(4, 98, 65, 0.4)" : BRAND.green,
+           transform: open ? "scale(0.92)" : "scale(1)",
+         }}
         title="Ask about your data"
       >
         {open ? "✕" : "💬"}
@@ -456,12 +460,13 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
           className="fixed bottom-24 right-6 z-50 w-[460px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           style={{
             height: "600px",
-            backgroundColor: BRAND.white,
-            border: "1px solid rgba(19, 48, 32, 0.12)",
+            backgroundColor: BRAND.surface,
+            border: `1px solid ${BRAND.border}`,
+            color: BRAND.dark,
           }}
         >
           {/* Header */}
-          <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: BRAND.dark }}>
+          <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: BRAND.header }}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-base" style={{ backgroundColor: BRAND.green }}>🤖</div>
             <div>
               <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>Data Assistant</div>
@@ -474,7 +479,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ backgroundColor: "rgba(4, 98, 65, 0.04)" }}>
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3" style={{ backgroundColor: BRAND.soft }}>
             {messages.map((msg, i) => (
               <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
                 <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} w-full`}>
@@ -484,8 +489,8 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
                   <div
                     className="max-w-[88%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed"
                     style={msg.role === "user"
-                      ? { backgroundColor: BRAND.green, color: BRAND.white, borderBottomRightRadius: 8, whiteSpace: "pre-wrap" }
-                      : { backgroundColor: BRAND.white, color: BRAND.dark, border: "1px solid rgba(19, 48, 32, 0.1)", borderBottomLeftRadius: 8 }}
+                      ? { backgroundColor: BRAND.green, color: "#fff", borderBottomRightRadius: 8, whiteSpace: "pre-wrap" }
+                      : { backgroundColor: BRAND.white, color: BRAND.dark, border: `1px solid ${BRAND.border}`, borderBottomLeftRadius: 8 }}
                   >
                     {msg.role === "assistant"
                       ? <MarkdownMessage text={msg.content} />
@@ -507,7 +512,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
                         );
                       }}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                      style={{ backgroundColor: "rgba(4, 98, 65, 0.08)", border: "1px solid rgba(4, 98, 65, 0.28)", color: BRAND.green }}
+                      style={{ backgroundColor: "rgba(4, 98, 65, 0.08)", border: "1px solid rgba(4,98,65,0.28)", color: BRAND.green }}
                     >
                       <span>📊</span> Add Chart to Charts
                     </button>
@@ -528,7 +533,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
                     key={i}
                     onClick={() => { setInput(q); inputRef.current?.focus(); }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer"
-                    style={{ backgroundColor: BRAND.white, border: "1px solid rgba(19, 48, 32, 0.14)", color: BRAND.dark }}
+                    style={{ backgroundColor: BRAND.white, border: `1px solid ${BRAND.border}`, color: BRAND.dark }}
                   >
                     {q}
                   </button>
@@ -540,7 +545,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
             {loading && (
               <div className="flex justify-start">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.12)" }}>🤖</div>
-                <div className="px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5" style={{ backgroundColor: BRAND.white, border: "1px solid rgba(19, 48, 32, 0.1)" }}>
+                <div className="px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5" style={{ backgroundColor: BRAND.white, border: `1px solid ${BRAND.border}` }}>
                   <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: BRAND.saffron, animationDelay: "0ms" }} />
                   <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: BRAND.saffron, animationDelay: "150ms" }} />
                   <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: BRAND.saffron, animationDelay: "300ms" }} />
@@ -551,7 +556,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
           </div>
 
           {/* Input */}
-          <div className="px-3 py-3 flex gap-2 items-end shrink-0" style={{ borderTop: "1px solid rgba(19, 48, 32, 0.1)", backgroundColor: BRAND.white }}>
+          <div className="px-3 py-3 flex gap-2 items-end shrink-0" style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.white }}>
             <textarea
               ref={inputRef}
               value={input}
@@ -563,7 +568,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
               style={{
                 maxHeight: "100px",
                 overflowY: "auto",
-                border: "1px solid rgba(19, 48, 32, 0.18)",
+                border: `1px solid ${BRAND.border}`,
                 color: BRAND.dark,
                 outline: "none",
               }}
@@ -583,7 +588,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
             </button>
           </div>
 
-          <div className="px-4 py-1.5 text-center shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.04)", borderTop: "1px solid rgba(19, 48, 32, 0.08)" }}>
+          <div className="px-4 py-1.5 text-center shrink-0" style={{ backgroundColor: BRAND.soft, borderTop: `1px solid ${BRAND.border}` }}>
             <span className="text-xs" style={{ color: BRAND.muted }}>Enter to send · Shift+Enter for new line</span>
           </div>
         </div>
