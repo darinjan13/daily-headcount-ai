@@ -887,7 +887,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
   );
 
   return (
-    <div style={{padding:"24px",maxWidth:1600,margin:"0 auto",fontFamily:"'Manrope',sans-serif"}}>
+    <div style={{ padding: "48px 32px 80px", maxWidth: 1280, width: "100%", margin: "0 auto", fontFamily: "'Manrope',sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
 
       {aiGenerated&&datasetSummary&&<AIBanner summary={datasetSummary}/>}
@@ -1142,3 +1142,4 @@ export default function Dashboard({ data, blueprint, fileId }) {
     </div>
   );
 }
+
