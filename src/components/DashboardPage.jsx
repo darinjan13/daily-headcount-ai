@@ -127,7 +127,7 @@ export default function DashboardPage() {
         />
       </aside>
 
-      <div style={{ marginLeft: "320px", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <div style={{ marginLeft: "320px", width: "calc(100% - 320px)", minHeight: "100vh", display: "flex", flexDirection: "column", overflowX: "hidden" }}>
         {/* Top bar */}
         <div
           className="sticky top-0 z-50"

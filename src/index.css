@@ -125,6 +125,7 @@ body {
   color: var(--color-text);
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 
 #root {
