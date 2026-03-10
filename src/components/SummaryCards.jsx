@@ -1,65 +1,194 @@
-import { useTheme } from "../context/ThemeContext";
+import { useMemo } from "react";
 
-const BRAND = {
-  dark: "var(--color-text)",
-  green: "var(--color-castleton-green)",
-  saffron: "var(--color-saffron)",
-  white: "var(--color-white)",
-  textLight: "var(--color-text-light)",
+const LW = { dark: "#133020", green: "#046241", saffron: "#FFB347", salt: "#F9F7F7" };
+const ACCENTS = [LW.green, LW.dark, LW.saffron, "#417256", "#034E34"];
+
+const fmt = (value, hint) => {
+  if (value === null || value === undefined || isNaN(value)) return "—";
+  // guard: if value is a large number, percent hints are clearly wrong
+  if ((hint === "percent" || hint === "percent_decimal") && Math.abs(value) >= 2) hint = "number";
+  if (hint === "currency") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+  if (hint === "percent") return `${Number(value).toFixed(1)}%`;
+  if (hint === "percent_decimal") return `${(Number(value) * 100).toFixed(1)}%`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value % 1 === 0 ? value.toLocaleString() : value.toFixed(2);
 };
 
-export default function SummaryCards({ data, cards }) {
-  const { theme } = useTheme();
-  const isDark = theme === "dark";
+const MEDALS = ["🥇", "🥈", "🥉"];
 
-  if (!cards || cards.length === 0) return null;
+function RankBar({ pct, accent }) {
+  return (
+    <div style={{ height: 3, borderRadius: 999, background: "rgba(19,48,32,0.07)", overflow: "hidden", marginTop: 3 }}>
+      <div style={{ height: "100%", width: `${Math.min(100, Math.max(2, pct))}%`, background: accent, borderRadius: 999 }} />
+    </div>
+  );
+}
 
-  const calculate = (column, agg) => {
-    const rawValues = data.map(r => r[column]).filter(v => v !== null && v !== undefined && String(v).trim() !== "");
-    if (agg === "count") return new Set(rawValues.map(v => String(v).trim().toLowerCase())).size;
-    const numValues = rawValues.map(v => Number(v)).filter(v => !isNaN(v));
-    if (agg === "sum") return numValues.reduce((a, b) => a + b, 0);
-    if (agg === "avg") return numValues.length ? numValues.reduce((a, b) => a + b, 0) / numValues.length : 0;
-    return 0;
-  };
+function SummaryCard({ card, data, accent }) {
+  const hint = card.formatHint || "number";
 
-  const format = (value, hint) => {
-    if (hint === "currency") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
-    if (hint === "percent") return `${value.toFixed(1)}%`;
-    if (hint === "percent_decimal") return `${(value * 100).toFixed(1)}%`;
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
-    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-    return value % 1 === 0 ? value.toLocaleString() : value.toFixed(2);
-  };
+  const { rankings, topValue } = useMemo(() => {
+    const rawValues = data
+      .map(r => r[card.column])
+      .filter(v => v !== null && v !== undefined && String(v).trim() !== "");
 
-  const accents = isDark
-    ? ["#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF"]
-    : [BRAND.green, BRAND.green, BRAND.green, BRAND.green, BRAND.green];
+    if (card.aggregation === "count") {
+      // rank by frequency, case-insensitive grouping, preserve original casing
+      const freq = {};
+      const canonical = {}; // lowercase key → original display label (first seen)
+      rawValues.forEach(v => {
+        const k = String(v).trim();
+        const lower = k.toLowerCase();
+        freq[lower] = (freq[lower] || 0) + 1;
+        if (!canonical[lower]) canonical[lower] = k;
+      });
+      const sorted = Object.entries(freq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([lower, count]) => ({ label: canonical[lower], value: count, display: count.toLocaleString() }));
+      return { rankings: sorted, topValue: sorted[0]?.value || 0 };
+    }
+
+    // numeric — find the best category column to group by
+    const allCols = Object.keys(data[0] || {});
+    const categoryCol = allCols.find(col => {
+      if (col === card.column) return false;
+      const vals = data.map(r => r[col]).filter(v => v !== null && v !== undefined && String(v).trim() !== "");
+      if (!vals.length) return false;
+      const unique = new Set(vals.map(v => String(v).trim().toLowerCase()));
+      const uniqueRatio = unique.size / vals.length;
+      // good label column: not all unique (not an ID), not all same, mostly text
+      const numericCount = vals.filter(v => !isNaN(parseFloat(String(v).replace(/,/g, "")))).length;
+      const isTextCol = numericCount / vals.length < 0.5;
+      return isTextCol && uniqueRatio > 0.005 && uniqueRatio < 0.95 && unique.size >= 2;
+    });
+
+    if (categoryCol) {
+      // group by category column, case-insensitive, preserve original casing
+      const groups = {};
+      const canonical = {};
+      data.forEach(row => {
+        const raw = String(row[categoryCol] ?? "—").trim();
+        const lower = raw.toLowerCase();
+        const num = parseFloat(String(row[card.column] ?? "").replace(/,/g, ""));
+        if (!isNaN(num)) {
+          groups[lower] = (groups[lower] || 0) + num;
+          if (!canonical[lower]) canonical[lower] = raw;
+        }
+      });
+      const sorted = Object.entries(groups)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 8)
+        .map(([lower, value]) => ({ label: canonical[lower], value, display: fmt(value, hint) }));
+      return { rankings: sorted, topValue: sorted[0]?.value || 0 };
+    }
+
+    // fallback — rank individual rows by value
+    const entries = data
+      .map(r => ({ label: String(r[card.column] ?? "—").trim(), raw: parseFloat(String(r[card.column] ?? "").replace(/,/g, "")) }))
+      .filter(e => !isNaN(e.raw))
+      .sort((a, b) => b.raw - a.raw)
+      .slice(0, 8)
+      .map(e => ({ label: e.label, value: e.raw, display: fmt(e.raw, hint) }));
+    return { rankings: entries, topValue: entries[0]?.value || 0 };
+  }, [data, card]);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 24, fontFamily: "'Manrope', sans-serif" }}>
-      {cards.map((card, idx) => {
-        const raw = calculate(card.column, card.aggregation);
-        const formatted = format(raw, card.formatHint || "number");
-        const accent = accents[idx % accents.length];
-        return (
-          <div key={card.id} style={{
-            background: BRAND.white,
-            borderRadius: 14,
-            padding: "20px 22px",
-            border: "1px solid var(--color-border)",
-            borderLeft: `4px solid ${accent}`,
-            boxShadow: "var(--color-shadow-soft)",
-            cursor: "default", transition: "transform 0.2s, box-shadow 0.2s",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "var(--color-shadow-strong)"; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "var(--color-shadow-soft)"; }}
-          >
-            <div style={{ fontSize: 10, fontWeight: 700, color: isDark ? "#FFFFFF" : BRAND.textLight, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>{card.label}</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: accent, letterSpacing: "-0.03em", lineHeight: 1 }}>{formatted}</div>
+    <div
+      style={{
+        background: "#fff",
+        borderRadius: 16,
+        padding: "20px 22px",
+        borderLeft: `4px solid ${accent}`,
+        boxShadow: "0 1px 6px rgba(19,48,32,0.06)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 0,
+        transition: "transform 0.18s, box-shadow 0.18s",
+        cursor: "default",
+        fontFamily: "'Manrope', sans-serif",
+      }}
+    >
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "#9cafa4", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 3 }}>
+            {card.label}
           </div>
-        );
-      })}
+          <div style={{ fontSize: 11, color: "#b8c8c0", fontWeight: 500 }}>
+            Top {rankings.length} ranking
+          </div>
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: accent, letterSpacing: "-0.03em" }}>
+          {fmt(rankings[0]?.value, hint)}
+        </div>
+      </div>
+
+      <div style={{ height: 1, background: "rgba(19,48,32,0.07)", marginBottom: 12 }} />
+
+      {/* Rankings list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rankings.map((item, i) => {
+          const pct = topValue > 0 ? (item.value / topValue) * 100 : 0;
+          const isMedal = i < 3;
+          return (
+            <div key={i}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {/* Rank indicator */}
+                <div style={{
+                  width: 22, height: 22, borderRadius: 6,
+                  background: isMedal ? accent : "rgba(19,48,32,0.06)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: isMedal ? 11 : 10,
+                  fontWeight: 800,
+                  color: isMedal ? "#fff" : "#9cafa4",
+                  flexShrink: 0,
+                }}>
+                  {isMedal ? MEDALS[i] : i + 1}
+                </div>
+
+                {/* Label */}
+                <div style={{
+                  flex: 1,
+                  fontSize: 12,
+                  fontWeight: i === 0 ? 700 : 500,
+                  color: i === 0 ? LW.dark : "#4a6358",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {item.label}
+                </div>
+
+                {/* Value */}
+                <div style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: i === 0 ? accent : LW.dark,
+                  flexShrink: 0,
+                }}>
+                  {item.display}
+                </div>
+              </div>
+              <div style={{ paddingLeft: 30 }}>
+                <RankBar pct={pct} accent={i === 0 ? accent : "rgba(19,48,32,0.15)"} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function SummaryCards({ data, cards }) {
+  if (!cards || cards.length === 0) return null;
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16, marginBottom: 24 }}>
+      {cards.map((card, idx) => (
+        <SummaryCard key={card.id} card={card} data={data} accent={ACCENTS[idx % ACCENTS.length]} />
+      ))}
     </div>
   );
 }
