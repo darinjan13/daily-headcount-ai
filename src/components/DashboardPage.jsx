@@ -124,6 +124,7 @@ export default function DashboardPage() {
           filesLoading={switching}
           onSelectFolder={null}
           onRefresh={refreshDashboard}
+          onBack={() => navigate("/")}
         />
       </aside>
 
@@ -139,16 +140,6 @@ export default function DashboardPage() {
         >
           <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={() => navigate("/")}
-                className="text-sm font-semibold"
-                style={{ background: "none", border: "none", color: "var(--color-text)", padding: 0, cursor: "pointer" }}
-                title="Back to files"
-                aria-label="Back to files"
-              >
-                ← Back
-              </button>
               <div className="flex items-center gap-2 min-w-0">
                 <img src={lifewoodIconSquared} alt="Workbook" className="w-5 h-5 shrink-0" />
                 <span className="text-sm font-semibold truncate" style={{ color: "var(--color-text)" }}>

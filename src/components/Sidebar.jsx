@@ -6,7 +6,7 @@ import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 import UserAvatar from "./UserAvatar";
 
-export default function Sidebar({ folder, files, filesLoading, onSelectFolder, onRefresh }) {
+export default function Sidebar({ folder, files, filesLoading, onSelectFolder, onRefresh, onBack }) {
   const { user, logout } = useAuth();
   const { theme } = useTheme();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -49,6 +49,20 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
         <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-text)", marginBottom: "8px" }}>
           Actions
         </p>
+
+        {onBack && (
+          <button
+            onClick={onBack}
+            className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all"
+            style={{
+              backgroundColor: "var(--color-surface-soft)",
+              color: "var(--color-text)",
+              border: "1.5px solid var(--color-border)",
+            }}
+          >
+            ← Go Back
+          </button>
+        )}
 
         {onSelectFolder && (
           <button
