@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
@@ -190,6 +190,123 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
   );
 }
 
+function FileTable({ files, fileTagsById, onOpen, openingFile }) {
+  return (
+    <div
+      className="rounded-2xl border overflow-hidden"
+      style={{ backgroundColor: "var(--color-white)", borderColor: "var(--color-border)" }}
+    >
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-sm">
+          <thead style={{ backgroundColor: "var(--color-surface-soft)", color: "var(--color-text)" }}>
+            <tr>
+              <th className="px-4 py-3 font-semibold">File</th>
+              <th className="px-4 py-3 font-semibold">Size</th>
+              <th className="px-4 py-3 font-semibold">Modified</th>
+              <th className="px-4 py-3 font-semibold">Sheets</th>
+              <th className="px-4 py-3 font-semibold text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {files.map((file) => {
+              const tags = fileTagsById[file.id];
+              const isTagLoading = !tags;
+              return (
+                <tr key={file.id} className="border-t" style={{ borderColor: "var(--color-border)" }}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={excelFileIcon}
+                        alt="Excel file"
+                        className="w-8 h-8 flex-shrink-0"
+                        style={{ objectFit: "contain" }}
+                      />
+                      <div className="min-w-0">
+                        <p className="font-semibold truncate" style={{ color: "var(--color-text)" }} title={file.name}>
+                          {file.name}
+                        </p>
+                        <p className="text-xs" style={{ color: "var(--color-text-light)" }}>
+                          {file.webViewLink ? "Drive link available" : "No direct link"}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 align-top" style={{ color: "var(--color-text)" }}>{formatSize(parseInt(file.size))}</td>
+                  <td className="px-4 py-3 align-top" style={{ color: "var(--color-text)" }}>{formatDate(file.modifiedTime)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-wrap gap-2">
+                      {isTagLoading ? (
+                        <span
+                          className="inline-flex items-center gap-2 text-xs animate-pulse"
+                          style={{
+                            borderRadius: "20px",
+                            backgroundColor: "var(--color-chip-bg)",
+                            color: "var(--color-chip-text)",
+                            border: "1px solid var(--color-chip-border)",
+                            fontWeight: 600,
+                            padding: "3px 9px",
+                          }}
+                        >
+                          <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                        </svg>
+                          Loading
+                        </span>
+                      ) : (
+                        (tags || []).map((tag) => (
+                          <span
+                            key={`${file.id}-${tag}`}
+                            style={{
+                              borderRadius: "20px",
+                              backgroundColor: "var(--color-chip-bg)",
+                              color: "var(--color-chip-text)",
+                              border: "1px solid var(--color-chip-border)",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              padding: "3px 9px",
+                            }}
+                          >
+                            {tag}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right align-top">
+                    <button
+                      onClick={() => onOpen(file)}
+                      disabled={openingFile === file.id}
+                      className="rounded-lg px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
+                      style={{
+                        backgroundColor: openingFile === file.id ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
+                        color: "#FFFFFF",
+                        border: "none",
+                      }}
+                    >
+                      {openingFile === file.id ? (
+                        <>
+                          <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                          </svg>
+                          Opening
+                        </>
+                      ) : (
+                        "Open analysis"
+                      )}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // Empty State Component
 function EmptyState({ folderName, onChangeFolder }) {
   return (
@@ -294,6 +411,44 @@ export default function HomePage() {
   const [openError, setOpenError] = useState("");
   const [fileTagsById, setFileTagsById] = useState({});
   const tagLoadInProgress = useRef(new Set());
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedType, setSelectedType] = useState("all");
+  const [viewMode, setViewMode] = useState("cards");
+  const [pageSize, setPageSize] = useState(6);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const filteredFiles = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return files.filter((file) => {
+      const lowerName = file.name.toLowerCase();
+      const tags = fileTagsById[file.id] || [];
+      const matchesSearch =
+        term === "" ||
+        lowerName.includes(term) ||
+        tags.some((tag) => tag.toLowerCase().includes(term));
+      const matchesType =
+        selectedType === "all" ||
+        (selectedType === "xlsx" && lowerName.endsWith(".xlsx")) ||
+        (selectedType === "xls" && lowerName.endsWith(".xls"));
+      return matchesSearch && matchesType;
+    });
+  }, [files, fileTagsById, searchTerm, selectedType]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedType, pageSize, files.length]);
+
+  const totalPages = filteredFiles.length ? Math.ceil(filteredFiles.length / pageSize) : 1;
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = filteredFiles.length ? (safePage - 1) * pageSize : 0;
+  const endIndex = filteredFiles.length ? Math.min(filteredFiles.length, safePage * pageSize) : 0;
+  const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   useEffect(() => {
     if (folder && accessToken) {
@@ -580,25 +735,17 @@ export default function HomePage() {
         {/* Main Content */}
         <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full flex flex-col">
           {/* Page Title */}
-          {folder ? (
-            <div className="mb-12">
-              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-text)", marginBottom: "4px" }}>
-                {folder.name}
-              </h1>
-              <p style={{ color: "var(--color-text-light)" }}>
-                {files.length} file{files.length !== 1 ? "s" : ""} available for analysis
-              </p>
-            </div>
-          ) : (
-            <div className="mb-12">
-              <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-text)" }}>
-                Welcome to DataViz
-              </h1>
-              <p style={{ color: "var(--color-text-light)" }}>
-                Select a Google Drive folder to begin exploring your data
-              </p>
-            </div>
-          )}
+          <div className="mb-12">
+            <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-text)", marginBottom: "4px" }}>
+              Excel Files
+            </h1>
+            <p style={{ color: "var(--color-text-light)" }}>
+              {folder
+                ? `${files.length} file${files.length !== 1 ? "s" : ""} available in `
+                : "Select a Google Drive folder to begin exploring your data"}
+              {folder && <span style={{ fontWeight: 700, color: "var(--color-text)" }}>{folder.name}</span>}
+            </p>
+          </div>
 
           {/* Error Alert */}
           {(error || openError) && (
@@ -688,18 +835,149 @@ export default function HomePage() {
 
           {/* File Grid */}
           {!filesLoading && folder && files.length > 0 && (
-            <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
-              {files.map((file) => (
-                <FileCard
-                  key={file.id}
-                  file={file}
+            <>
+              <div className="mb-6 flex flex-col gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-[240px]">
+                    <label className="sr-only" htmlFor="file-search">Search files</label>
+                    <div className="relative">
+                      <input
+                        id="file-search"
+                        type="search"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search by file name or sheet name"
+                        className="w-full rounded-lg border px-4 py-2.5 text-sm"
+                        style={{
+                          backgroundColor: "var(--color-white)",
+                          borderColor: "var(--color-border)",
+                          color: "var(--color-text)",
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+
+                    <select
+                      value={selectedType}
+                      onChange={(e) => setSelectedType(e.target.value)}
+                      className="rounded-lg border px-3 py-2 text-sm"
+                      style={{ backgroundColor: "var(--color-white)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
+                    >
+                      <option value="all">All types</option>
+                      <option value="xlsx">.xlsx</option>
+                      <option value="xls">.xls</option>
+                    </select>
+
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
+                      className="rounded-lg border px-3 py-2 text-sm"
+                      style={{ backgroundColor: "var(--color-white)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
+                    >
+                      {[6, 12, 18].map((size) => (
+                        <option key={size} value={size}>
+                          Show {size}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="flex items-center gap-1 rounded-lg border p-1" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-white)" }}>
+                      <button
+                        onClick={() => setViewMode("cards")}
+                        className="px-3 py-2 text-sm font-semibold rounded-md"
+                        style={{
+                          backgroundColor: viewMode === "cards" ? "var(--color-castleton-green)" : "transparent",
+                          color: viewMode === "cards" ? "#FFFFFF" : "var(--color-text)",
+                          border: "none",
+                        }}
+                      >
+                        Cards
+                      </button>
+                      <button
+                        onClick={() => setViewMode("table")}
+                        className="px-3 py-2 text-sm font-semibold rounded-md"
+                        style={{
+                          backgroundColor: viewMode === "table" ? "var(--color-castleton-green)" : "transparent",
+                          color: viewMode === "table" ? "#FFFFFF" : "var(--color-text)",
+                          border: "none",
+                        }}
+                      >
+                        Table
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between text-sm" style={{ color: "var(--color-text-light)" }}>
+                  <span>
+                    {filteredFiles.length
+                      ? `Showing ${startIndex + 1}-${endIndex} of ${filteredFiles.length} file${filteredFiles.length !== 1 ? "s" : ""}`
+                      : "No files match your search or filters"}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                      disabled={safePage === 1 || filteredFiles.length === 0}
+                      className="px-3 py-2 rounded-md text-sm font-semibold"
+                      style={{
+                        backgroundColor: "var(--color-surface-soft)",
+                        color: "var(--color-text)",
+                        border: "1px solid var(--color-border)",
+                        opacity: safePage === 1 || filteredFiles.length === 0 ? 0.5 : 1,
+                      }}
+                    >
+                      Prev
+                    </button>
+                    <div style={{ color: "var(--color-text)" }}>Page {safePage} / {totalPages}</div>
+                    <button
+                      onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                      disabled={safePage === totalPages || filteredFiles.length === 0}
+                      className="px-3 py-2 rounded-md text-sm font-semibold"
+                      style={{
+                        backgroundColor: "var(--color-surface-soft)",
+                        color: "var(--color-text)",
+                        border: "1px solid var(--color-border)",
+                        opacity: safePage === totalPages || filteredFiles.length === 0 ? 0.5 : 1,
+                      }}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {filteredFiles.length === 0 && (
+                <div className="rounded-2xl border p-6 text-center" style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}>
+                  No files match your search or filters.
+                </div>
+              )}
+
+              {filteredFiles.length > 0 && viewMode === "cards" && (
+                <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
+                  {paginatedFiles.map((file) => (
+                    <FileCard
+                      key={file.id}
+                      file={file}
+                      onOpen={handleOpenFile}
+                      loading={openingFile === file.id}
+                      tags={fileTagsById[file.id] || []}
+                      isTagLoading={!fileTagsById[file.id]}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {filteredFiles.length > 0 && viewMode === "table" && (
+                <FileTable
+                  files={paginatedFiles}
+                  fileTagsById={fileTagsById}
                   onOpen={handleOpenFile}
-                  loading={openingFile === file.id}
-                  tags={fileTagsById[file.id] || []}
-                  isTagLoading={!fileTagsById[file.id]}
+                  openingFile={openingFile}
                 />
-              ))}
-            </div>
+              )}
+            </>
           )}
 
           {/* Empty Folder State */}
