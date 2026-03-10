@@ -667,8 +667,7 @@ export default function HomePage() {
     );
   }
 
-  const firstName = user?.displayName?.split(" ")[0] || "My";
-  const breadcrumb = folder ? `${firstName}'s Google Drive > ${folder.name}` : `${firstName}'s Google Drive`;
+  const breadcrumb = folder ? `Your Google Drive > ... > ${folder.name}` : "Your Google Drive";
 
   // Main logged-in view
   return (
