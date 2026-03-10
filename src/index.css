@@ -239,12 +239,12 @@ button:disabled {
 }
 
 .login-google-wave-btn:hover .login-google-wave-text {
-  animation: loginGoogleText 0.3s forwards;
+  animation: loginGoogleText 2.5s linear infinite;
 }
 
 @keyframes loginGoogleText {
-  from { color: var(--color-dark-serpent); }
-  to { color: var(--color-white); }
+  0%, 8% { color: var(--color-dark-serpent); }
+  16%, 100% { color: var(--color-white); }
 }
 
 .login-google-wave-btn:hover::before {
@@ -258,7 +258,7 @@ button:disabled {
   height: 0;
   opacity: 0;
   border-radius: 300px;
-  animation: loginWave1 2.5s ease-in-out forwards;
+  animation: loginWave1 2.5s linear infinite;
 }
 
 .login-google-wave-btn:hover::after {
@@ -272,52 +272,53 @@ button:disabled {
   height: 0;
   opacity: 0;
   border-radius: 300px;
-  animation: loginWave2 2.5s ease-in-out forwards;
+  animation: loginWave2 2.5s linear infinite;
 }
 
 @keyframes loginWave1 {
-  0% { z-index: 1; background: #EB4335; width: 0; height: 0; opacity: 1; }
-  1% { z-index: 1; background: #EB4335; width: 0; height: 0; opacity: 1; }
-  25% { z-index: 1; background: #EB4335; width: 800px; height: 800px; opacity: 1; }
-  26% { z-index: 3; background: #34A853; width: 0; height: 0; opacity: 1; }
-  50% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 1; }
-  70% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 1; }
-  100% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 1; }
+  0% { z-index: 1; background: #EB4335; width: 0; height: 0; opacity: 0; }
+  4% { z-index: 1; background: #EB4335; width: 0; height: 0; opacity: 1; }
+  26% { z-index: 1; background: #EB4335; width: 800px; height: 800px; opacity: 1; }
+  27% { z-index: 3; background: #34A853; width: 0; height: 0; opacity: 1; }
+  56% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 1; }
+  92% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 1; }
+  100% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 0; }
 }
 
 @keyframes loginWave2 {
-  0% { z-index: 2; background: #FBBC05; width: 0; height: 0; opacity: 1; }
-  11% { z-index: 2; background: #FBBC05; width: 0; height: 0; opacity: 1; }
-  35% { z-index: 2; background: #FBBC05; width: 800px; height: 800px; opacity: 1; }
-  39% { z-index: 2; background: #FBBC05; width: 800px; height: 800px; opacity: 1; }
-  40% { z-index: 4; background: #4285F4; width: 0; height: 0; opacity: 1; }
-  64% { z-index: 4; background: #4285F4; width: 800px; height: 800px; opacity: 1; }
-  100% { z-index: 4; background: #4285F4; width: 800px; height: 800px; opacity: 1; }
+  0% { z-index: 2; background: #FBBC05; width: 0; height: 0; opacity: 0; }
+  12% { z-index: 2; background: #FBBC05; width: 0; height: 0; opacity: 1; }
+  40% { z-index: 2; background: #FBBC05; width: 800px; height: 800px; opacity: 1; }
+  41% { z-index: 4; background: #4285F4; width: 0; height: 0; opacity: 1; }
+  70% { z-index: 4; background: #4285F4; width: 800px; height: 800px; opacity: 1; }
+  92% { z-index: 4; background: #4285F4; width: 800px; height: 800px; opacity: 1; }
+  100% { z-index: 4; background: #4285F4; width: 800px; height: 800px; opacity: 0; }
 }
 
 .login-google-wave-btn:hover .red {
-  animation: loginGoogleDisappear 0.1s forwards;
+  animation: loginGoogleDisappear 2.5s linear infinite;
   animation-delay: 0.1s;
 }
 
 .login-google-wave-btn:hover .yellow {
-  animation: loginGoogleDisappear 0.1s forwards;
+  animation: loginGoogleDisappear 2.5s linear infinite;
   animation-delay: 0.3s;
 }
 
 .login-google-wave-btn:hover .green {
-  animation: loginGoogleDisappear 0.1s forwards;
+  animation: loginGoogleDisappear 2.5s linear infinite;
   animation-delay: 0.7s;
 }
 
 .login-google-wave-btn:hover .blue {
-  animation: loginGoogleDisappear 0.1s forwards;
+  animation: loginGoogleDisappear 2.5s linear infinite;
   animation-delay: 1.1s;
 }
 
 @keyframes loginGoogleDisappear {
-  from { filter: brightness(1); }
-  to { filter: brightness(100); }
+  0%, 4% { filter: brightness(1); }
+  8%, 14% { filter: brightness(100); }
+  22%, 100% { filter: brightness(1); }
 }
 
 @media (max-width: 640px) {
