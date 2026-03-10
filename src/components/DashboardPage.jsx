@@ -1,21 +1,18 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 import Dashboard from "./Dashboard";
 import Sidebar from "./Sidebar";
-import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
-import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
 
 export default function DashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { theme } = useTheme();
   const { user, loading: authLoading } = useAuth();
   const state = location.state;
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const [data, setData] = useState(state?.tableData || null);
   const [blueprint, setBlueprint] = useState(state?.blueprint || null);
@@ -24,7 +21,6 @@ export default function DashboardPage() {
   const [fileName] = useState(state?.fileName || "");
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState("");
-  const lifewoodLogoSrc = theme === "dark" ? LIFEWOOD_DARK_LOGO_URL : lifewoodIconText;
 
   // Drive info for sheet switching + real-time (future)
   const driveFileId = state?.driveFileId || null;
@@ -39,6 +35,14 @@ export default function DashboardPage() {
       navigate("/");
     }
   }, [authLoading, user, navigate]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setShowBackToTop(window.scrollY > 500);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   if (authLoading) return null;
   if (!data || !blueprint || !user) return null;
@@ -190,6 +194,21 @@ export default function DashboardPage() {
         </div>
 
         <Dashboard data={data} blueprint={blueprint} fileId={driveFileId} />
+
+        {showBackToTop && (
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="fixed bottom-6 right-24 z-40 w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-xl transition-all duration-200 cursor-pointer border-none"
+            style={{
+              backgroundColor: "var(--color-castleton-green)",
+              color: "#fff",
+              boxShadow: "0 10px 25px rgba(4, 98, 65, 0.25)",
+            }}
+            title="Back to top"
+          >
+            ^
+          </button>
+        )}
       </div>
     </div>
   );
