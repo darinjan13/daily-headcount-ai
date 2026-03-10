@@ -667,6 +667,9 @@ export default function HomePage() {
     );
   }
 
+  const firstName = user?.displayName?.split(" ")[0] || "My";
+  const breadcrumb = folder ? `${firstName}'s Google Drive > ${folder.name}` : `${firstName}'s Google Drive`;
+
   // Main logged-in view
   return (
     <div style={{ backgroundColor: "var(--color-bg)", minHeight: "100vh" }}>
@@ -706,26 +709,15 @@ export default function HomePage() {
           }}
         >
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div className="hidden md:block text-center">
-              <p className="text-xs font-medium" style={{ color: "var(--color-text-light)" }}>
-                {folder ? `Folder: ${folder.name}` : "No folder selected"}
+            <div className="text-left">
+              <p className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
+                {breadcrumb}
               </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:block text-right">
-                <div className="text-xs font-semibold" style={{ color: "var(--color-text)" }}>
-                  {user.displayName}
-                </div>
-                <div className="text-xs" style={{ color: "var(--color-text-light)" }}>
-                  {user.email}
-                </div>
-              </div>
-              <UserAvatar
-                user={user}
-                size={32}
-                borderColor="var(--color-saffron)"
-              />
+              {!folder && (
+                <p className="text-xs" style={{ color: "var(--color-text-light)" }}>
+                  No folder selected
+                </p>
+              )}
             </div>
           </div>
         </header>
