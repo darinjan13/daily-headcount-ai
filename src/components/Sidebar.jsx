@@ -82,7 +82,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
             )}
-            Refresh files
+            Refresh File
           </button>
         )}
       </div>
