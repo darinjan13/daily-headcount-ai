@@ -138,8 +138,11 @@ export default function DashboardPage() {
             boxShadow: "var(--color-shadow-soft)",
           }}
         >
-          <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4">
-            <div className="flex items-center gap-3 min-w-0">
+          <div
+            className="flex items-center gap-4"
+            style={{ maxWidth: "1280px", width: "100%", margin: "0 auto", padding: "12px 24px" }}
+          >
+            <div className="flex items-center gap-3 min-w-0" style={{ flex: 1 }}>
               <div className="flex items-center gap-2 min-w-0">
                 <img src={lifewoodIconSquared} alt="Workbook" className="w-5 h-5 shrink-0" />
                 <span className="text-sm font-semibold truncate" style={{ color: "var(--color-text)" }}>
@@ -150,7 +153,7 @@ export default function DashboardPage() {
 
             {/* Sheet switcher — full dropdown when multiple sheets */}
             {allSheets.length > 1 && (
-              <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <div className="flex items-center gap-2 shrink-0" style={{ marginLeft: "auto" }}>
                 <label
                   className="text-xs font-bold uppercase tracking-wide"
                   style={{ color: "var(--color-text)" }}
