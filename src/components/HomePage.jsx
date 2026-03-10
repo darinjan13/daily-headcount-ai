@@ -78,7 +78,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
       }}
     >
       {/* Icon and Header */}
-      <div className="flex items-start gap-4" style={{ marginBottom: "10px" }}>
+      <div className="flex min-h-[86px] items-start gap-4" style={{ marginBottom: "10px" }}>
         <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
           <img
             src={excelFileIcon}
@@ -89,7 +89,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
         </div>
         <div className="min-w-0 flex-1">
           <h4
-            className="font-semibold text-sm leading-tight truncate mb-2"
+            className="mb-2 text-sm font-semibold leading-snug break-words"
             title={file.name}
             style={{ color: "var(--color-text)", marginBottom: "4px" }}
           >
@@ -101,7 +101,10 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center" style={{ gap: "6px", marginBottom: "14px" }}>
+      <div
+        className="flex min-h-[54px] flex-wrap items-start content-start"
+        style={{ gap: "6px", marginBottom: "14px" }}
+      >
         {isTagLoading ? (
           <span
             className="inline-flex items-center animate-pulse"
@@ -159,7 +162,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
       <button
         onClick={() => onOpen(file)}
         disabled={loading}
-        className="w-full text-sm font-semibold py-3 flex items-center justify-center gap-2 rounded-lg transition-all"
+        className="mt-auto w-full rounded-lg py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2"
         style={{
           backgroundColor: loading ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
           color: "#FFFFFF",
@@ -722,4 +725,3 @@ export default function HomePage() {
     </div>
   );
 }
-
