@@ -5,7 +5,8 @@ const BRAND = {
   dark: "var(--color-text)",
   green: "var(--color-castleton-green)",
   saffron: "var(--color-saffron)",
-  white: "var(--color-white)",
+  white: "var(--color-surface)",
+  elevated: "var(--color-surface-elevated)",
   border: "var(--color-border)",
   muted: "var(--color-text-light)",
 };
@@ -19,7 +20,7 @@ function LWSelect({ label, value, onChange, children, optional }) {
       </label>
       <select value={value} onChange={e => onChange(e.target.value)} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} style={{
         padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${focused ? BRAND.green : BRAND.border}`,
-        fontSize: 13, color: BRAND.dark, background: BRAND.white, outline: "none", cursor: "pointer",
+        fontSize: 13, color: BRAND.dark, background: BRAND.elevated, outline: "none", cursor: "pointer",
         fontFamily: "'Manrope', sans-serif", fontWeight: 500, minWidth: 140, transition: "border-color 0.2s",
       }}>
         {children}
@@ -80,7 +81,7 @@ export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
         </label>
         <select value={groupBy} onChange={e => setGroupBy(e.target.value)} style={{
           padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${lineNeedsDate ? "var(--color-saffron)" : BRAND.border}`,
-          fontSize: 13, color: BRAND.dark, background: BRAND.white,
+          fontSize: 13, color: BRAND.dark, background: BRAND.elevated,
           outline: "none", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontWeight: 500, minWidth: 140,
         }}>
           <option value="">Select column</option>
@@ -97,7 +98,7 @@ export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
         <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: BRAND.muted, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>
           {outputType === "line" ? "Y axis / Metric" : "Metric"}
         </label>
-        <select value={metric} onChange={e => setMetric(e.target.value)} style={{ padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${BRAND.border}`, fontSize: 13, color: BRAND.dark, background: BRAND.white, outline: "none", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontWeight: 500, minWidth: 140 }}>
+        <select value={metric} onChange={e => setMetric(e.target.value)} style={{ padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${BRAND.border}`, fontSize: 13, color: BRAND.dark, background: BRAND.elevated, outline: "none", cursor: "pointer", fontFamily: "'Manrope', sans-serif", fontWeight: 500, minWidth: 140 }}>
           <option value="">Select column</option>
           {aggregation === "count" ? columns.map(col => <option key={col} value={col}>{col}</option>) : (
             <>
@@ -136,7 +137,7 @@ export default function ChartBuilder({ columns, onGenerate, sampleData = [] }) {
           placeholder={groupBy && metric ? `${metric} by ${groupBy}` : "Auto"}
           style={{
             padding: "8px 12px", borderRadius: 8, border: `1.5px solid ${titleFocused ? BRAND.green : BRAND.border}`,
-            fontSize: 13, color: BRAND.dark, background: BRAND.white, outline: "none",
+            fontSize: 13, color: BRAND.dark, background: BRAND.elevated, outline: "none",
             fontFamily: "'Manrope', sans-serif", minWidth: 176, transition: "border-color 0.2s",
           }} />
       </div>

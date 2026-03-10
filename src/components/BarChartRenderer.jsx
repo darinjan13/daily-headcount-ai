@@ -1,6 +1,13 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Cell } from "recharts";
 
-const COLORS = ["#046241", "#133020", "#2F6A4D", "#3C7A5A", "#548E71", "#FFB347"];
+const COLORS = [
+  "var(--color-chart-1, #0f9d71)",
+  "var(--color-chart-2, #1c4732)",
+  "var(--color-chart-3, #2f6a4d)",
+  "var(--color-chart-4, #3c7a5a)",
+  "var(--color-chart-5, #6ea186)",
+  "var(--color-chart-6, #ffb347)",
+];
 
 export default function BarChartRenderer({ data, config }) {
   if (!data || data.length === 0)

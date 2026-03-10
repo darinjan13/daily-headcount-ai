@@ -21,6 +21,13 @@ const UI = {
   text: "var(--color-text)",
   textLight: "var(--color-text-light)",
 };
+const CHART_THEME = {
+  grid: "var(--color-grid)",
+  axis: "var(--color-chart-axis)",
+  tooltipBorder: "var(--color-border)",
+  tooltipBg: "var(--color-surface-elevated)",
+  tooltipText: "var(--color-text)",
+};
 const CHART_COLORS = ["#046241","#059669","#10b981","#34d399","#6ee7b7","#a7f3d0","#FFB347","#f97316","#3b82f6","#8b5cf6"];
 const CMP = { a:"#046241", b:"#FFB347" };
 
@@ -560,10 +567,10 @@ function ClickableBarChart({ data, config, onDrilldown }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false}/>
-        <XAxis dataKey={xKey} tick={{fontSize:11,fill:"#6b7280"}} angle={-35} textAnchor="end" interval={0}/>
-        <YAxis tick={{fontSize:12,fill:"#6b7280"}} tickFormatter={v=>v.toLocaleString()}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:"1px solid #e5e7eb",fontSize:13}}/>
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
+        <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0}/>
+        <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
+        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
         <Bar dataKey={yKey} radius={[4,4,0,0]} cursor={onDrilldown?"pointer":"default"} onClick={d=>onDrilldown&&onDrilldown(d[xKey])}>
           {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
         </Bar>
@@ -577,10 +584,10 @@ function HorizontalBarChart({ data, config, onDrilldown }) {
   return (
     <ResponsiveContainer width="100%" height={Math.max(260,data.length*34)}>
       <BarChart data={data} layout="vertical" margin={{top:5,right:40,left:120,bottom:5}}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false}/>
-        <XAxis type="number" tick={{fontSize:11,fill:"#6b7280"}} tickFormatter={v=>v.toLocaleString()}/>
-        <YAxis type="category" dataKey={xKey} tick={{fontSize:11,fill:"#6b7280"}} width={110}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:"1px solid #e5e7eb",fontSize:13}}/>
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} horizontal={false}/>
+        <XAxis type="number" tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
+        <YAxis type="category" dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} width={110}/>
+        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
         <Bar dataKey={yKey} radius={[0,4,4,0]} cursor={onDrilldown?"pointer":"default"} onClick={d=>onDrilldown&&onDrilldown(d[xKey])}>
           {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
         </Bar>
@@ -595,10 +602,10 @@ function StackedBarChart({ data }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false}/>
-        <XAxis dataKey="name" tick={{fontSize:11,fill:"#6b7280"}} angle={-35} textAnchor="end" interval={0}/>
-        <YAxis tick={{fontSize:12,fill:"#6b7280"}} tickFormatter={v=>v.toLocaleString()}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:"1px solid #e5e7eb",fontSize:13}}/>
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
+        <XAxis dataKey="name" tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0}/>
+        <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
+        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
         {stackKeys.map((k,i)=><Bar key={k} dataKey={k} stackId="a" fill={CHART_COLORS[i%CHART_COLORS.length]} radius={i===stackKeys.length-1?[4,4,0,0]:[0,0,0,0]}/>)}
       </BarChart>
     </ResponsiveContainer>
@@ -611,10 +618,10 @@ function SimpleAreaChart({ data, xKey, yKey }) {
     <ResponsiveContainer width="100%" height={340}>
       <AreaChart data={data} margin={{top:8,right:20,left:10,bottom:mb}}>
         <defs><linearGradient id="lwGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={LW.green} stopOpacity={0.15}/><stop offset="95%" stopColor={LW.green} stopOpacity={0}/></linearGradient></defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0ece4" vertical={false}/>
-        <XAxis dataKey={xKey} tick={{fontSize:11,fill:"#9cafa4"}} angle={angle} textAnchor={angle!==0?"end":"middle"} interval={data.length>30?Math.floor(data.length/15):0} axisLine={false} tickLine={false}/>
-        <YAxis tick={{fontSize:11,fill:"#9cafa4"}} tickFormatter={v=>v.toLocaleString()} axisLine={false} tickLine={false}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:10,border:"none",background:LW.dark,color:"#fff",fontSize:13}} labelStyle={{color:"#9cafa4",fontSize:11}}/>
+        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
+        <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={angle} textAnchor={angle!==0?"end":"middle"} interval={data.length>30?Math.floor(data.length/15):0} axisLine={false} tickLine={false}/>
+        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:10,border:`1px solid ${CHART_THEME.tooltipBorder}`,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText,fontSize:13}} labelStyle={{color:CHART_THEME.tooltipText,fontSize:11}}/>
         <Area type="monotone" dataKey={yKey} stroke={LW.green} strokeWidth={2.5} fill="url(#lwGrad)" dot={{fill:LW.green,r:data.length>30?0:4,strokeWidth:0}} activeDot={{r:6,fill:LW.saffron,stroke:LW.dark,strokeWidth:2}}/>
       </AreaChart>
     </ResponsiveContainer>
@@ -675,7 +682,7 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
     if(!ranked||!ranked.length) return null;
     const top = ranked[0].value;
     return (
-      <div style={{background:"#fff",borderRadius:16,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"0 1px 6px rgba(19,48,32,0.06)",fontFamily:"'Manrope',sans-serif"}}
+      <div style={{background:UI.surfaceElevated,borderRadius:16,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,fontFamily:"'Manrope',sans-serif"}}
         onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(19,48,32,0.11)"}}
         onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
@@ -726,12 +733,12 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
       {cards.map((card,idx)=>{
         const accent=accents[idx%accents.length];
         return (
-          <div key={card.id||idx} style={{background:"#fff",borderRadius:14,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"0 1px 6px rgba(19,48,32,0.06)",transition:"transform 0.2s,box-shadow 0.2s"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(19,48,32,0.10)"}}
-            onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
-            <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{card.label}</div>
-            <div style={{fontSize:30,fontWeight:800,color:accent,letterSpacing:"-0.03em",lineHeight:1}}>{formatNum(card.value,card.formatHint)}</div>
-          </div>
+          <div key={card.id||idx} style={{background:UI.surfaceElevated,borderRadius:14,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,transition:"transform 0.2s,box-shadow 0.2s"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.24)"}}
+            onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="var(--color-shadow-soft)"}}>
+             <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{card.label}</div>
+             <div style={{fontSize:30,fontWeight:800,color:accent,letterSpacing:"-0.03em",lineHeight:1}}>{formatNum(card.value,card.formatHint)}</div>
+           </div>
         );
       })}
     </div>
@@ -1016,7 +1023,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
               <div style={{fontSize:11,fontWeight:700,color:LW.green,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>📌 Pinned Charts</div>
 
               {pinnedCustom.map(chart=>(
-                <div key={chart.id} style={{background:"#fff",borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 2px 16px rgba(4,98,65,0.12)",border:`1.5px solid ${LW.green}`,borderLeft:`4px solid ${LW.green}`}}>
+                <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1.5px solid ${LW.green}`,borderLeft:`4px solid ${LW.green}`}}>
                   <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(String(chart.id))} pinned={true} onRemove={()=>removeCustom(chart.id)}/>
                   <RenderChart chart={chart} filteredData={filteredData} onDrilldown={handleDrilldown}/>
                 </div>
@@ -1065,10 +1072,10 @@ export default function Dashboard({ data, blueprint, fileId }) {
 
           {/* Unpinned custom charts */}
           {customCharts.filter(c=>!pinnedIds.includes(String(c.id))).map(chart=>(
-            <div key={chart.id} style={{background:"#fff",borderRadius:16,padding:24,marginBottom:20,boxShadow:"0 1px 8px rgba(19,48,32,0.06)",border:"1px solid #e8e3d9",borderLeft:`4px solid ${LW.saffron}`}}>
-              <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>togglePin(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)}/>
-              <RenderChart chart={chart} filteredData={filteredData} onDrilldown={handleDrilldown}/>
-            </div>
+            <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,borderLeft:`4px solid ${LW.saffron}`}}>
+               <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>togglePin(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)}/>
+               <RenderChart chart={chart} filteredData={filteredData} onDrilldown={handleDrilldown}/>
+             </div>
           ))}
 
           <Divider label="Analytics"/>

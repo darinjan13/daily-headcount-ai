@@ -98,10 +98,10 @@ export default function LineChartRenderer({ data, config }) {
         <Line
           type="monotone"
           dataKey="value"
-          stroke="var(--color-chart-line-primary)"
+          stroke="var(--color-chart-line-primary, #0f9d71)"
           strokeWidth={2.5}
-          dot={{ fill: "var(--color-chart-line-primary)", r: chartData.length > 30 ? 2 : 4 }}
-          activeDot={{ r: 6, fill: "#FFB347", stroke: "var(--color-chart-line-primary)", strokeWidth: 2 }}
+          dot={{ fill: "var(--color-chart-line-primary, #0f9d71)", r: chartData.length > 30 ? 2 : 4 }}
+          activeDot={{ r: 6, fill: "var(--color-chart-accent, #ffb347)", stroke: "var(--color-chart-line-primary, #0f9d71)", strokeWidth: 2 }}
         />
       </LineChart>
     </ResponsiveContainer>
