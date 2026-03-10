@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import ThemeToggle from "./ThemeToggle";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 import UserAvatar from "./UserAvatar";
@@ -45,26 +46,6 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
 
       {/* Middle content */}
       <div className="pt-6 space-y-5">
-        <section>
-          <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-text)", marginBottom: "8px" }}>
-            Folder
-          </p>
-          <div
-            className="rounded-xl border p-3"
-            style={{
-              backgroundColor: "var(--color-surface-soft)",
-              borderColor: "var(--color-border)",
-            }}
-          >
-            <p className="text-sm font-semibold truncate" style={{ color: "var(--color-text)" }}>
-              {folder ? ".../" + folder.name : "No folder selected"}
-            </p>
-            <p className="text-xs mt-1" style={{ color: "var(--color-text-light)" }}>
-              {folder && files ? `${files.length || 0} file${files.length !== 1 ? "s" : ""} available` : "Select a folder to begin"}
-            </p>
-          </div>
-        </section>
-
         <p className="text-[11px] font-semibold tracking-wide uppercase mb-2" style={{ color: "var(--color-text)", marginBottom: "8px" }}>
           Actions
         </p>
@@ -132,17 +113,32 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
 
           {isProfileMenuOpen && (
             <div
-              className="absolute bottom-[calc(100%+8px)] left-0 w-full rounded-xl border shadow-md"
-              style={{ backgroundColor: "var(--color-surface-elevated)", borderColor: "var(--color-border)", zIndex: 20 }}
+              className="absolute bottom-[calc(100%+8px)] left-0 w-full rounded-xl border shadow-md space-y-3"
+              style={{ backgroundColor: "var(--color-surface-elevated)", borderColor: "var(--color-border)", zIndex: 20, padding: "12px" }}
             >
+              <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-white)" }}>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Theme</p>
+                  <p className="text-xs" style={{ color: "var(--color-text-light)" }}>Switch between light and dark</p>
+                </div>
+                <ThemeToggle />
+              </div>
+
               <button
                 onClick={() => {
                   setIsProfileMenuOpen(false);
                   logout();
                 }}
-                className="w-full text-left px-4 py-2.5 text-sm font-semibold rounded-xl"
-                style={{ color: "var(--color-text)", backgroundColor: "transparent", border: "none" }}
+                className="w-full text-left px-4 py-3 text-sm font-semibold rounded-lg flex items-center gap-2 transition-colors"
+                style={{
+                  color: "var(--color-text)",
+                  backgroundColor: "var(--color-surface-soft)",
+                  border: "1px solid var(--color-border)",
+                }}
               >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
+                </svg>
                 Sign Out
               </button>
             </div>

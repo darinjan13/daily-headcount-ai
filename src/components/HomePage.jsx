@@ -6,7 +6,6 @@ import { useDrivePicker } from "../hooks/useDrivePicker";
 import { useDriveFiles } from "../hooks/useDriveFiles";
 import Sidebar from "./Sidebar";
 import Grainient from "./Grainient";
-import ThemeToggle from "./ThemeToggle";
 import UserAvatar from "./UserAvatar";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
@@ -714,7 +713,6 @@ export default function HomePage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <ThemeToggle />
               <div className="hidden sm:block text-right">
                 <div className="text-xs font-semibold" style={{ color: "var(--color-text)" }}>
                   {user.displayName}
