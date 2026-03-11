@@ -71,7 +71,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
     <div
       className="rounded-2xl p-6 flex flex-col transition-all hover:shadow-xl border"
       style={{
-        backgroundColor: "var(--color-white)",
+        backgroundColor: "var(--color-surface-elevated)",
         borderColor: "var(--color-border)",
         backdropFilter: "blur(10px)",
       }}
@@ -193,7 +193,7 @@ function FileTable({ files, fileTagsById, onOpen, openingFile }) {
   return (
     <div
       className="rounded-2xl border overflow-hidden"
-      style={{ backgroundColor: "var(--color-white)", borderColor: "var(--color-border)" }}
+      style={{ backgroundColor: "var(--color-surface-elevated)", borderColor: "var(--color-border)" }}
     >
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
@@ -415,6 +415,7 @@ export default function HomePage() {
   const [viewMode, setViewMode] = useState("cards");
   const [pageSize, setPageSize] = useState(6);
   const [currentPage, setCurrentPage] = useState(1);
+  const toolbarDropdownGroupRef = useRef(null);
 
   const filteredFiles = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -577,7 +578,7 @@ export default function HomePage() {
   // Login state
   if (!user) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{ backgroundColor: "var(--color-sea-salt)" }}>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{ backgroundColor: "var(--color-bg)" }}>
         <ScrollProgressBar />
 
         <div className="absolute inset-0 pointer-events-none">
@@ -668,6 +669,17 @@ export default function HomePage() {
   }
 
   const breadcrumb = folder ? `Your Google Drive > ... > ${folder.name}` : "Your Google Drive";
+  const handleToolbarDropdownToggle = (e) => {
+    const currentDetails = e.currentTarget;
+    if (!currentDetails?.open) return;
+    const container = toolbarDropdownGroupRef.current;
+    if (!container) return;
+
+    const openDropdowns = container.querySelectorAll("details[open]");
+    openDropdowns.forEach((details) => {
+      if (details !== currentDetails) details.removeAttribute("open");
+    });
+  };
 
   // Main logged-in view
   return (
@@ -675,11 +687,12 @@ export default function HomePage() {
       <ScrollProgressBar />
 
       <aside
+        className="ui-auto-hide-sidebar"
         style={{
           position: "fixed",
           top: 0,
           left: 0,
-          width: "320px",
+          width: "var(--sidebar-width)",
           height: "100vh",
           zIndex: 50,
           background: "var(--color-surface)",
@@ -697,7 +710,7 @@ export default function HomePage() {
         />
       </aside>
 
-      <div style={{ marginLeft: "320px", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <div style={{ marginLeft: "var(--sidebar-offset)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         {/* Header */}
         <header
           className="sticky top-0 z-40 border-b"
@@ -838,7 +851,7 @@ export default function HomePage() {
                         placeholder="Search by file name or sheet name"
                         className="w-full rounded-lg border px-4 py-2.5 text-sm"
                         style={{
-                          backgroundColor: "var(--color-white)",
+                          backgroundColor: "var(--color-surface)",
                           borderColor: "var(--color-border)",
                           color: "var(--color-text)",
                         }}
@@ -846,56 +859,138 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3" ref={toolbarDropdownGroupRef}>
 
-                    <select
-                      value={selectedType}
-                      onChange={(e) => setSelectedType(e.target.value)}
-                      className="rounded-lg border px-3 py-2 text-sm"
-                      style={{ backgroundColor: "var(--color-white)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
-                    >
-                      <option value="all">All types</option>
-                      <option value="xlsx">.xlsx</option>
-                      <option value="xls">.xls</option>
-                    </select>
-
-                    <select
-                      value={pageSize}
-                      onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
-                      className="rounded-lg border px-3 py-2 text-sm"
-                      style={{ backgroundColor: "var(--color-white)", borderColor: "var(--color-border)", color: "var(--color-text)" }}
-                    >
-                      {[6, 12, 18].map((size) => (
-                        <option key={size} value={size}>
-                          Show {size}
-                        </option>
-                      ))}
-                    </select>
-
-                    <div className="flex items-center gap-1 rounded-lg border p-1" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-white)" }}>
-                      <button
-                        onClick={() => setViewMode("cards")}
-                        className="px-3 py-2 text-sm font-semibold rounded-md"
-                        style={{
-                          backgroundColor: viewMode === "cards" ? "var(--color-castleton-green)" : "transparent",
-                          color: viewMode === "cards" ? "#FFFFFF" : "var(--color-text)",
-                          border: "none",
-                        }}
+                    <details className="relative" onToggle={handleToolbarDropdownToggle}>
+                      <summary
+                        className="ui-dropdown-control ui-toolbar-dropdown flex items-center justify-between gap-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden"
+                        style={{ listStyle: "none" }}
+                        aria-label="File type"
                       >
-                        Cards
-                      </button>
-                      <button
-                        onClick={() => setViewMode("table")}
-                        className="px-3 py-2 text-sm font-semibold rounded-md"
-                        style={{
-                          backgroundColor: viewMode === "table" ? "var(--color-castleton-green)" : "transparent",
-                          color: viewMode === "table" ? "#FFFFFF" : "var(--color-text)",
-                          border: "none",
-                        }}
+                        <span>
+                          {selectedType === "all" ? "All types" : selectedType === "xlsx" ? ".xlsx" : ".xls"}
+                        </span>
+                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
+                        </svg>
+                      </summary>
+
+                      <div
+                        className="absolute left-0 z-10 mt-1 w-36 overflow-hidden rounded-lg border shadow-sm"
+                        style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-surface-elevated)" }}
+                        role="menu"
+                        aria-label="File type options"
                       >
-                        Table
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            setSelectedType("all");
+                            e.currentTarget.closest("details")?.removeAttribute("open");
+                          }}
+                          className={`ui-dropdown-item ${selectedType === "all" ? "is-active" : ""}`}
+                          role="menuitem"
+                        >
+                          All types
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            setSelectedType("xlsx");
+                            e.currentTarget.closest("details")?.removeAttribute("open");
+                          }}
+                          className={`ui-dropdown-item ${selectedType === "xlsx" ? "is-active" : ""}`}
+                          role="menuitem"
+                        >
+                          .xlsx
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            setSelectedType("xls");
+                            e.currentTarget.closest("details")?.removeAttribute("open");
+                          }}
+                          className={`ui-dropdown-item ${selectedType === "xls" ? "is-active" : ""}`}
+                          role="menuitem"
+                        >
+                          .xls
+                        </button>
+                      </div>
+                    </details>
+
+                    <details className="relative" onToggle={handleToolbarDropdownToggle}>
+                      <summary
+                        className="ui-dropdown-control ui-toolbar-dropdown flex items-center justify-between gap-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden"
+                        style={{ listStyle: "none" }}
+                        aria-label="Page size"
+                      >
+                        <span>Show {pageSize}</span>
+                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
+                        </svg>
+                      </summary>
+
+                      <div
+                        className="absolute left-0 z-10 mt-1 w-36 overflow-hidden rounded-lg border shadow-sm"
+                        style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-surface-elevated)" }}
+                        role="menu"
+                        aria-label="Page size options"
+                      >
+                        {[6, 12, 18].map((size) => (
+                          <button
+                            key={size}
+                            type="button"
+                            onClick={(e) => {
+                              setPageSize(size);
+                              e.currentTarget.closest("details")?.removeAttribute("open");
+                            }}
+                            className={`ui-dropdown-item ${pageSize === size ? "is-active" : ""}`}
+                            role="menuitem"
+                          >
+                            Show {size}
+                          </button>
+                        ))}
+                      </div>
+                    </details>
+
+                    <details
+                      className="relative"
+                      onToggle={handleToolbarDropdownToggle}
+                    >
+                      <summary
+                        className="ui-dropdown-control ui-toolbar-dropdown flex items-center justify-between gap-2 cursor-pointer select-none [&::-webkit-details-marker]:hidden"
+                        style={{ listStyle: "none" }}
+                        aria-label="View"
+                      >
+                        <span>View</span>
+                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
+                        </svg>
+                      </summary>
+
+                      <div
+                        className="absolute right-0 z-10 mt-1 w-36 overflow-hidden rounded-lg border shadow-sm"
+                        style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-surface-elevated)" }}
+                        role="menu"
+                        aria-label="View options"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setViewMode("cards")}
+                          className={`ui-dropdown-item ${viewMode === "cards" ? "is-active" : ""}`}
+                          role="menuitem"
+                        >
+                          Cards{viewMode === "cards" ? " (current)" : ""}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setViewMode("table")}
+                          className={`ui-dropdown-item ${viewMode === "table" ? "is-active" : ""}`}
+                          role="menuitem"
+                        >
+                          Table{viewMode === "table" ? " (current)" : ""}
+                        </button>
+                      </div>
+                    </details>
                   </div>
                 </div>
 

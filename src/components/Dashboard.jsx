@@ -82,13 +82,38 @@ function buildLabelMap(data, field) {
 }
 
 function generatePivot(data, rowField, columnField, metric, aggregation) {
+  const buildValueLabel = () => {
+    const metricLabel = metric != null && String(metric).trim() !== "" ? String(metric).trim() : "";
+    const metricLower = metricLabel.toLowerCase();
+
+    if (!metricLabel) {
+      if (aggregation === "count") return "Count";
+      if (aggregation === "avg") return "Average";
+      if (aggregation === "sum") return "Total";
+      return "Value";
+    }
+
+    if (aggregation === "count") {
+      return metricLower.includes("count") ? metricLabel : `Count of ${metricLabel}`;
+    }
+    if (aggregation === "avg") {
+      return (metricLower.includes("avg") || metricLower.includes("average")) ? metricLabel : `Avg ${metricLabel}`;
+    }
+    if (aggregation === "sum") {
+      return (metricLower.includes("total") || metricLower.includes("sum")) ? metricLabel : `Total ${metricLabel}`;
+    }
+
+    return metricLabel;
+  };
+
+  const singleValueLabel = columnField ? null : buildValueLabel();
   const result={}, columnSet=new Set();
   const rowLabelMap=buildLabelMap(data,rowField);
   const colLabelMap=columnField?buildLabelMap(data,columnField):{};
   data.forEach(row=>{
     const rowKey=row[rowField]!=null?String(row[rowField]).trim().toLowerCase():null;
-    const colRaw=columnField?row[columnField]:"Value";
-    const colKey=columnField?(colRaw!=null?String(colRaw).trim().toLowerCase():null):"Value";
+    const colRaw=columnField?row[columnField]:singleValueLabel;
+    const colKey=columnField?(colRaw!=null?String(colRaw).trim().toLowerCase():null):(singleValueLabel?singleValueLabel.toLowerCase():"Value");
     const value=Number(row[metric])||0;
     if(!rowKey||!colKey)return;
     columnSet.add(colKey);
@@ -97,7 +122,7 @@ function generatePivot(data, rowField, columnField, metric, aggregation) {
     result[rowKey][colKey].push(value);
   });
   const columnKeys=Array.from(columnSet).sort();
-  const columnLabels=columnField?columnKeys.map(k=>colLabelMap[k]||k):["Value"];
+  const columnLabels=columnField?columnKeys.map(k=>colLabelMap[k]||k):[singleValueLabel||"Value"];
   const pivotRows=Object.entries(result).map(([rowKey,colValues])=>{
     const label=rowLabelMap[rowKey]||rowKey;
     const rowObj={[rowField]:label};
@@ -165,9 +190,9 @@ function getMonthRange(dateKey) {
 function Section({ children, accent, pinned }) {
   return (
     <div style={{ background:UI.surfaceElevated, borderRadius:16, padding:24, marginBottom:20,
-      boxShadow: pinned?"0 2px 16px rgba(4,98,65,0.18)":"var(--color-shadow-soft)",
-      border: pinned?`1.5px solid ${LW.green}`:`1px solid ${UI.border}`,
-      borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid ${LW.green}`:`1px solid ${UI.border}`,
+      boxShadow: pinned?"0 0 0 1px var(--color-pin-accent), var(--color-shadow-soft)":"var(--color-shadow-soft)",
+      border: pinned?`1.5px solid var(--color-pin-accent)`:`1px solid ${UI.border}`,
+      borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid var(--color-pin-accent)`:`1px solid ${UI.border}`,
       fontFamily:"'Manrope',sans-serif" }}>
       {children}
     </div>
@@ -175,7 +200,7 @@ function Section({ children, accent, pinned }) {
 }
 
 function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove }) {
-  const bs = { AI:{bg:LW.dark,color:LW.saffron}, AUTO:{bg:LW.green,color:"#fff"}, "RAW DATA":{bg:LW.paper,color:LW.dark}, CUSTOM:{bg:"#fff3dc",color:"#c17110"}, PINNED:{bg:LW.green,color:"#fff"}, "AI FILTER":{bg:LW.dark,color:LW.saffron} };
+  const bs = { AI:{bg:LW.dark,color:LW.saffron}, AUTO:{bg:LW.green,color:"#fff"}, "RAW DATA":{bg:LW.paper,color:LW.dark}, CUSTOM:{bg:"var(--color-badge-custom-bg)",color:"var(--color-badge-custom-text)"}, PINNED:{bg:"var(--color-pin-accent)",color:"var(--color-on-primary)"}, "AI FILTER":{bg:LW.dark,color:LW.saffron} };
   const b = bs[badge]||{bg:LW.paper,color:LW.dark};
   return (
     <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:20 }}>
@@ -188,7 +213,16 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove }) {
       </div>
       <div style={{ display:"flex", gap:8, alignItems:"center" }}>
         {onPin && (
-          <button onClick={onPin} style={{ background:"none", border:`1px solid ${pinned?LW.green:"#e8e3d9"}`, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, color:pinned?LW.green:"#9cafa4" }}>
+          <button onClick={onPin} style={{
+            background: pinned ? "var(--color-pin-accent-bg)" : "none",
+            border: `1px solid ${pinned ? "var(--color-pin-accent)" : UI.border}`,
+            borderRadius: 8,
+            padding: "4px 10px",
+            cursor: "pointer",
+            fontSize: 12,
+            fontWeight: 800,
+            color: pinned ? "var(--color-pin-accent)" : UI.textLight,
+          }}>
             {pinned?"📌 Pinned":"📌 Pin"}
           </button>
         )}
@@ -689,28 +723,35 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
         onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div>
-            <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>{title}</div>
-            <div style={{fontSize:11,color:"#b8c8c0",fontWeight:500}}>Top {ranked.length} ranking</div>
+            <div style={{fontSize:10,fontWeight:800,color:UI.textLight,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>{title}</div>
+            <div style={{fontSize:11,color:UI.textLight,fontWeight:500,opacity:0.9}}>Top {ranked.length} ranking</div>
           </div>
           <div style={{fontSize:20,fontWeight:800,color:accent,letterSpacing:"-0.03em"}}>{formatNum(ranked[0].value,"number")}</div>
         </div>
-        <div style={{height:1,background:"rgba(19,48,32,0.07)",marginBottom:12}}/>
+        <div style={{height:1,background:"var(--color-border-strong)",marginBottom:10}}/>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {ranked.map((item,i)=>{
             const pct = top>0?(item.value/top)*100:0;
             const isMedal=i<3;
             return (
-              <div key={i}>
+              <div
+                key={i}
+                style={{
+                  paddingBottom: 10,
+                  marginBottom: i === ranked.length - 1 ? 0 : 2,
+                  borderBottom: i === ranked.length - 1 ? "none" : "1px solid var(--color-border-strong)",
+                }}
+              >
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:22,height:22,borderRadius:6,background:isMedal?accent:"rgba(19,48,32,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:isMedal?11:10,fontWeight:800,color:isMedal?"#fff":"#9cafa4",flexShrink:0}}>
+                  <div style={{width:22,height:22,borderRadius:6,background:isMedal?accent:UI.surfaceSoft,display:"flex",alignItems:"center",justifyContent:"center",fontSize:isMedal?11:10,fontWeight:800,color:isMedal?"#fff":UI.textLight,flexShrink:0}}>
                     {isMedal?MEDALS[i]:i+1}
                   </div>
-                  <div style={{flex:1,fontSize:12,fontWeight:i===0?700:500,color:i===0?LW.dark:"#4a6358",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
+                  <div style={{flex:1,fontSize:12,fontWeight:i===0?700:500,color:i===0?UI.text:UI.textLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
                   <div style={{fontSize:12,fontWeight:700,color:i===0?accent:LW.dark,flexShrink:0}}>{formatNum(item.value,"number")}</div>
                 </div>
                 <div style={{paddingLeft:30}}>
-                  <div style={{height:3,borderRadius:999,background:"rgba(19,48,32,0.07)",overflow:"hidden",marginTop:3}}>
-                    <div style={{height:"100%",width:`${Math.min(100,Math.max(2,pct))}%`,background:i===0?accent:"rgba(19,48,32,0.15)",borderRadius:999}}/>
+                  <div style={{height:3,borderRadius:999,background:"var(--color-border-strong)",overflow:"hidden",marginTop:3}}>
+                    <div style={{height:"100%",width:`${Math.min(100,Math.max(2,pct))}%`,background:i===0?accent:"var(--color-border-strong)",borderRadius:999}}/>
                   </div>
                 </div>
               </div>
@@ -1068,9 +1109,40 @@ export default function Dashboard({ data, blueprint, fileId }) {
   }, [autoIds.join(","), allCustomCharts.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const Divider = ({label}) => (
-    <div style={{position:"relative",margin:"8px 0 24px",textAlign:"center"}}>
-      <div style={{height:1,background:"#e8e3d9"}}/>
-      <span style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:LW.salt,padding:"0 16px",fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.12em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "18px 0 26px" }}>
+      <div
+        style={{
+          flex: 1,
+          height: 2,
+          background: "linear-gradient(to right, transparent, var(--color-border-strong), transparent)",
+          boxShadow: "0 1px 0 rgba(0,0,0,0.08)",
+        }}
+      />
+      <span
+        style={{
+          background: UI.surface,
+          border: `1px solid ${UI.border}`,
+          padding: "6px 12px",
+          borderRadius: 999,
+          fontSize: 10,
+          fontWeight: 800,
+          color: UI.textLight,
+          letterSpacing: "0.14em",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+          boxShadow: "var(--color-shadow-soft)",
+        }}
+      >
+        {label}
+      </span>
+      <div
+        style={{
+          flex: 1,
+          height: 2,
+          background: "linear-gradient(to right, transparent, var(--color-border-strong), transparent)",
+          boxShadow: "0 1px 0 rgba(0,0,0,0.08)",
+        }}
+      />
     </div>
   );
 
@@ -1089,7 +1161,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
               style={{
                 position: isFilterPinned ? "fixed" : "static",
                 top: isFilterPinned ? filterPinOffset : "auto",
-                left: isFilterPinned ? 320 : "auto",
+                left: isFilterPinned ? "var(--sidebar-offset)" : "auto",
                 right: isFilterPinned ? 0 : "auto",
                 zIndex: 45,
                 pointerEvents: "none",
@@ -1203,7 +1275,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
             style={{
               position: isFilterPinned ? "fixed" : "static",
               top: isFilterPinned ? filterPinOffset : "auto",
-              left: isFilterPinned ? 320 : "auto",
+              left: isFilterPinned ? "var(--sidebar-offset)" : "auto",
               right: isFilterPinned ? 0 : "auto",
               zIndex: 45,
               pointerEvents: "none",
@@ -1228,7 +1300,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
           {/* Pinned section */}
           {(validPinnedIds.length>0||pinnedCustom.length>0)&&(
             <>
-              <div style={{fontSize:11,fontWeight:700,color:LW.green,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>📌 Pinned Charts & Tables</div>
+              <div style={{fontSize:11,fontWeight:800,color:"var(--color-pin-accent)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>📌 Pinned Charts & Tables</div>
 
               {/* Pinned raw data table */}
               {validPinnedIds.includes("raw_data_table")&&(

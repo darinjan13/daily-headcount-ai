@@ -75,7 +75,7 @@ export default function PivotTableRenderer({ data, defaultPageSize = 15 }) {
               : null;
 
             return (
-              <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "var(--color-white)" : "var(--color-surface-soft)" }}>
+              <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "var(--color-surface)" : "var(--color-surface-soft)" }}>
                 {columns.map((col, j) => (
                   <td
                     key={col}

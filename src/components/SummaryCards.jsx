@@ -5,6 +5,7 @@ const UI = {
   surface: "var(--color-surface)",
   elevated: "var(--color-surface-elevated)",
   border: "var(--color-border)",
+  borderStrong: "var(--color-border-strong)",
   text: "var(--color-text)",
   textLight: "var(--color-text-light)",
 };
@@ -26,7 +27,7 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 
 function RankBar({ pct, accent }) {
   return (
-    <div style={{ height: 3, borderRadius: 999, background: "rgba(19,48,32,0.07)", overflow: "hidden", marginTop: 3 }}>
+    <div style={{ height: 3, borderRadius: 999, background: UI.border, overflow: "hidden", marginTop: 3 }}>
       <div style={{ height: "100%", width: `${Math.min(100, Math.max(2, pct))}%`, background: accent, borderRadius: 999 }} />
     </div>
   );
@@ -133,7 +134,7 @@ function SummaryCard({ card, data, accent }) {
         </div>
       </div>
 
-      <div style={{ height: 1, background: UI.border, opacity: 0.6, marginBottom: 12 }} />
+      <div style={{ height: 1, background: UI.borderStrong, marginBottom: 12 }} />
 
       {/* Rankings list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -146,11 +147,12 @@ function SummaryCard({ card, data, accent }) {
                 {/* Rank indicator */}
                 <div style={{
                   width: 22, height: 22, borderRadius: 6,
-                  background: isMedal ? accent : "rgba(19,48,32,0.06)",
+                  background: isMedal ? accent : UI.border,
+                  border: isMedal ? "none" : `1px solid ${UI.borderStrong}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: isMedal ? 11 : 10,
                   fontWeight: 800,
-                  color: isMedal ? "#fff" : "#9cafa4",
+                  color: isMedal ? "#fff" : UI.textLight,
                   flexShrink: 0,
                 }}>
                   {isMedal ? MEDALS[i] : i + 1}
@@ -180,7 +182,7 @@ function SummaryCard({ card, data, accent }) {
                 </div>
               </div>
               <div style={{ paddingLeft: 30 }}>
-                <RankBar pct={pct} accent={i === 0 ? accent : "rgba(19,48,32,0.25)"} />
+                <RankBar pct={pct} accent={i === 0 ? accent : UI.borderStrong} />
               </div>
             </div>
           );

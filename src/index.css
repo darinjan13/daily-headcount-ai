@@ -32,6 +32,14 @@
   --color-meta-text: var(--color-text-light);
   --color-alert-bg: rgba(255, 179, 71, 0.08);
   --color-alert-border: rgba(255, 179, 71, 0.3);
+  --color-on-primary: var(--color-white);
+  --color-pin-accent: var(--color-castleton-green);
+  --color-pin-accent-bg: rgba(4, 98, 65, 0.1);
+  --color-badge-custom-bg: rgba(255, 179, 71, 0.18);
+  --color-badge-custom-text: #8A5A00;
+  --sidebar-width: 320px;
+  --sidebar-peek: 22px;
+  --sidebar-offset: var(--sidebar-peek);
 
   /* Typography */
   font-family: "Manrope", system-ui, sans-serif;
@@ -40,7 +48,7 @@
 
   color-scheme: light;
   color: var(--color-text);
-  background-color: var(--color-white);
+  background-color: var(--color-bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -49,30 +57,32 @@
 }
 
 :root[data-theme="dark"] {
-  --color-white: #16261E;
-  --color-sea-salt: #0E1914;
-  --color-light-gray: #1D2F26;
-  --color-medium-gray: #294036;
-  --color-text: #F5EEDB;
-  --color-text-light: #B7C9BC;
+  /* Lifewood-branded dark palette (deep greens + paper + saffron) */
+  --color-text: var(--color-paper);
+  --color-text-light: rgba(245, 238, 219, 0.78);
 
   --color-bg: #0B1511;
-  --color-surface: #16261E;
-  --color-surface-elevated: #1E3128;
-  --color-surface-soft: rgba(245, 238, 219, 0.06);
-  --color-border: rgba(245, 238, 219, 0.18);
-  --color-border-strong: rgba(245, 238, 219, 0.28);
-  --color-grid: rgba(245, 238, 219, 0.16);
-  --color-chart-axis: #CDD9D0;
-  --color-chart-line-primary: #FFFFFF;
+  --color-surface: #10251B;
+  --color-surface-elevated: #163126;
+  --color-surface-soft: rgba(4, 98, 65, 0.16);
+  --color-border: rgba(245, 238, 219, 0.24);
+  --color-border-strong: rgba(245, 238, 219, 0.38);
+  --color-grid: rgba(245, 238, 219, 0.14);
+  --color-chart-axis: rgba(245, 238, 219, 0.86);
+  --color-chart-line-primary: var(--color-saffron);
   --color-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.32);
   --color-shadow-strong: 0 14px 30px rgba(0, 0, 0, 0.45);
-  --color-chip-bg: rgba(255, 195, 112, 0.24);
-  --color-chip-text: #F5EEDB;
-  --color-chip-border: rgba(255, 195, 112, 0.5);
-  --color-meta-text: #F5EEDB;
-  --color-alert-bg: rgba(255, 179, 71, 0.14);
-  --color-alert-border: rgba(255, 179, 71, 0.36);
+  --color-chip-bg: rgba(255, 179, 71, 0.18);
+  --color-chip-text: var(--color-paper);
+  --color-chip-border: rgba(255, 179, 71, 0.42);
+  --color-meta-text: rgba(245, 238, 219, 0.92);
+  --color-alert-bg: rgba(255, 179, 71, 0.16);
+  --color-alert-border: rgba(255, 179, 71, 0.4);
+  --color-on-primary: var(--color-paper);
+  --color-pin-accent: var(--color-saffron);
+  --color-pin-accent-bg: rgba(255, 179, 71, 0.18);
+  --color-badge-custom-bg: rgba(255, 179, 71, 0.2);
+  --color-badge-custom-text: var(--color-paper);
 
   color-scheme: dark;
 }
@@ -83,7 +93,7 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-light-gray);
+  background: var(--color-surface);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -159,7 +169,7 @@ button {
   font-weight: 600;
   font-family: inherit;
   background-color: var(--color-dark-serpent);
-  color: var(--color-white);
+  color: var(--color-on-primary);
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -169,6 +179,68 @@ button:hover {
   color: var(--color-dark-serpent);
   transform: translateY(-2px);
   box-shadow: 0 8px 16px rgba(255, 179, 71, 0.2);
+}
+
+/* Shared dropdown control styling (selects + <summary> buttons) */
+.ui-dropdown-control {
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+select.ui-dropdown-control,
+summary.ui-dropdown-control {
+  cursor: pointer;
+}
+
+.ui-dropdown-control:focus,
+.ui-dropdown-control:focus-visible {
+  outline: 2px solid var(--color-saffron);
+  outline-offset: 2px;
+}
+
+/* Prevent toolbar dropdown controls from resizing when selection changes */
+.ui-toolbar-dropdown {
+  min-width: 8.5rem;
+  white-space: nowrap;
+}
+
+/* Simple dropdown menu buttons (opt out of global button hover effects) */
+button.ui-dropdown-item {
+  --_dropdown-item-bg: transparent;
+  --_dropdown-item-color: var(--color-text);
+
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+  border: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: var(--_dropdown-item-bg);
+  color: var(--_dropdown-item-color);
+  cursor: pointer;
+  transition: none;
+  box-shadow: none;
+  transform: none;
+}
+
+button.ui-dropdown-item.is-active {
+  --_dropdown-item-bg: var(--color-surface-soft);
+}
+
+button.ui-dropdown-item:hover,
+button.ui-dropdown-item:focus-visible {
+  background-color: var(--_dropdown-item-bg);
+  color: var(--_dropdown-item-color);
+  box-shadow: none;
+  transform: none;
 }
 
 button:focus,
@@ -181,6 +253,27 @@ button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+/* Auto-hide sidebar: keeps a small "peek" handle and expands on hover/focus */
+.ui-auto-hide-sidebar {
+  transform: translateX(calc(var(--sidebar-peek) - var(--sidebar-width)));
+  transition: transform 180ms ease;
+  will-change: transform;
+}
+
+.ui-auto-hide-sidebar:hover,
+.ui-auto-hide-sidebar:focus-within {
+  transform: translateX(0);
+}
+
+@media (max-width: 900px) {
+  :root {
+    --sidebar-offset: var(--sidebar-width);
+  }
+  .ui-auto-hide-sidebar {
+    transform: none;
+  }
 }
 
 .login-glass-card {

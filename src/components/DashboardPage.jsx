@@ -105,13 +105,14 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen w-screen" style={{ backgroundColor: "var(--color-bg)" }}>
       <aside
+        className="ui-auto-hide-sidebar"
         style={{
           position: "fixed",
           top: 0,
           left: 0,
-          width: "320px",
+          width: "var(--sidebar-width)",
           height: "100vh",
-          zIndex: 50,
+          zIndex: 60,
           background: "var(--color-surface)",
           backdropFilter: "blur(10px)",
           borderRight: "1px solid var(--color-border)",
@@ -128,16 +129,16 @@ export default function DashboardPage() {
         />
       </aside>
 
-      <div style={{ marginLeft: "320px", width: "calc(100% - 320px)", minHeight: "100vh", display: "flex", flexDirection: "column", overflowX: "hidden", paddingTop: 56 }}>
+      <div style={{ marginLeft: "var(--sidebar-offset)", width: "calc(100% - var(--sidebar-offset))", minHeight: "100vh", display: "flex", flexDirection: "column", overflowX: "hidden", paddingTop: 56 }}>
         {/* Top bar */}
         <div
-          className="z-50"
           style={{
             position: "fixed",
             top: 0,
-            left: "320px",
+            left: "var(--sidebar-offset)",
             right: 0,
             height: 56,
+            zIndex: 55,
             backgroundColor: "var(--color-surface)",
             borderBottom: "1px solid var(--color-border)",
             boxShadow: "var(--color-shadow-soft)",
