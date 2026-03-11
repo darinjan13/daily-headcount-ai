@@ -884,7 +884,80 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const activeDateCol = activeDateRange.length === 1 ? activeDateRange[0] : null;
   const effectiveValueCol = activeDateCol || valueCol;
 
+  const widePrimaryPivotData = useMemo(() => {
+    if (!isWide || !primaryPivot || !primaryCol) return null;
+    if (wideFilters.section !== "all" || wideFilters.name !== "all") {
+      return analyticsToPrebuiltPivot({
+        headers: [primaryCol, "Production"],
+        rows: wideFilteredData.map(r => [
+          r[primaryCol],
+          activeDateRange.length > 1
+            ? activeDateRange.reduce((s, dc) => s + (Number(r[dc]) || 0), 0)
+            : (Number(r[effectiveValueCol]) || 0),
+        ]),
+      }, primaryCol, "Production");
+    }
+    return primaryPivot;
+  }, [
+    isWide,
+    primaryPivot,
+    primaryCol,
+    wideFilters.section,
+    wideFilters.name,
+    wideFilteredData,
+    activeDateRange,
+    effectiveValueCol,
+  ]);
+
+  const wideSectionPivotData = useMemo(() => {
+    if (!isWide || !sectionPivot) return null;
+    if (wideFilters.section !== "all" || wideFilters.name !== "all") {
+      const grouped = {};
+      wideFilteredData.forEach(r => {
+        const s = r[dataSectionCol || "Section"] || "Unknown";
+        const v = activeDateRange.length > 1
+          ? activeDateRange.reduce((sum, dc) => sum + (Number(r[dc]) || 0), 0)
+          : (Number(r[effectiveValueCol]) || 0);
+        grouped[s] = (grouped[s] || 0) + v;
+      });
+      const rows = Object.entries(grouped)
+        .sort((a, b) => b[1] - a[1])
+        .map(([s, v]) => ({ Section: s, [effectiveValueCol]: v }));
+      const total = rows.reduce((s, r) => s + (Number(r[effectiveValueCol]) || 0), 0);
+      return { columns: ["Section", effectiveValueCol], rows, totalRow: { Section: "Grand Total", [valueCol]: total }, hasColDim: false };
+    }
+    return sectionPivot;
+  }, [
+    isWide,
+    sectionPivot,
+    wideFilters.section,
+    wideFilters.name,
+    wideFilteredData,
+    dataSectionCol,
+    activeDateRange,
+    effectiveValueCol,
+    valueCol,
+  ]);
+
+  const DEFAULT_PIVOT_PAGE_SIZE = 15;
+
   function buildLongPivot(pivotDef) { return generatePivot(filteredData,pivotDef.rowDim,pivotDef.colDim||null,pivotDef.measure,pivotDef.aggregation||"sum"); }
+
+  const longPivotData = useMemo(
+    () => (blueprint.pivots || []).map(pivot => ({ pivot, data: buildLongPivot(pivot) })),
+    [blueprint.pivots, filteredData]
+  );
+  const longPivotPageSize = useMemo(() => {
+    if (longPivotData.length < 2) return DEFAULT_PIVOT_PAGE_SIZE;
+    const minRows = Math.min(...longPivotData.map(p => p.data.rows.length));
+    return Math.min(DEFAULT_PIVOT_PAGE_SIZE, Math.max(1, minRows));
+  }, [longPivotData]);
+
+  const widePivotPageSize = useMemo(() => {
+    if (!widePrimaryPivotData || !wideSectionPivotData) return DEFAULT_PIVOT_PAGE_SIZE;
+    const minRows = Math.min(widePrimaryPivotData.rows.length, wideSectionPivotData.rows.length);
+    return Math.min(DEFAULT_PIVOT_PAGE_SIZE, Math.max(1, minRows));
+  }, [widePrimaryPivotData, wideSectionPivotData]);
 
   const autoIds = isWide
     ? ["wide_line",...(primaryPivot?["wide_primary"]:[]),...(sectionPivot?["wide_section"]:[])]
@@ -1084,45 +1157,17 @@ export default function Dashboard({ data, blueprint, fileId }) {
           {isWide&&(
             <>
               {periodData.length>1&&<Section><SectionHeader title={`${valueCol} over Time`} badge="AUTO" onPin={()=>togglePin("wide_line")} pinned={isPinned("wide_line")}/><SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol}/></Section>}
-              <div style={{display:"grid",gap:20,gridTemplateColumns:sectionPivot?"1fr 1fr":"1fr"}}>
-                {primaryPivot&&(
+              <div style={{display:"grid",gap:20,gridTemplateColumns:"repeat(auto-fit,minmax(0,1fr))",alignItems:"start",justifyContent:"start"}}>
+                {widePrimaryPivotData&&(
                   <Section>
                     <SectionHeader title={`${valueCol} by ${primaryCol}`} badge="AUTO" onPin={()=>togglePin("wide_primary")} pinned={isPinned("wide_primary")}/>
-                    <PivotTableRenderer data={
-                      wideFilters.section!=="all"||wideFilters.name!=="all"
-                        ? analyticsToPrebuiltPivot({
-                            headers:[primaryCol,"Production"],
-                            rows:wideFilteredData.map(r=>[
-                              r[primaryCol],
-                              activeDateRange.length > 1
-                                ? activeDateRange.reduce((s,dc)=>s+(Number(r[dc])||0),0)
-                                : (Number(r[effectiveValueCol])||0)
-                            ])
-                          }, primaryCol, "Production")
-                        : primaryPivot
-                    }/>
+                    <PivotTableRenderer data={widePrimaryPivotData} defaultPageSize={widePivotPageSize}/>
                   </Section>
                 )}
-                {sectionPivot&&(
+                {wideSectionPivotData&&(
                   <Section>
                     <SectionHeader title={`${valueCol} by Section`} badge="AUTO" onPin={()=>togglePin("wide_section")} pinned={isPinned("wide_section")}/>
-                    <PivotTableRenderer data={
-                      wideFilters.section!=="all"||wideFilters.name!=="all"
-                        ? (()=>{
-                            const grouped={};
-                            wideFilteredData.forEach(r=>{
-                              const s=r[dataSectionCol||"Section"]||"Unknown";
-                              const v = activeDateRange.length > 1
-                                ? activeDateRange.reduce((sum,dc)=>sum+(Number(r[dc])||0),0)
-                                : (Number(r[effectiveValueCol])||0);
-                              grouped[s]=(grouped[s]||0)+v;
-                            });
-                            const rows=Object.entries(grouped).sort((a,b)=>b[1]-a[1]).map(([s,v])=>({Section:s,[effectiveValueCol]:v}));
-                            const total=rows.reduce((s,r)=>s+(Number(r[effectiveValueCol])||0),0);
-                            return{columns:["Section",effectiveValueCol],rows,totalRow:{Section:"Grand Total",[valueCol]:total},hasColDim:false};
-                          })()
-                        : sectionPivot
-                    }/>
+                    <PivotTableRenderer data={wideSectionPivotData} defaultPageSize={widePivotPageSize}/>
                   </Section>
                 )}
               </div>
@@ -1140,11 +1185,11 @@ export default function Dashboard({ data, blueprint, fileId }) {
                   {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
                 </Section>
               ))}
-              <div style={{display:"grid",gap:20,gridTemplateColumns:blueprint.pivots?.length>1?"1fr 1fr":"1fr"}}>
-                {blueprint.pivots?.map(pivot=>(
+              <div style={{display:"grid",gap:20,gridTemplateColumns:"repeat(auto-fit,minmax(0,1fr))",alignItems:"start",justifyContent:"start"}}>
+                {longPivotData.map(({ pivot, data })=>(
                   <Section key={pivot.id}>
                     <SectionHeader title={pivot.title} badge={aiGenerated?"AI":"AUTO"} onPin={()=>togglePin(pivot.id)} pinned={isPinned(pivot.id)}/>
-                    <PivotTableRenderer data={buildLongPivot(pivot)}/>
+                    <PivotTableRenderer data={data} defaultPageSize={longPivotPageSize}/>
                   </Section>
                 ))}
               </div>

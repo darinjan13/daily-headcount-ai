@@ -1,6 +1,15 @@
-export default function PivotTableRenderer({ data }) {
+import { useEffect, useMemo, useState } from "react";
+
+export default function PivotTableRenderer({ data, defaultPageSize = 15 }) {
   const { columns, rows, totalRow, hasColDim } = data;
   const valueColumns = columns.slice(1);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(defaultPageSize);
+
+  useEffect(() => {
+    setPageSize(defaultPageSize);
+    setPage(0);
+  }, [rows, defaultPageSize]);
 
   const formatNumber = (val) => {
     if (val === null || val === undefined || val === "") return "";
@@ -20,9 +29,15 @@ export default function PivotTableRenderer({ data }) {
   }
 
   const showColumnTotals = hasColDim && valueColumns.length > 1;
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const pageRows = useMemo(
+    () => rows.slice(page * pageSize, (page + 1) * pageSize),
+    [rows, page, pageSize],
+  );
+  const goTo = (p) => setPage(Math.max(0, Math.min(totalPages - 1, p)));
 
   return (
-    <div className="overflow-x-auto mt-2">
+    <div className="mt-2" style={{ overflowX: "auto", overflowY: "hidden" }}>
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr>
@@ -54,7 +69,7 @@ export default function PivotTableRenderer({ data }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => {
+          {pageRows.map((row, i) => {
             const rowTotal = showColumnTotals
               ? valueColumns.reduce((sum, col) => sum + (Number(row[col]) || 0), 0)
               : null;
@@ -121,6 +136,46 @@ export default function PivotTableRenderer({ data }) {
           )}
         </tbody>
       </table>
+
+      {totalPages > 1 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginTop: 18 }}>
+          <span style={{ fontSize: 11, color: "var(--color-text-light)", fontWeight: 600 }}>
+            {rows.length.toLocaleString()} rows
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+            <PagBtn onClick={() => goTo(page - 1)} disabled={page === 0}>Prev</PagBtn>
+            <span style={{ fontSize: 11, color: "var(--color-text-light)", fontWeight: 600 }}>
+              Page {page + 1} of {totalPages}
+            </span>
+            <PagBtn onClick={() => goTo(page + 1)} disabled={page === totalPages - 1}>Next</PagBtn>
+          </div>
+          <span />
+        </div>
+      )}
     </div>
+  );
+}
+
+function PagBtn({ onClick, disabled, children }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        padding: "6px 12px",
+        borderRadius: 8,
+        border: "1.5px solid var(--color-border)",
+        background: "var(--color-surface-elevated)",
+        color: disabled ? "var(--color-text-light)" : "var(--color-text)",
+        opacity: disabled ? 0.6 : 1,
+        fontSize: 12,
+        fontWeight: 600,
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontFamily: "'Manrope', sans-serif",
+        transition: "all 0.15s",
+      }}
+    >
+      {children}
+    </button>
   );
 }
