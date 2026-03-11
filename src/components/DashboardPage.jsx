@@ -128,11 +128,16 @@ export default function DashboardPage() {
         />
       </aside>
 
-      <div style={{ marginLeft: "320px", width: "calc(100% - 320px)", minHeight: "100vh", display: "flex", flexDirection: "column", overflowX: "hidden" }}>
+      <div style={{ marginLeft: "320px", width: "calc(100% - 320px)", minHeight: "100vh", display: "flex", flexDirection: "column", overflowX: "hidden", paddingTop: 56 }}>
         {/* Top bar */}
         <div
-          className="sticky top-0 z-50"
+          className="z-50"
           style={{
+            position: "fixed",
+            top: 0,
+            left: "320px",
+            right: 0,
+            height: 56,
             backgroundColor: "var(--color-surface)",
             borderBottom: "1px solid var(--color-border)",
             boxShadow: "var(--color-shadow-soft)",
@@ -140,7 +145,7 @@ export default function DashboardPage() {
         >
           <div
             className="flex items-center gap-4"
-            style={{ maxWidth: "1280px", width: "100%", margin: "0 auto", padding: "12px 24px" }}
+            style={{ maxWidth: "1280px", width: "100%", margin: "0 auto", padding: "8px 24px", height: "100%" }}
           >
             <div className="flex items-center gap-3 min-w-0" style={{ flex: 1 }}>
               <div className="flex items-center gap-2 min-w-0">
