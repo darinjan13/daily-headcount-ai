@@ -2,13 +2,13 @@ import SummaryCards from "./SummaryCards";
 import BarChartRenderer from "./BarChartRenderer";
 import LineChartRenderer from "./LineChartRenderer";
 import DonutChartRenderer from "./DonutChartRenderer";
-import { useEffect, useMemo, useState, useCallback, useLayoutEffect, useRef } from "react";
-import { useAuth } from "../context/AuthContext";
-import { usePins } from "../hooks/usePins";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import ChartBuilder from "./ChartBuilder";
 import PivotTableRenderer from "./PivotTableRenderer";
 import DataTable from "./DataTable";
 import DataChatbot from "./DataChatBot";
+import { useAuth } from "../context/AuthContext";
+import { usePins } from "../hooks/usePins";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ResponsiveContainer, Cell, AreaChart, Area,
@@ -82,38 +82,13 @@ function buildLabelMap(data, field) {
 }
 
 function generatePivot(data, rowField, columnField, metric, aggregation) {
-  const buildValueLabel = () => {
-    const metricLabel = metric != null && String(metric).trim() !== "" ? String(metric).trim() : "";
-    const metricLower = metricLabel.toLowerCase();
-
-    if (!metricLabel) {
-      if (aggregation === "count") return "Count";
-      if (aggregation === "avg") return "Average";
-      if (aggregation === "sum") return "Total";
-      return "Value";
-    }
-
-    if (aggregation === "count") {
-      return metricLower.includes("count") ? metricLabel : `Count of ${metricLabel}`;
-    }
-    if (aggregation === "avg") {
-      return (metricLower.includes("avg") || metricLower.includes("average")) ? metricLabel : `Avg ${metricLabel}`;
-    }
-    if (aggregation === "sum") {
-      return (metricLower.includes("total") || metricLower.includes("sum")) ? metricLabel : `Total ${metricLabel}`;
-    }
-
-    return metricLabel;
-  };
-
-  const singleValueLabel = columnField ? null : buildValueLabel();
   const result={}, columnSet=new Set();
   const rowLabelMap=buildLabelMap(data,rowField);
   const colLabelMap=columnField?buildLabelMap(data,columnField):{};
   data.forEach(row=>{
     const rowKey=row[rowField]!=null?String(row[rowField]).trim().toLowerCase():null;
-    const colRaw=columnField?row[columnField]:singleValueLabel;
-    const colKey=columnField?(colRaw!=null?String(colRaw).trim().toLowerCase():null):(singleValueLabel?singleValueLabel.toLowerCase():"Value");
+    const colRaw=columnField?row[columnField]:"Value";
+    const colKey=columnField?(colRaw!=null?String(colRaw).trim().toLowerCase():null):"Value";
     const value=Number(row[metric])||0;
     if(!rowKey||!colKey)return;
     columnSet.add(colKey);
@@ -122,7 +97,7 @@ function generatePivot(data, rowField, columnField, metric, aggregation) {
     result[rowKey][colKey].push(value);
   });
   const columnKeys=Array.from(columnSet).sort();
-  const columnLabels=columnField?columnKeys.map(k=>colLabelMap[k]||k):[singleValueLabel||"Value"];
+  const columnLabels=columnField?columnKeys.map(k=>colLabelMap[k]||k):["Value"];
   const pivotRows=Object.entries(result).map(([rowKey,colValues])=>{
     const label=rowLabelMap[rowKey]||rowKey;
     const rowObj={[rowField]:label};
@@ -190,39 +165,55 @@ function getMonthRange(dateKey) {
 function Section({ children, accent, pinned }) {
   return (
     <div style={{ background:UI.surfaceElevated, borderRadius:16, padding:24, marginBottom:20,
-      boxShadow: pinned?"0 0 0 1px var(--color-pin-accent), var(--color-shadow-soft)":"var(--color-shadow-soft)",
-      border: pinned?`1.5px solid var(--color-pin-accent)`:`1px solid ${UI.border}`,
-      borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid var(--color-pin-accent)`:`1px solid ${UI.border}`,
+      boxShadow: pinned?"0 2px 16px rgba(4,98,65,0.18)":"var(--color-shadow-soft)",
+      border: pinned?`1.5px solid ${LW.green}`:`1px solid ${UI.border}`,
+      borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid ${LW.green}`:`1px solid ${UI.border}`,
       fontFamily:"'Manrope',sans-serif" }}>
       {children}
     </div>
   );
 }
 
-function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove }) {
-  const bs = { AI:{bg:LW.dark,color:LW.saffron}, AUTO:{bg:LW.green,color:"#fff"}, "RAW DATA":{bg:LW.paper,color:LW.dark}, CUSTOM:{bg:"var(--color-badge-custom-bg)",color:"var(--color-badge-custom-text)"}, PINNED:{bg:"var(--color-pin-accent)",color:"var(--color-on-primary)"}, "AI FILTER":{bg:LW.dark,color:LW.saffron} };
+function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRename }) {
+  const bs = { AI:{bg:LW.dark,color:LW.saffron}, AUTO:{bg:LW.green,color:"#fff"}, "RAW DATA":{bg:LW.paper,color:LW.dark}, CUSTOM:{bg:"#fff3dc",color:"#c17110"}, PINNED:{bg:LW.green,color:"#fff"}, "AI FILTER":{bg:LW.dark,color:LW.saffron} };
   const b = bs[badge]||{bg:LW.paper,color:LW.dark};
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const inputRef = useRef(null);
+
+  const startEdit = () => { if (!onRename) return; setDraft(title); setEditing(true); setTimeout(()=>inputRef.current?.select(), 30); };
+  const commit = () => { const t = draft.trim(); if (t && t !== title) onRename(t); setEditing(false); };
+  const cancel = () => setEditing(false);
+
   return (
     <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:20 }}>
-      <div>
+      <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <h3 style={{ fontSize:15, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em" }}>{title}</h3>
-          {badge && <span style={{ fontSize:10, padding:"2px 8px", borderRadius:100, fontWeight:700, letterSpacing:"0.08em", background:b.bg, color:b.color }}>{badge}</span>}
+          {editing ? (
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={e=>setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={e=>{ if(e.key==="Enter"){e.preventDefault();commit();} if(e.key==="Escape")cancel(); }}
+              style={{ fontSize:15, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em", border:"none", borderBottom:`2px solid ${LW.green}`, outline:"none", background:"transparent", width:"100%", maxWidth:340, fontFamily:"inherit" }}
+            />
+          ) : (
+            <h3
+              onClick={startEdit}
+              title={onRename ? "Click to rename" : undefined}
+              style={{ fontSize:15, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em", cursor:onRename?"text":"default", borderBottom:onRename?"1px dashed transparent":"none" }}
+              onMouseEnter={e=>{ if(onRename) e.currentTarget.style.borderBottomColor="#9cafa4"; }}
+              onMouseLeave={e=>{ if(onRename) e.currentTarget.style.borderBottomColor="transparent"; }}
+            >{title}</h3>
+          )}
+          {badge && <span style={{ fontSize:10, padding:"2px 8px", borderRadius:100, fontWeight:700, letterSpacing:"0.08em", background:b.bg, color:b.color, flexShrink:0 }}>{badge}</span>}
         </div>
         {subtitle && <p style={{ fontSize:12, color:"#9cafa4", margin:"4px 0 0", fontWeight:500 }}>{subtitle}</p>}
       </div>
       <div style={{ display:"flex", gap:8, alignItems:"center" }}>
         {onPin && (
-          <button onClick={onPin} style={{
-            background: pinned ? "var(--color-pin-accent-bg)" : "none",
-            border: `1px solid ${pinned ? "var(--color-pin-accent)" : UI.border}`,
-            borderRadius: 8,
-            padding: "4px 10px",
-            cursor: "pointer",
-            fontSize: 12,
-            fontWeight: 800,
-            color: pinned ? "var(--color-pin-accent)" : UI.textLight,
-          }}>
+          <button onClick={onPin} style={{ background:"none", border:`1px solid ${pinned?LW.green:"#e8e3d9"}`, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, color:pinned?LW.green:"#9cafa4" }}>
             {pinned?"📌 Pinned":"📌 Pin"}
           </button>
         )}
@@ -491,29 +482,6 @@ function GlobalFilterBar({ dateCol, dateOptions, filters, setFilters, categoryCo
 
 // ── Drilldown Banner ───────────────────────────────────────────────────────────
 
-function DrilldownBanner({ filters, setFilters }) {
-  const entries = Object.entries(filters.categories);
-  const isDateFiltered = filters.dateFrom!=="all" || filters.dateTo!=="all";
-  if (!entries.length && !isDateFiltered) return null;
-  return (
-    <div style={{ background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:10, padding:"10px 16px", marginBottom:16, display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", fontFamily:"'Manrope',sans-serif" }}>
-      <span style={{ fontSize:11, fontWeight:700, color:LW.green }}>⚡ Filtered view</span>
-      {isDateFiltered && (
-        <span style={{ fontSize:11, background:"#dcfce7", color:LW.green, borderRadius:100, padding:"2px 10px", fontWeight:700 }}>
-          📅 {filters.dateFrom!=="all"?formatDateLabel(filters.dateFrom):"Start"} → {filters.dateTo!=="all"?formatDateLabel(filters.dateTo):"End"}
-          <button onClick={()=>setFilters(f=>({...f,dateFrom:"all",dateTo:"all"}))} style={{ background:"none", border:"none", cursor:"pointer", padding:"0 0 0 4px", color:LW.green, fontSize:13 }}>×</button>
-        </span>
-      )}
-      {entries.map(([col,val])=>(
-        <span key={col} style={{ fontSize:11, background:"#dcfce7", color:LW.green, borderRadius:100, padding:"2px 10px", fontWeight:700, display:"inline-flex", alignItems:"center", gap:5 }}>
-          {col}: {val}
-          <button onClick={()=>setFilters(f=>{const c={...f.categories};delete c[col];return{...f,categories:c};})} style={{ background:"none", border:"none", cursor:"pointer", padding:0, color:LW.green, fontSize:13 }}>×</button>
-        </span>
-      ))}
-      <button onClick={()=>setFilters({dateFrom:"all",dateTo:"all",categories:{}})} style={{ marginLeft:"auto", fontSize:11, fontWeight:700, color:"#9cafa4", background:"none", border:"none", cursor:"pointer" }}>Clear all</button>
-    </div>
-  );
-}
 
 // ── Comparison Mode ────────────────────────────────────────────────────────────
 
@@ -723,35 +691,28 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
         onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div>
-            <div style={{fontSize:10,fontWeight:800,color:UI.textLight,letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>{title}</div>
-            <div style={{fontSize:11,color:UI.textLight,fontWeight:500,opacity:0.9}}>Top {ranked.length} ranking</div>
+            <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>{title}</div>
+            <div style={{fontSize:11,color:"#b8c8c0",fontWeight:500}}>Top {ranked.length} ranking</div>
           </div>
           <div style={{fontSize:20,fontWeight:800,color:accent,letterSpacing:"-0.03em"}}>{formatNum(ranked[0].value,"number")}</div>
         </div>
-        <div style={{height:1,background:"var(--color-border-strong)",marginBottom:10}}/>
+        <div style={{height:1,background:"rgba(19,48,32,0.07)",marginBottom:12}}/>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {ranked.map((item,i)=>{
             const pct = top>0?(item.value/top)*100:0;
             const isMedal=i<3;
             return (
-              <div
-                key={i}
-                style={{
-                  paddingBottom: 10,
-                  marginBottom: i === ranked.length - 1 ? 0 : 2,
-                  borderBottom: i === ranked.length - 1 ? "none" : "1px solid var(--color-border-strong)",
-                }}
-              >
+              <div key={i}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:22,height:22,borderRadius:6,background:isMedal?accent:UI.surfaceSoft,display:"flex",alignItems:"center",justifyContent:"center",fontSize:isMedal?11:10,fontWeight:800,color:isMedal?"#fff":UI.textLight,flexShrink:0}}>
+                  <div style={{width:22,height:22,borderRadius:6,background:isMedal?accent:"rgba(19,48,32,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:isMedal?11:10,fontWeight:800,color:isMedal?"#fff":"#9cafa4",flexShrink:0}}>
                     {isMedal?MEDALS[i]:i+1}
                   </div>
-                  <div style={{flex:1,fontSize:12,fontWeight:i===0?700:500,color:i===0?UI.text:UI.textLight,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
+                  <div style={{flex:1,fontSize:12,fontWeight:i===0?700:500,color:i===0?LW.dark:"#4a6358",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
                   <div style={{fontSize:12,fontWeight:700,color:i===0?accent:LW.dark,flexShrink:0}}>{formatNum(item.value,"number")}</div>
                 </div>
                 <div style={{paddingLeft:30}}>
-                  <div style={{height:3,borderRadius:999,background:"var(--color-border-strong)",overflow:"hidden",marginTop:3}}>
-                    <div style={{height:"100%",width:`${Math.min(100,Math.max(2,pct))}%`,background:i===0?accent:"var(--color-border-strong)",borderRadius:999}}/>
+                  <div style={{height:3,borderRadius:999,background:"rgba(19,48,32,0.07)",overflow:"hidden",marginTop:3}}>
+                    <div style={{height:"100%",width:`${Math.min(100,Math.max(2,pct))}%`,background:i===0?accent:"rgba(19,48,32,0.15)",borderRadius:999}}/>
                   </div>
                 </div>
               </div>
@@ -805,44 +766,12 @@ function RenderChart({ chart, filteredData, onDrilldown }) {
 export default function Dashboard({ data, blueprint, fileId }) {
   const { headers, rows } = data;
 
-  const [filteredTables, setFilteredTables] = useState([]);
+  // filteredTables now persisted via usePins
   const [activeView, setActiveView] = useState("home");
   const [showCompare, setShowCompare] = useState(false);
   const [filters, setFilters] = useState({ dateFrom:"all", dateTo:"all", categories:{} });
   // Wide-format filter state — section, name (primary entity), and active date columns
   const [wideFilters, setWideFilters] = useState({ section:"all", name:"all", dateFrom:"all", dateTo:"all" });
-  const filterBarRef = useRef(null);
-  const filterPlaceholderRef = useRef(null);
-  const [filterBarHeight, setFilterBarHeight] = useState(0);
-  const [isFilterPinned, setIsFilterPinned] = useState(false);
-  const [filterVisible, setFilterVisible] = useState(false);
-  const filterPinOffset = 56;
-
-  const renderFilterBlock = () => (
-    <>
-      {/* Wide format: WideFilterBar with section/name/date dropdowns
-          Long format: GlobalFilterBar with date + category dropdowns */}
-      {isWide
-        ? <WideFilterBar
-            wideDateCols={wideDateCols}
-            objectData={objectData}
-            wideFilters={wideFilters}
-            setWideFilters={setWideFilters}
-            primaryCol={dataPrimaryCol}
-            sectionCol={dataSectionCol}
-          />
-        : <GlobalFilterBar
-            dateCol={dateCol}
-            dateOptions={dateOptions}
-            filters={filters}
-            setFilters={setFilters}
-            categoryColumns={categoryColumns}
-            objectData={objectData}
-          />
-      }
-      <DrilldownBanner filters={filters} setFilters={setFilters}/>
-    </>
-  );
 
   const isWide = blueprint.tableFormat==="wide";
   const analytics = blueprint.analytics||data.analytics||null;
@@ -856,38 +785,15 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const dataPrimaryCol = data.primaryCol || analytics?.primaryCol || null;
   const dataSectionCol = data.sectionCol || (analytics?.sectionTotals ? "Section" : null);
 
-  // Pin storage per file — persisted to Firestore via usePins hook
+  // Pin storage per file
   const { user } = useAuth();
-  const { pinnedIds, customCharts: savedCustomCharts,
-          togglePin, isPinned, addCustomChart, removeCustomChart } = usePins(user?.uid, fileId||"default");
+  const { pinnedIds, customCharts: savedCustomCharts, filteredTables, loading: pinsLoading,
+          togglePin, isPinned, addCustomChart, removeCustomChart, renameCustomChart,
+          addFilteredTable, removeFilteredTable } = usePins(user?.uid, fileId||"default");
 
-  // sessionCharts: charts created in this session (have full computed data)
+  // customCharts from usePins is already seeded from localStorage on first render
+  // and synced from Firestore in background — use directly
   const [sessionCharts, setCustomCharts] = useState([]);
-  useLayoutEffect(() => {
-    if (!filterBarRef.current) return;
-    const updateHeight = () => {
-      if (filterBarRef.current) {
-        setFilterBarHeight(filterBarRef.current.offsetHeight || 0);
-      }
-    };
-    updateHeight();
-    const observer = new ResizeObserver(updateHeight);
-    observer.observe(filterBarRef.current);
-    return () => observer.disconnect();
-  }, [activeView]);
-
-  useEffect(() => {
-    const onScroll = () => {
-      if (!filterPlaceholderRef.current) return;
-      const top = filterPlaceholderRef.current.getBoundingClientRect().top;
-      const pinned = top <= filterPinOffset;
-      setIsFilterPinned(pinned);
-      setFilterVisible(pinned);
-    };
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [filterPinOffset]);
 
 
   // Object data
@@ -914,8 +820,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
   },[objectData,filters,dateCol]);
 
   const filteredRows = useMemo(()=>filteredData.map(row=>headers.map(h=>row[h]===undefined?null:row[h])),[filteredData,headers]);
-
   // Rebuild saved charts from Firestore — recompute chartData/pivotData from their spec
+  // Must be after filteredData is defined
   const rebuiltSavedCharts = useMemo(() => {
     return savedCustomCharts.map(c => {
       if (c.type === "pivot" && c.xCol && !c.pivotData) {
@@ -928,11 +834,24 @@ export default function Dashboard({ data, blueprint, fileId }) {
     });
   }, [savedCustomCharts, filteredData]);
 
-  // Merge session charts with rebuilt Firestore charts (session takes priority)
+  // Merge session charts with rebuilt Firestore charts
   const allCustomCharts = [
     ...sessionCharts,
     ...rebuiltSavedCharts.filter(s => !sessionCharts.find(c => String(c.id) === String(s.id)))
   ];
+
+  const autoIds = isWide
+    ? ["wide_line", "wide_primary", "wide_section"]
+    : [...(blueprint.charts||[]).map(c=>c.id), ...(blueprint.pivots||[]).map(p=>p.id)];
+
+  const validPinnedIds = pinnedIds.filter(id =>
+    autoIds.includes(id) ||
+    allCustomCharts.some(c => String(c.id) === id) ||
+    id === "raw_data_table" ||
+    filteredTables.some(t => String(t.id) === id)
+  );
+
+  const pinnedCustom = allCustomCharts.filter(c => validPinnedIds.includes(String(c.id)));
 
   // Wide-format: filter by section/name
   const wideFilteredData = useMemo(()=>{
@@ -958,191 +877,113 @@ export default function Dashboard({ data, blueprint, fileId }) {
     return headers.filter(h => !wideDateCols.includes(h) || inRange.has(h));
   }, [isWide, headers, wideDateCols, wideFilters.dateFrom, wideFilters.dateTo]);
 
-  // Click chart → drilldown
-  const handleDrilldown = useCallback((col,val)=>{
-    if(!col||!val)return;
-    setFilters(f=>({...f,categories:{...f.categories,[col]:val}}));
-  },[]);
+  // Analytics-derived variables
+  const periodData = analytics ? analyticsToObjects(analytics.periodTotals) : [];
+  const primaryCol = analytics?.primaryCol || dataPrimaryCol || "Entity";
+  const valueCol   = analytics?.valueCol || "Total Production";
+  const periodCol  = analytics?.periodCol || "Period";
+  const primaryPivot = analytics?.primaryTotals
+    ? analyticsToPrebuiltPivot(analytics.primaryTotals, primaryCol, valueCol) : null;
+  const sectionPivot = analytics?.sectionTotals
+    ? analyticsToPrebuiltPivot(analytics.sectionTotals, "Section", valueCol) : null;
 
-  const removeCustom = (id) => {
-    setCustomCharts(prev=>prev.filter(c=>c.id!==id));
-    removeCustomChart(id); // remove from Firestore too
-  };
-  const removeFilteredTable = (id) => setFilteredTables(prev=>prev.filter(t=>t.id!==id));
-
-  const handleChatResult = ({ chartSpec, filterSpec }) => {
-    if (filterSpec) {
-      const id = Date.now();
-      setFilteredTables(prev => [{ id, ...filterSpec }, ...prev]);
-      setActiveView("home");
-    } else if (chartSpec) {
-      const spec = chartSpec;
-      const id = Date.now();
-      const title = spec.title || `${spec.measure||spec.y||""} by ${spec.rowDim||spec.x||""}`;
-      let result;
-      if(spec.type==="pivot") result={id,type:"pivot",title,xCol:spec.rowDim,spec,pivotData:generatePivot(filteredData,spec.rowDim,spec.colDim||null,spec.measure,spec.aggregation||"sum")};
-      else if(spec.type==="bar") result={id,type:"bar",title,xCol:spec.x,spec,config:{x:spec.x,y:spec.y},chartData:groupForBar(filteredData,spec.x,spec.y,20)};
-      else if(spec.type==="line") result={id,type:"line",title,spec,config:{x:spec.x,y:spec.y}};
-      else if(spec.type==="donut") result={id,type:"donut",title,spec,config:{x:spec.x,y:spec.y}};
-      if(result) {
-        setCustomCharts(prev=>[result,...prev]);
-        addCustomChart(result); // persist to Firestore + auto-pin
-        setActiveView("charts");
-      }
-    }
-  };
-
-  const periodData = analytics?analyticsToObjects(analytics.periodTotals):[];
-  const primaryCol = analytics?.primaryCol||dataPrimaryCol||"Entity";
-  const valueCol = analytics?.valueCol||"Total Production";
-  const periodCol = analytics?.periodCol||"Period";
-  const primaryPivot = analytics?.primaryTotals?analyticsToPrebuiltPivot(analytics.primaryTotals,primaryCol,valueCol):null;
-  const sectionPivot = analytics?.sectionTotals?analyticsToPrebuiltPivot(analytics.sectionTotals,"Section",valueCol):null;
-
-  // Date range helpers
   const { dateFrom, dateTo } = wideFilters;
   const isDateFiltered = dateFrom !== "all" || dateTo !== "all";
   const fromIdx = dateFrom !== "all" ? wideDateCols.indexOf(dateFrom) : 0;
   const toIdx   = dateTo   !== "all" ? wideDateCols.indexOf(dateTo)   : wideDateCols.length - 1;
   const activeDateRange = isDateFiltered ? wideDateCols.slice(fromIdx, toIdx + 1) : [];
-
-  // For a single date, rank by that column directly.
-  // For a range, sum across columns on the fly — effectiveValueCol stays as Total Production
-  // but StaticSummaryCards will receive activeDateRange and sum live.
   const activeDateCol = activeDateRange.length === 1 ? activeDateRange[0] : null;
   const effectiveValueCol = activeDateCol || valueCol;
 
-  const widePrimaryPivotData = useMemo(() => {
-    if (!isWide || !primaryPivot || !primaryCol) return null;
-    if (wideFilters.section !== "all" || wideFilters.name !== "all") {
-      return analyticsToPrebuiltPivot({
-        headers: [primaryCol, "Production"],
-        rows: wideFilteredData.map(r => [
-          r[primaryCol],
-          activeDateRange.length > 1
-            ? activeDateRange.reduce((s, dc) => s + (Number(r[dc]) || 0), 0)
-            : (Number(r[effectiveValueCol]) || 0),
-        ]),
-      }, primaryCol, "Production");
+  function buildLongPivot(pivotDef) {
+    return generatePivot(filteredData, pivotDef.rowDim, pivotDef.colDim||null, pivotDef.measure, pivotDef.aggregation||"sum");
+  }
+
+  const removeCustom = (id) => {
+    setCustomCharts(prev => prev.filter(c => c.id !== id));
+    removeCustomChart(id);
+  };
+
+  const renameChart = (id, newTitle) => {
+    setCustomCharts(prev => prev.map(c =>
+      c.id !== id ? c : { ...c, title: newTitle, spec: c.spec ? { ...c.spec, title: newTitle } : c.spec }
+    ));
+    renameCustomChart(id, newTitle);
+  };
+
+  // Build a chart result from a spec, applying limit/sort/row-filters
+  const buildChartResult = (spec, id) => {
+    if (!spec) return null;
+    let data = filteredData;
+    if (spec.filters?.length) {
+      data = data.filter(row => spec.filters.every(({ column, operator, value }) => {
+        const cell = String(row[column] ?? "").trim().toLowerCase();
+        const val = String(value ?? "").toLowerCase();
+        if (operator === "eq") return cell === val;
+        if (operator === "neq") return cell !== val;
+        if (operator === "contains") return cell.includes(val);
+        const cn = parseFloat(cell), vn = parseFloat(val);
+        if (operator === "gt") return cn > vn;
+        if (operator === "gte") return cn >= vn;
+        if (operator === "lt") return cn < vn;
+        if (operator === "lte") return cn <= vn;
+        return true;
+      }));
     }
-    return primaryPivot;
-  }, [
-    isWide,
-    primaryPivot,
-    primaryCol,
-    wideFilters.section,
-    wideFilters.name,
-    wideFilteredData,
-    activeDateRange,
-    effectiveValueCol,
-  ]);
-
-  const wideSectionPivotData = useMemo(() => {
-    if (!isWide || !sectionPivot) return null;
-    if (wideFilters.section !== "all" || wideFilters.name !== "all") {
-      const grouped = {};
-      wideFilteredData.forEach(r => {
-        const s = r[dataSectionCol || "Section"] || "Unknown";
-        const v = activeDateRange.length > 1
-          ? activeDateRange.reduce((sum, dc) => sum + (Number(r[dc]) || 0), 0)
-          : (Number(r[effectiveValueCol]) || 0);
-        grouped[s] = (grouped[s] || 0) + v;
-      });
-      const rows = Object.entries(grouped)
-        .sort((a, b) => b[1] - a[1])
-        .map(([s, v]) => ({ Section: s, [effectiveValueCol]: v }));
-      const total = rows.reduce((s, r) => s + (Number(r[effectiveValueCol]) || 0), 0);
-      return { columns: ["Section", effectiveValueCol], rows, totalRow: { Section: "Grand Total", [valueCol]: total }, hasColDim: false };
+    const limit = spec.limit || null;
+    const xCol = spec.x || spec.xCol || null;
+    const yCol = spec.y || null;
+    if (spec.type === "pivot") {
+      return { id, type: "pivot", title: spec.title || "Pivot", xCol: spec.rowDim, spec,
+        pivotData: generatePivot(data, spec.rowDim, spec.colDim || null, spec.measure, spec.aggregation || "sum") };
     }
-    return sectionPivot;
-  }, [
-    isWide,
-    sectionPivot,
-    wideFilters.section,
-    wideFilters.name,
-    wideFilteredData,
-    dataSectionCol,
-    activeDateRange,
-    effectiveValueCol,
-    valueCol,
-  ]);
-
-  const DEFAULT_PIVOT_PAGE_SIZE = 15;
-
-  function buildLongPivot(pivotDef) { return generatePivot(filteredData,pivotDef.rowDim,pivotDef.colDim||null,pivotDef.measure,pivotDef.aggregation||"sum"); }
-
-  const longPivotData = useMemo(
-    () => (blueprint.pivots || []).map(pivot => ({ pivot, data: buildLongPivot(pivot) })),
-    [blueprint.pivots, filteredData]
-  );
-  const longPivotPageSize = useMemo(() => {
-    if (longPivotData.length < 2) return DEFAULT_PIVOT_PAGE_SIZE;
-    const minRows = Math.min(...longPivotData.map(p => p.data.rows.length));
-    return Math.min(DEFAULT_PIVOT_PAGE_SIZE, Math.max(1, minRows));
-  }, [longPivotData]);
-
-  const widePivotPageSize = useMemo(() => {
-    if (!widePrimaryPivotData || !wideSectionPivotData) return DEFAULT_PIVOT_PAGE_SIZE;
-    const minRows = Math.min(widePrimaryPivotData.rows.length, wideSectionPivotData.rows.length);
-    return Math.min(DEFAULT_PIVOT_PAGE_SIZE, Math.max(1, minRows));
-  }, [widePrimaryPivotData, wideSectionPivotData]);
-
-  const autoIds = isWide
-    ? ["wide_line",...(primaryPivot?["wide_primary"]:[]),...(sectionPivot?["wide_section"]:[])]
-    : [...(blueprint.charts||[]).map(c=>c.id),...(blueprint.pivots||[]).map(p=>p.id)];
-
-  const pinnedCustom = allCustomCharts.filter(c=>pinnedIds.includes(String(c.id)));
-  // Only count pins that actually have a matching chart/table to render
-  const validPinnedIds = pinnedIds.filter(id =>
-    autoIds.includes(id) ||
-    allCustomCharts.some(c => String(c.id) === id) ||
-    id === "raw_data_table" ||
-    filteredTables.some(t => String(t.id) === id)
-  );
-  const pinnedCount = validPinnedIds.length;
-
-  // Auto-clean stale pins (saved IDs with no matching chart)
-  useEffect(() => {
-    if (pinnedIds.length > 0 && validPinnedIds.length < pinnedIds.length) {
-      pinnedIds.filter(id => !validPinnedIds.includes(id)).forEach(id => togglePin(id));
+    if (spec.type === "bar" || spec.type === "hbar") {
+      return { id, type: spec.type, title: spec.title || "Chart", xCol, spec,
+        config: { x: xCol, y: yCol },
+        chartData: groupForBar(data, xCol, yCol, limit || 20) };
     }
-  }, [autoIds.join(","), allCustomCharts.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (spec.type === "donut") {
+      return { id, type: "donut", title: spec.title || "Chart", xCol, spec,
+        config: { x: xCol, y: yCol, topN: limit || 10 },
+        chartData: groupForBar(data, xCol, yCol, limit || 10) };
+    }
+    if (spec.type === "line") {
+      return { id, type: "line", title: spec.title || "Chart", spec, config: { x: xCol, y: yCol } };
+    }
+    return null;
+  };
+
+  const handleChatResult = ({ chartSpec, filterSpec, action, targetId, updateChartId }) => {
+    if (filterSpec) {
+      const id = Date.now();
+      addFilteredTable({ id, ...filterSpec });
+      setActiveView("home");
+    } else if (chartSpec) {
+      const modifyId = targetId || updateChartId || (action === "modify" ? chartSpec.targetId : null);
+      if (modifyId) {
+        setCustomCharts(prev => prev.map(c => {
+          if (String(c.id) !== String(modifyId)) return c;
+          return buildChartResult(chartSpec, c.id) || c;
+        }));
+        const updated = buildChartResult(chartSpec, modifyId);
+        if (updated) addCustomChart(updated);
+        setActiveView("charts");
+      } else {
+        const id = chartSpec._chatId || Date.now();
+        const result = buildChartResult(chartSpec, id);
+        if (result) {
+          setCustomCharts(prev => [result, ...prev]);
+          addCustomChart(result);
+          setActiveView("charts");
+        }
+      }
+    }
+  };
 
   const Divider = ({label}) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "18px 0 26px" }}>
-      <div
-        style={{
-          flex: 1,
-          height: 2,
-          background: "linear-gradient(to right, transparent, var(--color-border-strong), transparent)",
-          boxShadow: "0 1px 0 rgba(0,0,0,0.08)",
-        }}
-      />
-      <span
-        style={{
-          background: UI.surface,
-          border: `1px solid ${UI.border}`,
-          padding: "6px 12px",
-          borderRadius: 999,
-          fontSize: 10,
-          fontWeight: 800,
-          color: UI.textLight,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          whiteSpace: "nowrap",
-          boxShadow: "var(--color-shadow-soft)",
-        }}
-      >
-        {label}
-      </span>
-      <div
-        style={{
-          flex: 1,
-          height: 2,
-          background: "linear-gradient(to right, transparent, var(--color-border-strong), transparent)",
-          boxShadow: "0 1px 0 rgba(0,0,0,0.08)",
-        }}
-      />
+    <div style={{position:"relative",margin:"8px 0 24px",textAlign:"center"}}>
+      <div style={{height:1,background:"#e8e3d9"}}/>
+      <span style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:LW.salt,padding:"0 16px",fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.12em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>
     </div>
   );
 
@@ -1151,37 +992,31 @@ export default function Dashboard({ data, blueprint, fileId }) {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
 
       {aiGenerated&&datasetSummary&&<AIBanner summary={datasetSummary}/>}
-      <DashboardNav activeView={activeView} setActiveView={setActiveView} pinnedCount={pinnedCount} filteredTableCount={filteredTables.length}/>
+      <DashboardNav activeView={activeView} setActiveView={setActiveView} pinnedCount={pinnedIds.length} filteredTableCount={filteredTables.length}/>
 
       {/* ── HOME TAB ─────────────────────────────────────── */}
       {activeView==="home" && (
         <>
-            <div ref={filterPlaceholderRef} style={{ height: isFilterPinned ? filterBarHeight : 0 }} />
-            <div
-              style={{
-                position: isFilterPinned ? "fixed" : "static",
-                top: isFilterPinned ? filterPinOffset : "auto",
-                left: isFilterPinned ? "var(--sidebar-offset)" : "auto",
-                right: isFilterPinned ? 0 : "auto",
-                zIndex: 45,
-                pointerEvents: "none",
-              }}
-            >
-              <div style={{
-                maxWidth: isFilterPinned ? 1280 : "100%",
-                width: "100%",
-                margin: isFilterPinned ? "0 auto" : 0,
-                padding: isFilterPinned ? "0 32px" : 0,
-                pointerEvents: "auto",
-                transition: "transform 0.2s ease, opacity 0.2s ease",
-                transform: isFilterPinned ? (filterVisible ? "translateY(0)" : "translateY(-6px)") : "translateY(0)",
-                opacity: isFilterPinned && filterVisible ? 1 : isFilterPinned ? 0 : 1,
-              }}>
-                <div ref={filterBarRef}>
-                  {renderFilterBlock()}
-                </div>
-              </div>
-            </div>
+          {/* Wide format: WideFilterBar with section/name/date dropdowns
+              Long format: GlobalFilterBar with date + category dropdowns */}
+          {isWide
+            ? <WideFilterBar
+                wideDateCols={wideDateCols}
+                objectData={objectData}
+                wideFilters={wideFilters}
+                setWideFilters={setWideFilters}
+                primaryCol={dataPrimaryCol}
+                sectionCol={dataSectionCol}
+              />
+            : <GlobalFilterBar
+                dateCol={dateCol}
+                dateOptions={dateOptions}
+                filters={filters}
+                setFilters={setFilters}
+                categoryColumns={categoryColumns}
+                objectData={objectData}
+              />
+          }
 
           {isWide&&blueprint.cards?.length>0&&<StaticSummaryCards
             cards={blueprint.cards}
@@ -1207,7 +1042,22 @@ export default function Dashboard({ data, blueprint, fileId }) {
             <CompareCards blueprint={blueprint} objectData={objectData} dateCol={dateCol} dateOptions={dateOptions} isWide={isWide}/>
           )}
 
-          {/* AI filtered tables — above raw data, below summaries */}
+          <Section>
+            <SectionHeader
+              title="Data Table"
+              subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
+              badge="RAW DATA"
+            />
+            <DataTable
+              headers={isWide ? wideVisibleHeaders : headers}
+              rows={isWide
+                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
+                : filteredRows
+              }
+            />
+          </Section>
+
+          {/* AI filtered tables from chatbot — bottom of summary */}
           {filteredTables.map(table => {
             const applyTableFilter = () => {
               return objectData.filter(row =>
@@ -1232,133 +1082,36 @@ export default function Dashboard({ data, blueprint, fileId }) {
             const displayCols = (table.columns||[]).filter(c => headers.includes(c));
             const matchedRows = applyTableFilter();
             const displayRows = matchedRows.map(row => displayCols.map(col => row[col] === undefined ? null : row[col]));
-            const tablePin = String(table.id);
             return (
-              <Section key={table.id} pinned={isPinned(tablePin)}>
+              <Section key={table.id}>
                 <SectionHeader
                   title={table.title}
                   subtitle={`${matchedRows.length} row${matchedRows.length !== 1 ? "s" : ""} · AI filtered`}
                   badge="AI FILTER"
-                  onPin={() => togglePin(tablePin)}
-                  pinned={isPinned(tablePin)}
+                  onPin={() => togglePin(String(table.id))}
+                  pinned={isPinned(String(table.id))}
                   onRemove={() => removeFilteredTable(table.id)}
                 />
                 <DataTable headers={displayCols} rows={displayRows}/>
               </Section>
             );
           })}
-
-          <Section pinned={isPinned("raw_data_table")}>
-            <SectionHeader
-              title="Data Table"
-              subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
-              badge="RAW DATA"
-              onPin={() => togglePin("raw_data_table")}
-              pinned={isPinned("raw_data_table")}
-            />
-            <DataTable
-              headers={isWide ? wideVisibleHeaders : headers}
-              rows={isWide
-                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
-                : filteredRows
-              }
-            />
-          </Section>
         </>
       )}
 
       {/* ── CHARTS TAB ───────────────────────────────────── */}
       {activeView==="charts" && (
         <>
-          <div ref={filterPlaceholderRef} style={{ height: isFilterPinned ? filterBarHeight : 0 }} />
-          <div
-            style={{
-              position: isFilterPinned ? "fixed" : "static",
-              top: isFilterPinned ? filterPinOffset : "auto",
-              left: isFilterPinned ? "var(--sidebar-offset)" : "auto",
-              right: isFilterPinned ? 0 : "auto",
-              zIndex: 45,
-              pointerEvents: "none",
-            }}
-          >
-            <div style={{
-              maxWidth: isFilterPinned ? 1280 : "100%",
-              width: "100%",
-              margin: isFilterPinned ? "0 auto" : 0,
-              padding: isFilterPinned ? "0 32px" : 0,
-              pointerEvents: "auto",
-              transition: "transform 0.2s ease, opacity 0.2s ease",
-              transform: isFilterPinned ? (filterVisible ? "translateY(0)" : "translateY(-6px)") : "translateY(0)",
-              opacity: isFilterPinned && filterVisible ? 1 : isFilterPinned ? 0 : 1,
-            }}>
-              <div ref={filterBarRef}>
-                {renderFilterBlock()}
-              </div>
-            </div>
-          </div>
 
           {/* Pinned section */}
-          {(validPinnedIds.length>0||pinnedCustom.length>0)&&(
+          {validPinnedIds.length>0&&(
             <>
-              <div style={{fontSize:11,fontWeight:800,color:"var(--color-pin-accent)",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>📌 Pinned Charts & Tables</div>
-
-              {/* Pinned raw data table */}
-              {validPinnedIds.includes("raw_data_table")&&(
-                <Section pinned>
-                  <SectionHeader
-                    title="Data Table"
-                    subtitle={`${(isWide?wideFilteredData:filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide?wideVisibleHeaders:headers).length} columns`}
-                    badge="RAW DATA"
-                    onPin={()=>togglePin("raw_data_table")}
-                    pinned={true}
-                  />
-                  <DataTable
-                    headers={isWide?wideVisibleHeaders:headers}
-                    rows={isWide
-                      ?wideFilteredData.map(row=>wideVisibleHeaders.map(h=>row[h]===undefined?null:row[h]))
-                      :filteredRows
-                    }
-                  />
-                </Section>
-              )}
-
-              {/* Pinned AI filter tables */}
-              {filteredTables.filter(t=>validPinnedIds.includes(String(t.id))).map(table=>{
-                const matchedRows=objectData.filter(row=>(table.filters||[]).every(({column,operator,value})=>{
-                  const cell=row[column]; const cellStr=cell==null?"":String(cell).trim();
-                  const cellNum=parseFloat(cellStr.replace(/,/g,"")); const valNum=parseFloat(String(value).replace(/,/g,""));
-                  switch(operator){
-                    case "eq": return cellStr.toLowerCase()===String(value).toLowerCase();
-                    case "neq": return cellStr.toLowerCase()!==String(value).toLowerCase();
-                    case "contains": return cellStr.toLowerCase().includes(String(value).toLowerCase());
-                    case "gt": return !isNaN(cellNum)&&cellNum>valNum;
-                    case "gte": return !isNaN(cellNum)&&cellNum>=valNum;
-                    case "lt": return !isNaN(cellNum)&&cellNum<valNum;
-                    case "lte": return !isNaN(cellNum)&&cellNum<=valNum;
-                    default: return true;
-                  }
-                }));
-                const displayCols=(table.columns||[]).filter(c=>headers.includes(c));
-                const displayRows=matchedRows.map(row=>displayCols.map(col=>row[col]===undefined?null:row[col]));
-                return(
-                  <Section key={table.id} pinned>
-                    <SectionHeader
-                      title={table.title}
-                      subtitle={`${matchedRows.length} row${matchedRows.length!==1?"s":""} · AI filtered`}
-                      badge="AI FILTER"
-                      onPin={()=>togglePin(String(table.id))}
-                      pinned={true}
-                      onRemove={()=>removeFilteredTable(table.id)}
-                    />
-                    <DataTable headers={displayCols} rows={displayRows}/>
-                  </Section>
-                );
-              })}
+              <div style={{fontSize:11,fontWeight:700,color:LW.green,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>📌 Pinned Charts</div>
 
               {pinnedCustom.map(chart=>(
                 <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1.5px solid ${LW.green}`,borderLeft:`4px solid ${LW.green}`}}>
-                  <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(String(chart.id))} pinned={true} onRemove={()=>removeCustom(chart.id)}/>
-                  <RenderChart chart={chart} filteredData={filteredData} onDrilldown={handleDrilldown}/>
+                  <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(String(chart.id))} pinned={true} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
+                  <RenderChart chart={chart} filteredData={filteredData}/>
                 </div>
               ))}
 
@@ -1375,7 +1128,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 <Section key={chart.id} pinned>
                   <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(chart.id)} pinned={true}/>
                   {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
-                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} onDrilldown={v=>handleDrilldown(chart.x,v)}/>}
+                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} />}
                   {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
                 </Section>
               ))}
@@ -1385,6 +1138,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
                   <PivotTableRenderer data={buildLongPivot(pivot)}/>
                 </Section>
               ))}
+
               <Divider label="All Charts"/>
             </>
           )}
@@ -1394,7 +1148,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
             <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table"/>
             <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
               const id=Date.now(); let result;
-              const spec=config;
+              const spec=config; // save full config as spec for Firestore rebuild
               if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
               else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
               else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
@@ -1410,8 +1164,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
           {/* Unpinned custom charts */}
           {allCustomCharts.filter(c=>!pinnedIds.includes(String(c.id))).map(chart=>(
             <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,borderLeft:`4px solid ${LW.saffron}`}}>
-               <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>togglePin(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)}/>
-               <RenderChart chart={chart} filteredData={filteredData} onDrilldown={handleDrilldown}/>
+               <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>togglePin(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
+               <RenderChart chart={chart} filteredData={filteredData}/>
              </div>
           ))}
 
@@ -1421,17 +1175,45 @@ export default function Dashboard({ data, blueprint, fileId }) {
           {isWide&&(
             <>
               {periodData.length>1&&<Section><SectionHeader title={`${valueCol} over Time`} badge="AUTO" onPin={()=>togglePin("wide_line")} pinned={isPinned("wide_line")}/><SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol}/></Section>}
-              <div style={{display:"grid",gap:20,gridTemplateColumns:"repeat(auto-fit,minmax(0,1fr))",alignItems:"start",justifyContent:"start"}}>
-                {widePrimaryPivotData&&(
+              <div style={{display:"grid",gap:20,gridTemplateColumns:sectionPivot?"1fr 1fr":"1fr"}}>
+                {primaryPivot&&(
                   <Section>
                     <SectionHeader title={`${valueCol} by ${primaryCol}`} badge="AUTO" onPin={()=>togglePin("wide_primary")} pinned={isPinned("wide_primary")}/>
-                    <PivotTableRenderer data={widePrimaryPivotData} defaultPageSize={widePivotPageSize}/>
+                    <PivotTableRenderer data={
+                      wideFilters.section!=="all"||wideFilters.name!=="all"
+                        ? analyticsToPrebuiltPivot({
+                            headers:[primaryCol,"Production"],
+                            rows:wideFilteredData.map(r=>[
+                              r[primaryCol],
+                              activeDateRange.length > 1
+                                ? activeDateRange.reduce((s,dc)=>s+(Number(r[dc])||0),0)
+                                : (Number(r[effectiveValueCol])||0)
+                            ])
+                          }, primaryCol, "Production")
+                        : primaryPivot
+                    }/>
                   </Section>
                 )}
-                {wideSectionPivotData&&(
+                {sectionPivot&&(
                   <Section>
                     <SectionHeader title={`${valueCol} by Section`} badge="AUTO" onPin={()=>togglePin("wide_section")} pinned={isPinned("wide_section")}/>
-                    <PivotTableRenderer data={wideSectionPivotData} defaultPageSize={widePivotPageSize}/>
+                    <PivotTableRenderer data={
+                      wideFilters.section!=="all"||wideFilters.name!=="all"
+                        ? (()=>{
+                            const grouped={};
+                            wideFilteredData.forEach(r=>{
+                              const s=r[dataSectionCol||"Section"]||"Unknown";
+                              const v = activeDateRange.length > 1
+                                ? activeDateRange.reduce((sum,dc)=>sum+(Number(r[dc])||0),0)
+                                : (Number(r[effectiveValueCol])||0);
+                              grouped[s]=(grouped[s]||0)+v;
+                            });
+                            const rows=Object.entries(grouped).sort((a,b)=>b[1]-a[1]).map(([s,v])=>({Section:s,[effectiveValueCol]:v}));
+                            const total=rows.reduce((s,r)=>s+(Number(r[effectiveValueCol])||0),0);
+                            return{columns:["Section",effectiveValueCol],rows,totalRow:{Section:"Grand Total",[valueCol]:total},hasColDim:false};
+                          })()
+                        : sectionPivot
+                    }/>
                   </Section>
                 )}
               </div>
@@ -1445,15 +1227,15 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 <Section key={chart.id}>
                   <SectionHeader title={chart.title} badge={aiGenerated?"AI":"AUTO"} onPin={()=>togglePin(chart.id)} pinned={isPinned(chart.id)}/>
                   {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
-                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} onDrilldown={v=>handleDrilldown(chart.x,v)}/>}
+                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} />}
                   {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
                 </Section>
               ))}
-              <div style={{display:"grid",gap:20,gridTemplateColumns:"repeat(auto-fit,minmax(0,1fr))",alignItems:"start",justifyContent:"start"}}>
-                {longPivotData.map(({ pivot, data })=>(
+              <div style={{display:"grid",gap:20,gridTemplateColumns:blueprint.pivots?.length>1?"1fr 1fr":"1fr"}}>
+                {blueprint.pivots?.map(pivot=>(
                   <Section key={pivot.id}>
                     <SectionHeader title={pivot.title} badge={aiGenerated?"AI":"AUTO"} onPin={()=>togglePin(pivot.id)} pinned={isPinned(pivot.id)}/>
-                    <PivotTableRenderer data={data} defaultPageSize={longPivotPageSize}/>
+                    <PivotTableRenderer data={buildLongPivot(pivot)}/>
                   </Section>
                 ))}
               </div>
@@ -1462,7 +1244,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
         </>
       )}
 
-      <DataChatbot headers={headers} rows={filteredRows} blueprint={blueprint} onResult={handleChatResult}/>
+      <DataChatbot headers={headers} rows={filteredRows} blueprint={blueprint} onResult={handleChatResult} customCharts={allCustomCharts}/>
     </div>
   );
 }

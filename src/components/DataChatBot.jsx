@@ -15,8 +15,6 @@ const BRAND = {
 };
 
 // ── Lightweight markdown renderer ─────────────────────────────────────────────
-// Handles: **bold**, *italic*, `code`, ## headers, numbered lists, bullet lists,
-// markdown tables, and --- dividers. No external dependency needed.
 
 function MarkdownMessage({ text }) {
   const lines = text.split("\n");
@@ -26,328 +24,259 @@ function MarkdownMessage({ text }) {
   while (i < lines.length) {
     const line = lines[i];
 
-    // --- divider
     if (/^---+$/.test(line.trim())) {
       elements.push(<hr key={i} style={{ border: "none", borderTop: "1px solid rgba(19,48,32,0.12)", margin: "8px 0" }} />);
-      i++;
-      continue;
+      i++; continue;
     }
-
-    // ## heading
     if (/^#{1,3}\s/.test(line)) {
       const level = line.match(/^(#{1,3})/)[1].length;
       const txt = line.replace(/^#{1,3}\s+/, "");
       const sizes = { 1: "15px", 2: "13px", 3: "12px" };
-      elements.push(
-        <div key={i} style={{ fontWeight: 800, fontSize: sizes[level], color: "var(--color-dark-serpent)", marginTop: 10, marginBottom: 4 }}>
-          {renderInline(txt)}
-        </div>
-      );
-      i++;
-      continue;
+      elements.push(<div key={i} style={{ fontWeight: 800, fontSize: sizes[level], color: "var(--color-dark-serpent)", marginTop: 10, marginBottom: 4 }}>{renderInline(txt)}</div>);
+      i++; continue;
     }
-
-    // markdown table — collect all consecutive | lines
     if (line.trim().startsWith("|")) {
       const tableLines = [];
-      while (i < lines.length && lines[i].trim().startsWith("|")) {
-        tableLines.push(lines[i]);
-        i++;
-      }
-      const rows = tableLines
-        .filter(l => !/^\s*\|[-| :]+\|\s*$/.test(l)) // skip separator row
-        .map(l => l.replace(/^\||\|$/g, "").split("|").map(c => c.trim()));
+      while (i < lines.length && lines[i].trim().startsWith("|")) { tableLines.push(lines[i]); i++; }
+      const rows = tableLines.filter(l => !/^\s*\|[-| :]+\|\s*$/.test(l)).map(l => l.replace(/^\||\\|$/g, "").split("|").map(c => c.trim()));
       if (rows.length > 0) {
         elements.push(
           <div key={`table-${i}`} style={{ overflowX: "auto", margin: "8px 0" }}>
             <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "12px" }}>
-              <thead>
-                <tr>
-                  {rows[0].map((cell, ci) => (
-                    <th key={ci} style={{ padding: "5px 10px", background: "rgba(4,98,65,0.1)", borderBottom: "2px solid rgba(4,98,65,0.2)", textAlign: "left", fontWeight: 700, whiteSpace: "nowrap" }}>
-                      {renderInline(cell)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.slice(1).map((row, ri) => (
-                  <tr key={ri} style={{ background: ri % 2 === 0 ? "transparent" : "rgba(4,98,65,0.04)" }}>
-                    {row.map((cell, ci) => (
-                      <td key={ci} style={{ padding: "5px 10px", borderBottom: "1px solid rgba(19,48,32,0.08)" }}>
-                        {renderInline(cell)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
+              <thead><tr>{rows[0].map((cell, ci) => <th key={ci} style={{ padding: "5px 10px", background: "rgba(4,98,65,0.1)", borderBottom: "2px solid rgba(4,98,65,0.2)", textAlign: "left", fontWeight: 700, whiteSpace: "nowrap" }}>{renderInline(cell)}</th>)}</tr></thead>
+              <tbody>{rows.slice(1).map((row, ri) => <tr key={ri} style={{ background: ri % 2 === 0 ? "transparent" : "rgba(4,98,65,0.04)" }}>{row.map((cell, ci) => <td key={ci} style={{ padding: "5px 10px", borderBottom: "1px solid rgba(19,48,32,0.08)" }}>{renderInline(cell)}</td>)}</tr>)}</tbody>
             </table>
           </div>
         );
       }
       continue;
     }
-
-    // numbered list item: "1. " or "1) "
     if (/^\d+[.)]\s/.test(line)) {
       const listItems = [];
-      while (i < lines.length && /^\d+[.)]\s/.test(lines[i])) {
-        listItems.push(lines[i].replace(/^\d+[.)]\s+/, ""));
-        i++;
-      }
-      elements.push(
-        <ol key={`ol-${i}`} style={{ margin: "6px 0", paddingLeft: "20px", listStyleType: "decimal" }}>
-          {listItems.map((item, li) => (
-            <li key={li} style={{ marginBottom: "3px", fontSize: "13px", lineHeight: "1.5" }}>
-              {renderInline(item)}
-            </li>
-          ))}
-        </ol>
-      );
+      while (i < lines.length && /^\d+[.)]\s/.test(lines[i])) { listItems.push(lines[i].replace(/^\d+[.)]\s+/, "")); i++; }
+      elements.push(<ol key={`ol-${i}`} style={{ margin: "6px 0", paddingLeft: "20px", listStyleType: "decimal" }}>{listItems.map((item, li) => <li key={li} style={{ marginBottom: "3px", fontSize: "13px", lineHeight: "1.5" }}>{renderInline(item)}</li>)}</ol>);
       continue;
     }
-
-    // bullet list: "- " or "• "
     if (/^[-•]\s/.test(line)) {
       const listItems = [];
-      while (i < lines.length && /^[-•]\s/.test(lines[i])) {
-        listItems.push(lines[i].replace(/^[-•]\s+/, ""));
-        i++;
-      }
-      elements.push(
-        <ul key={`ul-${i}`} style={{ margin: "6px 0", paddingLeft: "18px", listStyleType: "disc" }}>
-          {listItems.map((item, li) => (
-            <li key={li} style={{ marginBottom: "3px", fontSize: "13px", lineHeight: "1.5" }}>
-              {renderInline(item)}
-            </li>
-          ))}
-        </ul>
-      );
+      while (i < lines.length && /^[-•]\s/.test(lines[i])) { listItems.push(lines[i].replace(/^[-•]\s+/, "")); i++; }
+      elements.push(<ul key={`ul-${i}`} style={{ margin: "6px 0", paddingLeft: "18px", listStyleType: "disc" }}>{listItems.map((item, li) => <li key={li} style={{ marginBottom: "3px", fontSize: "13px", lineHeight: "1.5" }}>{renderInline(item)}</li>)}</ul>);
       continue;
     }
-
-    // blank line → small gap
-    if (line.trim() === "") {
-      elements.push(<div key={i} style={{ height: "6px" }} />);
-      i++;
-      continue;
-    }
-
-    // regular paragraph
-    elements.push(
-      <p key={i} style={{ margin: "3px 0", fontSize: "13px", lineHeight: "1.6" }}>
-        {renderInline(line)}
-      </p>
-    );
+    if (line.trim() === "") { elements.push(<div key={i} style={{ height: "6px" }} />); i++; continue; }
+    elements.push(<p key={i} style={{ margin: "3px 0", fontSize: "13px", lineHeight: "1.6" }}>{renderInline(line)}</p>);
     i++;
   }
-
   return <div style={{ fontFamily: "inherit" }}>{elements}</div>;
 }
 
-// Renders inline markdown: **bold**, *italic*, `code`, and plain text
 function renderInline(text) {
   const parts = [];
-  // pattern matches **bold**, *italic*, `code` in order
   const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
-  let last = 0;
-  let match;
-  let key = 0;
-
+  let last = 0, match, key = 0;
   while ((match = pattern.exec(text)) !== null) {
-    if (match.index > last) {
-      parts.push(text.slice(last, match.index));
-    }
-    if (match[2] !== undefined) {
-      parts.push(<strong key={key++} style={{ fontWeight: 700 }}>{match[2]}</strong>);
-    } else if (match[3] !== undefined) {
-      parts.push(<em key={key++}>{match[3]}</em>);
-    } else if (match[4] !== undefined) {
-      parts.push(
-        <code key={key++} style={{ background: "rgba(4,98,65,0.1)", borderRadius: "3px", padding: "1px 5px", fontSize: "12px", fontFamily: "monospace", color: "var(--color-dark-serpent)" }}>
-          {match[4]}
-        </code>
-      );
-    }
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    if (match[2] !== undefined) parts.push(<strong key={key++} style={{ fontWeight: 700 }}>{match[2]}</strong>);
+    else if (match[3] !== undefined) parts.push(<em key={key++}>{match[3]}</em>);
+    else if (match[4] !== undefined) parts.push(<code key={key++} style={{ background: "rgba(4,98,65,0.1)", borderRadius: "3px", padding: "1px 5px", fontSize: "12px", fontFamily: "monospace", color: "var(--color-dark-serpent)" }}>{match[4]}</code>);
     last = match.index + match[0].length;
   }
-
-  if (last < text.length) {
-    parts.push(text.slice(last));
-  }
-
+  if (last < text.length) parts.push(text.slice(last));
   return parts.length === 1 && typeof parts[0] === "string" ? parts[0] : parts;
 }
 
 // ── FilterTable ───────────────────────────────────────────────────────────────
-// Applies filterSpec conditions to the full rows/headers and renders a mini table
 
 function applyFilter(headers, rows, filterSpec) {
   const { columns, filters } = filterSpec;
   const colIndex = (name) => headers.indexOf(name);
-
-  const filtered = rows.filter(row => {
-    return filters.every(({ column, operator, value }) => {
-      const idx = colIndex(column);
-      if (idx === -1) return true;
-      const cell = row[idx];
-      const cellStr = cell === null || cell === undefined ? "" : String(cell).trim();
-      const cellNum = parseFloat(cellStr.replace(/,/g, ""));
-      const valNum = parseFloat(String(value).replace(/,/g, ""));
-
-      switch (operator) {
-        case "eq":       return cellStr.toLowerCase() === String(value).toLowerCase();
-        case "neq":      return cellStr.toLowerCase() !== String(value).toLowerCase();
-        case "contains": return cellStr.toLowerCase().includes(String(value).toLowerCase());
-        case "gt":       return !isNaN(cellNum) && cellNum > valNum;
-        case "gte":      return !isNaN(cellNum) && cellNum >= valNum;
-        case "lt":       return !isNaN(cellNum) && cellNum < valNum;
-        case "lte":      return !isNaN(cellNum) && cellNum <= valNum;
-        default:         return true;
-      }
-    });
-  });
-
-  // only keep the requested display columns, in order
+  const filtered = rows.filter(row => filters.every(({ column, operator, value }) => {
+    const idx = colIndex(column); if (idx === -1) return true;
+    const cell = row[idx];
+    const cellStr = cell === null || cell === undefined ? "" : String(cell).trim();
+    const cellNum = parseFloat(cellStr.replace(/,/g, ""));
+    const valNum = parseFloat(String(value).replace(/,/g, ""));
+    switch (operator) {
+      case "eq":       return cellStr.toLowerCase() === String(value).toLowerCase();
+      case "neq":      return cellStr.toLowerCase() !== String(value).toLowerCase();
+      case "contains": return cellStr.toLowerCase().includes(String(value).toLowerCase());
+      case "gt":       return !isNaN(cellNum) && cellNum > valNum;
+      case "gte":      return !isNaN(cellNum) && cellNum >= valNum;
+      case "lt":       return !isNaN(cellNum) && cellNum < valNum;
+      case "lte":      return !isNaN(cellNum) && cellNum <= valNum;
+      default:         return true;
+    }
+  }));
   const displayCols = columns.filter(c => headers.includes(c));
-  const displayRows = filtered.map(row =>
-    displayCols.map(col => {
-      const val = row[colIndex(col)];
-      return val === null || val === undefined ? "" : val;
-    })
-  );
-
+  const displayRows = filtered.map(row => displayCols.map(col => { const val = row[colIndex(col)]; return val === null || val === undefined ? "" : val; }));
   return { displayCols, displayRows };
 }
 
 function FilterTable({ filterSpec, headers, rows }) {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 10;
-
   const { displayCols, displayRows } = applyFilter(headers, rows, filterSpec);
   const totalPages = Math.ceil(displayRows.length / PAGE_SIZE);
   const pageRows = displayRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  if (displayRows.length === 0) {
-    return (
-      <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(4,98,65,0.06)", border: "1px solid rgba(4,98,65,0.15)", fontSize: 12, color: "var(--color-dark-serpent)" }}>
-        No rows matched the filter.
-      </div>
-    );
-  }
-
+  if (displayRows.length === 0) return <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(4,98,65,0.06)", border: "1px solid rgba(4,98,65,0.15)", fontSize: 12, color: "var(--color-dark-serpent)" }}>No rows matched the filter.</div>;
   return (
     <div style={{ marginTop: 10, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(4,98,65,0.2)" }}>
-      {/* Table header bar */}
       <div style={{ background: "var(--color-castleton-green)", padding: "7px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 12 }}>
-          📋 {filterSpec.title}
-        </span>
-        <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 11 }}>
-          {displayRows.length} row{displayRows.length !== 1 ? "s" : ""}
-        </span>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: 12 }}>📋 {filterSpec.title}</span>
+        <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 11 }}>{displayRows.length} row{displayRows.length !== 1 ? "s" : ""}</span>
       </div>
-
-      {/* Scrollable table */}
       <div style={{ overflowX: "auto", background: "#fff" }}>
         <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>
-          <thead>
-            <tr>
-              {displayCols.map((col, ci) => (
-                <th key={ci} style={{
-                  padding: "6px 10px",
-                  background: "rgba(4,98,65,0.08)",
-                  borderBottom: "2px solid rgba(4,98,65,0.2)",
-                  textAlign: "left",
-                  fontWeight: 700,
-                  whiteSpace: "nowrap",
-                  color: "var(--color-dark-serpent)",
-                }}>
-                  {col}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map((row, ri) => (
-              <tr key={ri} style={{ background: ri % 2 === 0 ? "#fff" : "rgba(4,98,65,0.03)" }}>
-                {row.map((cell, ci) => (
-                  <td key={ci} style={{
-                    padding: "5px 10px",
-                    borderBottom: "1px solid rgba(19,48,32,0.07)",
-                    whiteSpace: "nowrap",
-                    color: "var(--color-dark-serpent)",
-                  }}>
-                    {typeof cell === "number" ? cell.toLocaleString() : String(cell)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
+          <thead><tr>{displayCols.map((col, ci) => <th key={ci} style={{ padding: "6px 10px", background: "rgba(4,98,65,0.08)", borderBottom: "2px solid rgba(4,98,65,0.2)", textAlign: "left", fontWeight: 700, whiteSpace: "nowrap", color: "var(--color-dark-serpent)" }}>{col}</th>)}</tr></thead>
+          <tbody>{pageRows.map((row, ri) => <tr key={ri} style={{ background: ri % 2 === 0 ? "#fff" : "rgba(4,98,65,0.03)" }}>{row.map((cell, ci) => <td key={ci} style={{ padding: "5px 10px", borderBottom: "1px solid rgba(19,48,32,0.07)", whiteSpace: "nowrap", color: "var(--color-dark-serpent)" }}>{typeof cell === "number" ? cell.toLocaleString() : String(cell)}</td>)}</tr>)}</tbody>
         </table>
       </div>
-
-      {/* Pagination */}
       {totalPages > 1 && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", background: "rgba(4,98,65,0.04)", borderTop: "1px solid rgba(4,98,65,0.1)" }}>
-          <button
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0}
-            style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(4,98,65,0.25)", background: page === 0 ? "transparent" : "#fff", color: "var(--color-castleton-green)", cursor: page === 0 ? "default" : "pointer", opacity: page === 0 ? 0.4 : 1 }}
-          >
-            ← Prev
-          </button>
-          <span style={{ fontSize: 11, color: "var(--color-text-light)" }}>
-            Page {page + 1} of {totalPages}
-          </span>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-            disabled={page === totalPages - 1}
-            style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(4,98,65,0.25)", background: page === totalPages - 1 ? "transparent" : "#fff", color: "var(--color-castleton-green)", cursor: page === totalPages - 1 ? "default" : "pointer", opacity: page === totalPages - 1 ? 0.4 : 1 }}
-          >
-            Next →
-          </button>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(4,98,65,0.25)", background: page === 0 ? "transparent" : "#fff", color: "var(--color-castleton-green)", cursor: page === 0 ? "default" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>← Prev</button>
+          <span style={{ fontSize: 11, color: "var(--color-text-light)" }}>Page {page + 1} of {totalPages}</span>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(4,98,65,0.25)", background: page === totalPages - 1 ? "transparent" : "#fff", color: "var(--color-castleton-green)", cursor: page === totalPages - 1 ? "default" : "pointer", opacity: page === totalPages - 1 ? 0.4 : 1 }}>Next →</button>
         </div>
       )}
     </div>
   );
 }
 
+// ── Chart state classifier ─────────────────────────────────────────────────────
+// Runs fully client-side — no backend needed.
+// Returns { action: "update"|"create", updatedState }
+
+function classifyIntent(userText, currentChartState) {
+  const t = userText.toLowerCase().trim();
+
+  // Modifiers that indicate the user wants to refine the existing chart
+  const modifierPatterns = [
+    /\btop\s*\d+\b/,                         // top 5, top 10
+    /\blimit\s+(to\s+)?\d+\b/,               // limit to 10
+    /\bonly\s+(show\s+)?(top|bottom|first|last)?\s*\d+/,  // only show top 5
+    /\bsort\s+(by\s+\w+\s*)?(asc|desc|ascending|descending)\b/,  // sort ascending
+    /\border\s+by\b/,                         // order by
+    /\bchange\s+(the\s+)?(chart\s+)?type\b/,  // change chart type
+    /\bswitch\s+to\s+(bar|line|donut|pie|pivot)\b/,  // switch to bar
+    /\bas\s+a?\s*(bar|line|donut|pie|pivot)\b/,  // as a bar chart
+    /\bshow\s+as\s+(bar|line|donut|pie)\b/,
+    /\bfilter\s+(where|by|above|below|over|under)\b/,  // filter where x > 5
+    /\bwhere\s+\w+\s*(>|<|=|is|>=|<=)\b/,    // where value > 10
+    /\babove\s+\d+/,                           // above 100
+    /\bbelow\s+\d+/,                           // below 100
+    /\bgreater\s+than\b/,
+    /\bless\s+than\b/,
+    /\bexclude\b/,                             // exclude zeros
+    /\bremove\s+(the\s+)?\w+\s+from\b/,       // remove X from
+    /\binstead\s+of\b/,                        // instead of sum use avg
+    /\buse\s+(sum|avg|average|count|max|min)\b/,  // use average instead
+    /\bchange\s+(to|from)\b/,
+    /\badd\s+(a\s+)?filter\b/,
+    /\bmore\s+(results|rows|items)\b/,
+    /\bfewer\s+(results|rows|items)\b/,
+    /\bthis\s+time\b/,                         // this time show top 3
+    /\bnow\s+show\b/,                          // now show top 5
+    /\bjust\s+show\b/,
+    /\bonly\s+show\b/,
+  ];
+
+  // If no current chart is active, always create
+  if (!currentChartState) return { action: "create", updatedState: null };
+
+  // Check if this is a modifier
+  const isModifier = modifierPatterns.some(p => p.test(t));
+
+  if (isModifier) {
+    // Extract updated state from the query
+    const updatedState = { ...currentChartState };
+
+    // Update topN / limit
+    const topMatch = t.match(/\btop\s*(\d+)\b/) || t.match(/\blimit\s+(?:to\s+)?(\d+)\b/) || t.match(/\bonly\s+(?:show\s+)?(?:top\s+)?(\d+)\b/);
+    if (topMatch) updatedState.topN = parseInt(topMatch[1]);
+
+    // Update sort
+    if (/\basc(ending)?\b/.test(t)) updatedState.sort = "asc";
+    if (/\bdesc(ending)?\b/.test(t)) updatedState.sort = "desc";
+
+    // Update chart type
+    const typeMatch = t.match(/\b(bar|line|donut|pie|pivot|horizontal)\b/);
+    if (typeMatch) {
+      const typeMap = { pie: "donut", horizontal: "hbar" };
+      updatedState.chartType = typeMap[typeMatch[1]] || typeMatch[1];
+    }
+
+    // Update aggregation
+    const aggMatch = t.match(/\b(sum|avg|average|count|max|min)\b/);
+    if (aggMatch) updatedState.aggregation = aggMatch[1] === "average" ? "avg" : aggMatch[1];
+
+    // Threshold filter
+    const aboveMatch = t.match(/\babove\s+(\d[\d,]*)/);
+    const belowMatch = t.match(/\bbelow\s+(\d[\d,]*)/);
+    const gtMatch    = t.match(/\bgreater\s+than\s+(\d[\d,]*)/);
+    const ltMatch    = t.match(/\bless\s+than\s+(\d[\d,]*)/);
+    if (aboveMatch || gtMatch) updatedState.threshold = { op: "gt", value: parseFloat((aboveMatch || gtMatch)[1].replace(/,/g, "")) };
+    if (belowMatch || ltMatch) updatedState.threshold = { op: "lt", value: parseFloat((belowMatch || ltMatch)[1].replace(/,/g, "")) };
+
+    return { action: "update", updatedState };
+  }
+
+  return { action: "create", updatedState: null };
+}
+
+// Apply chart state overrides to a chartSpec returned by the backend
+function applyChartState(chartSpec, chartState) {
+  if (!chartSpec || !chartState) return chartSpec;
+  const merged = { ...chartSpec };
+  if (chartState.topN)        merged.topN = chartState.topN;
+  if (chartState.sort)        merged.sort = chartState.sort;
+  if (chartState.chartType)   merged.type = chartState.chartType;
+  if (chartState.aggregation) merged.aggregation = chartState.aggregation;
+  if (chartState.threshold)   merged.threshold = chartState.threshold;
+  return merged;
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DataChatbot({ headers, rows, blueprint, onResult }) {
+export default function DataChatbot({ headers, rows, blueprint, onResult, customCharts = [] }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME, chartSpec: null }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Track the most recently active chart state for follow-up detection
+  // { chartId, chartSpec, topN, sort, chartType, aggregation, threshold }
+  const [activeChartState, setActiveChartState] = useState(null);
+
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
+  const abortRef = useRef(null);
 
-  useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 100);
-  }, [open]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
-
-  // Reset when new file loaded
+  useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 100); }, [open]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => {
     setMessages([{ role: "assistant", content: WELCOME, chartSpec: null }]);
+    setActiveChartState(null);
   }, [headers, rows]);
 
   const send = async () => {
     const text = input.trim();
     if (!text || loading) return;
 
+    // If a chart is explicitly selected, always treat as update — skip classifyIntent
+    const { action, updatedState } = activeChartState
+      ? { action: "update", updatedState: activeChartState }
+      : classifyIntent(text, null);
+
     const userMsg = { role: "user", content: text, chartSpec: null };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
     setLoading(true);
+    abortRef.current = new AbortController();
 
     try {
-      const response = await fetch("https://daily-headcount-ai-backend.onrender.com/chat", {
+      const response = await fetch("http://127.0.0.1:8000/chat", {
+        signal: abortRef.current.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -357,29 +286,120 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
           headers,
           rows,
           datasetSummary: blueprint?.datasetSummary || null,
+          currentChartState: activeChartState ? {
+            id: activeChartState.chartId,
+            type: activeChartState.chartType,
+            title: activeChartState.chartSpec?.title,
+            x: activeChartState.chartSpec?.x,
+            y: activeChartState.chartSpec?.y,
+            rowDim: activeChartState.chartSpec?.rowDim,
+            colDim: activeChartState.chartSpec?.colDim,
+            measure: activeChartState.chartSpec?.measure,
+            aggregation: activeChartState.chartSpec?.aggregation,
+            limit: activeChartState.topN,
+            sort: activeChartState.sort,
+            filters: activeChartState.chartSpec?.filters || [],
+          } : null,
         }),
       });
       const data = await response.json();
-      // Filter tables go to home automatically — no button needed
+
       if (data.filterSpec) {
         onResult({ chartSpec: null, filterSpec: data.filterSpec });
-      }
-      setMessages((prev) => [
-        ...prev,
-        {
+        setMessages((prev) => [...prev, {
           role: "assistant",
-          content: data.reply,
-          chartSpec: data.chartSpec || null,
-          filterSpec: null, // already sent to dashboard, no need to show button
-        },
-      ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "Couldn't reach the server. Is the backend running?", chartSpec: null },
-      ]);
+          content: (data.reply || "") + "\n\n📋 *Table added to the Summary tab.*",
+          chartSpec: null,
+          filterSpec: null,
+        }]);
+        setLoading(false);
+        return;
+      }
+
+      if (data.chartSpec) {
+        // Apply any client-side state overrides (topN, sort, etc.)
+        const resolvedSpec = action === "update" && updatedState
+          ? applyChartState(data.chartSpec, updatedState)
+          : data.chartSpec;
+
+        const isModify = !!activeChartState?.chartId;
+
+        if (isModify) {
+          // Modify existing chart in place
+          const newState = {
+            ...activeChartState,
+            ...updatedState,
+            chartSpec: resolvedSpec,
+          };
+          setActiveChartState(newState);
+          onResult({
+            chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId },
+            filterSpec: null,
+            action: "modify",
+          });
+          setMessages((prev) => [...prev, {
+            role: "assistant",
+            content: data.reply || "Chart updated.",
+            chartSpec: null,
+            chartUpdated: true,
+          }]);
+        } else {
+          // New chart — show Add button, don't auto-add
+          setMessages((prev) => [...prev, {
+            role: "assistant",
+            content: data.reply || "Here's your chart.",
+            chartSpec: resolvedSpec,
+            chartAdded: false,
+          }]);
+        }
+      } else {
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          content: data.reply || "Done.",
+          chartSpec: null,
+        }]);
+      }
+    } catch (err) {
+      if (err?.name !== "AbortError") {
+        setMessages((prev) => [...prev, {
+          role: "assistant",
+          content: "Couldn't reach the server. Is the backend running?",
+          chartSpec: null,
+        }]);
+      }
     }
     setLoading(false);
+    abortRef.current = null;
+  };
+
+  const stop = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setLoading(false);
+    setMessages((prev) => [...prev, {
+      role: "assistant",
+      content: "Stopped.",
+      chartSpec: null,
+    }]);
+  };
+
+  const handleAddChart = (msg, i) => {
+    const id = Date.now();
+    const specWithId = { ...msg.chartSpec, _chatId: id };
+    onResult({ chartSpec: specWithId, filterSpec: null });
+    // Set this as the active chart state for follow-up tracking
+    setActiveChartState({
+      chartId: id,
+      chartSpec: specWithId,
+      topN: msg.chartSpec.topN || null,
+      sort: msg.chartSpec.sort || null,
+      chartType: msg.chartSpec.type || null,
+      aggregation: msg.chartSpec.aggregation || null,
+      threshold: null,
+    });
+    setMessages((prev) =>
+      prev.map((m, idx) => idx === i ? { ...m, chartSpec: null, chartAdded: true } : m)
+    );
   };
 
   const handleKey = (e) => {
@@ -388,13 +408,8 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
 
   const suggestedQuestions = useMemo(() => {
     if (!headers || !rows || rows.length === 0) return ["Summarize this dataset"];
-
     const suggestions = [];
-
-    // Detect column types
-    const numericCols = [];
-    const categoryCols = [];
-
+    const numericCols = [], categoryCols = [];
     headers.forEach(col => {
       const vals = rows.map(r => r[headers.indexOf(col)]).filter(v => v !== null && v !== undefined && String(v).trim() !== "");
       if (!vals.length) return;
@@ -404,20 +419,10 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
       if (numCount / vals.length >= 0.7) numericCols.push(col);
       else if (uniqueRatio < 0.6 && uniqueCount >= 2 && uniqueCount <= 50) categoryCols.push(col);
     });
-
-    // 1. Always: summarize
     suggestions.push("Summarize this dataset");
-
-    // 2. Top N by best numeric col
-    if (numericCols.length > 0) {
-      const col = numericCols[numericCols.length - 1]; // last numeric tends to be the main metric
-      suggestions.push(`Who are the top 5 by ${col}?`);
-    }
-
-    // 3. Filter by a category col
+    if (numericCols.length > 0) suggestions.push(`Who are the top 5 by ${numericCols[numericCols.length - 1]}?`);
     if (categoryCols.length > 0) {
       const col = categoryCols[0];
-      // pick a sample value from that column
       const vals = rows.map(r => r[headers.indexOf(col)]).filter(v => v !== null && v !== undefined && String(v).trim() !== "");
       const freq = {};
       vals.forEach(v => { const k = String(v).trim(); freq[k] = (freq[k] || 0) + 1; });
@@ -425,18 +430,78 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
       if (topVal) suggestions.push(`Show me rows where ${col} is "${topVal}"`);
       else suggestions.push(`Filter by ${col}`);
     }
-
-    // 4. Breakdown numeric by category
-    if (numericCols.length > 0 && categoryCols.length > 0) {
-      suggestions.push(`What is the total ${numericCols[numericCols.length - 1]} per ${categoryCols[0]}?`);
-    } else if (categoryCols.length > 1) {
-      suggestions.push(`How many unique values are in ${categoryCols[1]}?`);
-    } else {
-      suggestions.push(`How many rows are in this dataset?`);
-    }
-
+    if (numericCols.length > 0 && categoryCols.length > 0) suggestions.push(`What is the total ${numericCols[numericCols.length - 1]} per ${categoryCols[0]}?`);
+    else if (categoryCols.length > 1) suggestions.push(`How many unique values are in ${categoryCols[1]}?`);
+    else suggestions.push("How many rows are in this dataset?");
     return suggestions.slice(0, 4);
   }, [headers, rows]);
+
+  // Active chart state pill — shows what chart is being "tracked" for follow-ups
+  const ChartSelector = () => {
+    if (customCharts.length === 0) return null;
+
+    const activeId = activeChartState?.chartId ? String(activeChartState.chartId) : "";
+    const typeIcon = (type) => ({ bar:"📊", hbar:"📊", line:"📈", donut:"🍩", pivot:"🗂️" }[type] || "📊");
+
+    const handleSelect = (e) => {
+      const val = e.target.value;
+      if (!val) { setActiveChartState(null); return; }
+      const chart = customCharts.find(c => String(c.id) === val);
+      if (!chart) return;
+      setActiveChartState({
+        chartId: chart.id,
+        chartType: chart.type,
+        chartSpec: chart.spec || chart,
+        topN: chart.spec?.limit || null,
+        sort: chart.spec?.sort || null,
+        aggregation: chart.spec?.aggregation || null,
+      });
+    };
+
+    return (
+      <div style={{
+        margin: "0 4px 8px",
+        padding: "7px 10px",
+        borderRadius: 8,
+        background: "rgba(4,98,65,0.07)",
+        border: `1px solid ${activeId ? "rgba(4,98,65,0.35)" : "rgba(4,98,65,0.15)"}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}>
+        <span style={{ fontSize: 12, flexShrink: 0 }}>✏️</span>
+        <select
+          value={activeId}
+          onChange={handleSelect}
+          style={{
+            flex: 1,
+            fontSize: 11,
+            fontWeight: 600,
+            color: activeId ? "var(--color-castleton-green)" : "var(--color-text-light)",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            cursor: "pointer",
+            minWidth: 0,
+          }}
+        >
+          <option value="">Select a chart to edit…</option>
+          {customCharts.map(c => (
+            <option key={c.id} value={String(c.id)}>
+              {typeIcon(c.type)} {c.title}
+            </option>
+          ))}
+        </select>
+        {activeId && (
+          <button
+            onClick={() => setActiveChartState(null)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "var(--color-text-light)", padding: 0, lineHeight: 1, flexShrink: 0 }}
+            title="Stop editing"
+          >×</button>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -447,8 +512,8 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
         style={{
           color: BRAND.white,
           backgroundColor: open ? "rgba(4, 98, 65, 0.4)" : BRAND.green,
-           transform: open ? "scale(0.92)" : "scale(1)",
-         }}
+          transform: open ? "scale(0.92)" : "scale(1)",
+        }}
         title="Ask about your data"
       >
         {open ? "✕" : "💬"}
@@ -458,12 +523,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
       {open && (
         <div
           className="fixed bottom-24 right-6 z-50 w-[460px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
-          style={{
-            height: "600px",
-            backgroundColor: BRAND.surface,
-            border: `1px solid ${BRAND.border}`,
-            color: BRAND.dark,
-          }}
+          style={{ height: "600px", backgroundColor: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.dark }}
         >
           {/* Header */}
           <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: BRAND.header }}>
@@ -492,34 +552,27 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
                       ? { backgroundColor: BRAND.green, color: "#fff", borderBottomRightRadius: 8, whiteSpace: "pre-wrap" }
                       : { backgroundColor: BRAND.white, color: BRAND.dark, border: `1px solid ${BRAND.border}`, borderBottomLeftRadius: 8 }}
                   >
-                    {msg.role === "assistant"
-                      ? <MarkdownMessage text={msg.content} />
-                      : msg.content
-                    }
+                    {msg.role === "assistant" ? <MarkdownMessage text={msg.content} /> : msg.content}
                   </div>
                 </div>
 
-                {/* Add Chart to Charts button — only for chart specs */}
-                {msg.role === "assistant" && msg.chartSpec && (
+                {/* Add Chart button — only for new charts not yet added */}
+                {msg.role === "assistant" && msg.chartSpec && !msg.chartAdded && (
                   <div className="ml-8 mt-1.5">
                     <button
-                      onClick={() => {
-                        onResult({ chartSpec: msg.chartSpec, filterSpec: null });
-                        setMessages((prev) =>
-                          prev.map((m, idx) =>
-                            idx === i ? { ...m, chartSpec: null, added: true } : m
-                          )
-                        );
-                      }}
+                      onClick={() => handleAddChart(msg, i)}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer"
                       style={{ backgroundColor: "rgba(4, 98, 65, 0.08)", border: "1px solid rgba(4,98,65,0.28)", color: BRAND.green }}
                     >
-                      <span>📊</span> Add Chart to Charts
+                      <span>📊</span> Add Chart to Charts tab
                     </button>
                   </div>
                 )}
-                {msg.role === "assistant" && msg.added && (
-                  <div className="ml-8 mt-1 text-xs font-medium" style={{ color: BRAND.green }}>✓ Chart added to Charts tab</div>
+                {msg.role === "assistant" && msg.chartAdded && (
+                  <div className="ml-8 mt-1 text-xs font-medium" style={{ color: BRAND.green }}>✓ Chart added — follow-up queries will update it</div>
+                )}
+                {msg.role === "assistant" && msg.chartUpdated && (
+                  <div className="ml-8 mt-1 text-xs font-medium" style={{ color: BRAND.green }}>✏️ Chart updated</div>
                 )}
               </div>
             ))}
@@ -529,19 +582,14 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
               <div className="space-y-1.5 mt-2">
                 <p className="text-xs font-medium px-1" style={{ color: BRAND.muted }}>Try asking:</p>
                 {suggestedQuestions.map((q, i) => (
-                  <button
-                    key={i}
-                    onClick={() => { setInput(q); inputRef.current?.focus(); }}
+                  <button key={i} onClick={() => { setInput(q); inputRef.current?.focus(); }}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer"
                     style={{ backgroundColor: BRAND.white, border: `1px solid ${BRAND.border}`, color: BRAND.dark }}
-                  >
-                    {q}
-                  </button>
+                  >{q}</button>
                 ))}
               </div>
             )}
 
-            {/* Loading dots */}
             {loading && (
               <div className="flex justify-start">
                 <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.12)" }}>🤖</div>
@@ -555,41 +603,48 @@ export default function DataChatbot({ headers, rows, blueprint, onResult }) {
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
-          <div className="px-3 py-3 flex gap-2 items-end shrink-0" style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.white }}>
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKey}
-              placeholder="Ask about your data..."
-              rows={1}
-              className="flex-1 px-3.5 py-2.5 rounded-xl text-sm resize-none leading-snug"
-              style={{
-                maxHeight: "100px",
-                overflowY: "auto",
-                border: `1px solid ${BRAND.border}`,
-                color: BRAND.dark,
-                outline: "none",
-              }}
-            />
-            <button
-              onClick={send}
-              disabled={!input.trim() || loading}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-base transition-all shrink-0 border-none cursor-pointer"
-              style={{ backgroundColor: input.trim() && !loading ? BRAND.green : "rgba(19, 48, 32, 0.25)" }}
-            >
+          {/* Active chart pill + Input */}
+          <div className="shrink-0" style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.white }}>
+            <div className="pt-2 px-3">
+              <ChartSelector />
+            </div>
+            <div className="px-3 pb-3 flex gap-2 items-end">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder={activeChartState?.chartSpec?.title ? `Editing "${activeChartState.chartSpec.title}" — what changes?` : "Ask about your data..."}
+                rows={1}
+                className="flex-1 px-3.5 py-2.5 rounded-xl text-sm resize-none leading-snug"
+                style={{ maxHeight: "100px", overflowY: "auto", border: `1px solid ${BRAND.border}`, color: BRAND.dark, outline: "none" }}
+              />
               {loading ? (
-                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-              ) : "↑"}
-            </button>
+                <button
+                  onClick={stop}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-base transition-all shrink-0 border-none cursor-pointer"
+                  style={{ backgroundColor: "#dc2626" }}
+                  title="Stop"
+                >
+                  ■
+                </button>
+              ) : (
+                <button
+                  onClick={send}
+                  disabled={!input.trim()}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-base transition-all shrink-0 border-none cursor-pointer"
+                  style={{ backgroundColor: input.trim() ? BRAND.green : "rgba(19, 48, 32, 0.25)" }}
+                >
+                  ↑
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="px-4 py-1.5 text-center shrink-0" style={{ backgroundColor: BRAND.soft, borderTop: `1px solid ${BRAND.border}` }}>
-            <span className="text-xs" style={{ color: BRAND.muted }}>Enter to send · Shift+Enter for new line</span>
+            <span className="text-xs" style={{ color: BRAND.muted }}>
+              {loading ? "Generating… click ■ to stop" : "Enter to send · Shift+Enter for new line"}
+            </span>
           </div>
         </div>
       )}
