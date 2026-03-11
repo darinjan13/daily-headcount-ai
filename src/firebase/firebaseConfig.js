@@ -6,6 +6,7 @@ import {
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,20 +21,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.addScope("https://www.googleapis.com/auth/drive.readonly");
 googleProvider.addScope("https://www.googleapis.com/auth/drive.metadata.readonly");
-googleProvider.setCustomParameters({ prompt: "select_account"});
+googleProvider.setCustomParameters({ prompt: "select_account" });
 
 export const signInWithGoogle = async () => {
   const result = await signInWithPopup(auth, googleProvider);
   const credential = GoogleAuthProvider.credentialFromResult(result);
   const accessToken = credential.accessToken;
-
-  // Persist token so it survives page refresh
   sessionStorage.setItem("driveAccessToken", accessToken);
-
   return { user: result.user, accessToken };
 };
 

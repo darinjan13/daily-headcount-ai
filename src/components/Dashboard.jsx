@@ -3,6 +3,8 @@ import BarChartRenderer from "./BarChartRenderer";
 import LineChartRenderer from "./LineChartRenderer";
 import DonutChartRenderer from "./DonutChartRenderer";
 import { useEffect, useMemo, useState, useCallback, useLayoutEffect, useRef } from "react";
+import { useAuth } from "../context/AuthContext";
+import { usePins } from "../hooks/usePins";
 import ChartBuilder from "./ChartBuilder";
 import PivotTableRenderer from "./PivotTableRenderer";
 import DataTable from "./DataTable";
@@ -761,7 +763,7 @@ function RenderChart({ chart, filteredData, onDrilldown }) {
 
 export default function Dashboard({ data, blueprint, fileId }) {
   const { headers, rows } = data;
-  const [customCharts, setCustomCharts] = useState([]);
+
   const [filteredTables, setFilteredTables] = useState([]);
   const [activeView, setActiveView] = useState("home");
   const [showCompare, setShowCompare] = useState(false);
@@ -813,12 +815,13 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const dataPrimaryCol = data.primaryCol || analytics?.primaryCol || null;
   const dataSectionCol = data.sectionCol || (analytics?.sectionTotals ? "Section" : null);
 
-  // Pin storage per file
-  const pinKey = `pinned_${fileId||"default"}`;
-  const [pinnedIds, setPinnedIds] = useState(()=>{ try{return JSON.parse(localStorage.getItem(pinKey)||"[]");}catch{return[];} });
-  const savePins = (ids) => { setPinnedIds(ids); try{localStorage.setItem(pinKey,JSON.stringify(ids));}catch{} };
-  const togglePin = (id) => savePins(pinnedIds.includes(id)?pinnedIds.filter(p=>p!==id):[...pinnedIds,id]);
+  // Pin storage per file — persisted to Firestore via usePins hook
+  const { user } = useAuth();
+  const { pinnedIds, customCharts: savedCustomCharts,
+          togglePin, isPinned, addCustomChart, removeCustomChart } = usePins(user?.uid, fileId||"default");
 
+  // sessionCharts: charts created in this session (have full computed data)
+  const [sessionCharts, setCustomCharts] = useState([]);
   useLayoutEffect(() => {
     if (!filterBarRef.current) return;
     const updateHeight = () => {
@@ -845,7 +848,6 @@ export default function Dashboard({ data, blueprint, fileId }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, [filterPinOffset]);
 
-  const isPinned = (id) => pinnedIds.includes(id);
 
   // Object data
   const objectData = useMemo(()=>
@@ -871,6 +873,25 @@ export default function Dashboard({ data, blueprint, fileId }) {
   },[objectData,filters,dateCol]);
 
   const filteredRows = useMemo(()=>filteredData.map(row=>headers.map(h=>row[h]===undefined?null:row[h])),[filteredData,headers]);
+
+  // Rebuild saved charts from Firestore — recompute chartData/pivotData from their spec
+  const rebuiltSavedCharts = useMemo(() => {
+    return savedCustomCharts.map(c => {
+      if (c.type === "pivot" && c.xCol && !c.pivotData) {
+        return { ...c, pivotData: generatePivot(filteredData, c.xCol, null, null, "sum") };
+      }
+      if ((c.type === "bar" || c.type === "donut") && c.config?.x && !c.chartData) {
+        return { ...c, chartData: groupForBar(filteredData, c.config.x, c.config.y, 20) };
+      }
+      return c;
+    });
+  }, [savedCustomCharts, filteredData]);
+
+  // Merge session charts with rebuilt Firestore charts (session takes priority)
+  const allCustomCharts = [
+    ...sessionCharts,
+    ...rebuiltSavedCharts.filter(s => !sessionCharts.find(c => String(c.id) === String(s.id)))
+  ];
 
   // Wide-format: filter by section/name
   const wideFilteredData = useMemo(()=>{
@@ -902,7 +923,10 @@ export default function Dashboard({ data, blueprint, fileId }) {
     setFilters(f=>({...f,categories:{...f.categories,[col]:val}}));
   },[]);
 
-  const removeCustom = (id) => setCustomCharts(prev=>prev.filter(c=>c.id!==id));
+  const removeCustom = (id) => {
+    setCustomCharts(prev=>prev.filter(c=>c.id!==id));
+    removeCustomChart(id); // remove from Firestore too
+  };
   const removeFilteredTable = (id) => setFilteredTables(prev=>prev.filter(t=>t.id!==id));
 
   const handleChatResult = ({ chartSpec, filterSpec }) => {
@@ -915,11 +939,15 @@ export default function Dashboard({ data, blueprint, fileId }) {
       const id = Date.now();
       const title = spec.title || `${spec.measure||spec.y||""} by ${spec.rowDim||spec.x||""}`;
       let result;
-      if(spec.type==="pivot") result={id,type:"pivot",title,xCol:spec.rowDim,pivotData:generatePivot(filteredData,spec.rowDim,spec.colDim||null,spec.measure,spec.aggregation||"sum")};
-      else if(spec.type==="bar") result={id,type:"bar",title,xCol:spec.x,chartData:groupForBar(filteredData,spec.x,spec.y,20)};
-      else if(spec.type==="line") result={id,type:"line",title,config:{x:spec.x,y:spec.y}};
-      else if(spec.type==="donut") result={id,type:"donut",title,config:{x:spec.x,y:spec.y}};
-      if(result) { setCustomCharts(prev=>[result,...prev]); setActiveView("charts"); }
+      if(spec.type==="pivot") result={id,type:"pivot",title,xCol:spec.rowDim,spec,pivotData:generatePivot(filteredData,spec.rowDim,spec.colDim||null,spec.measure,spec.aggregation||"sum")};
+      else if(spec.type==="bar") result={id,type:"bar",title,xCol:spec.x,spec,config:{x:spec.x,y:spec.y},chartData:groupForBar(filteredData,spec.x,spec.y,20)};
+      else if(spec.type==="line") result={id,type:"line",title,spec,config:{x:spec.x,y:spec.y}};
+      else if(spec.type==="donut") result={id,type:"donut",title,spec,config:{x:spec.x,y:spec.y}};
+      if(result) {
+        setCustomCharts(prev=>[result,...prev]);
+        addCustomChart(result); // persist to Firestore + auto-pin
+        setActiveView("charts");
+      }
     }
   };
 
@@ -1022,9 +1050,22 @@ export default function Dashboard({ data, blueprint, fileId }) {
     ? ["wide_line",...(primaryPivot?["wide_primary"]:[]),...(sectionPivot?["wide_section"]:[])]
     : [...(blueprint.charts||[]).map(c=>c.id),...(blueprint.pivots||[]).map(p=>p.id)];
 
-  const pinnedAutoIds = pinnedIds.filter(id=>autoIds.includes(id));
-  const pinnedCustom = customCharts.filter(c=>pinnedIds.includes(String(c.id)));
-  const pinnedCount = pinnedIds.length;
+  const pinnedCustom = allCustomCharts.filter(c=>pinnedIds.includes(String(c.id)));
+  // Only count pins that actually have a matching chart/table to render
+  const validPinnedIds = pinnedIds.filter(id =>
+    autoIds.includes(id) ||
+    allCustomCharts.some(c => String(c.id) === id) ||
+    id === "raw_data_table" ||
+    filteredTables.some(t => String(t.id) === id)
+  );
+  const pinnedCount = validPinnedIds.length;
+
+  // Auto-clean stale pins (saved IDs with no matching chart)
+  useEffect(() => {
+    if (pinnedIds.length > 0 && validPinnedIds.length < pinnedIds.length) {
+      pinnedIds.filter(id => !validPinnedIds.includes(id)).forEach(id => togglePin(id));
+    }
+  }, [autoIds.join(","), allCustomCharts.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const Divider = ({label}) => (
     <div style={{position:"relative",margin:"8px 0 24px",textAlign:"center"}}>
@@ -1094,22 +1135,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
             <CompareCards blueprint={blueprint} objectData={objectData} dateCol={dateCol} dateOptions={dateOptions} isWide={isWide}/>
           )}
 
-          <Section>
-            <SectionHeader
-              title="Data Table"
-              subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
-              badge="RAW DATA"
-            />
-            <DataTable
-              headers={isWide ? wideVisibleHeaders : headers}
-              rows={isWide
-                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
-                : filteredRows
-              }
-            />
-          </Section>
-
-          {/* AI filtered tables from chatbot — bottom of summary */}
+          {/* AI filtered tables — above raw data, below summaries */}
           {filteredTables.map(table => {
             const applyTableFilter = () => {
               return objectData.filter(row =>
@@ -1134,18 +1160,38 @@ export default function Dashboard({ data, blueprint, fileId }) {
             const displayCols = (table.columns||[]).filter(c => headers.includes(c));
             const matchedRows = applyTableFilter();
             const displayRows = matchedRows.map(row => displayCols.map(col => row[col] === undefined ? null : row[col]));
+            const tablePin = String(table.id);
             return (
-              <Section key={table.id}>
+              <Section key={table.id} pinned={isPinned(tablePin)}>
                 <SectionHeader
                   title={table.title}
                   subtitle={`${matchedRows.length} row${matchedRows.length !== 1 ? "s" : ""} · AI filtered`}
                   badge="AI FILTER"
+                  onPin={() => togglePin(tablePin)}
+                  pinned={isPinned(tablePin)}
                   onRemove={() => removeFilteredTable(table.id)}
                 />
                 <DataTable headers={displayCols} rows={displayRows}/>
               </Section>
             );
           })}
+
+          <Section pinned={isPinned("raw_data_table")}>
+            <SectionHeader
+              title="Data Table"
+              subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
+              badge="RAW DATA"
+              onPin={() => togglePin("raw_data_table")}
+              pinned={isPinned("raw_data_table")}
+            />
+            <DataTable
+              headers={isWide ? wideVisibleHeaders : headers}
+              rows={isWide
+                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
+                : filteredRows
+              }
+            />
+          </Section>
         </>
       )}
 
@@ -1180,9 +1226,62 @@ export default function Dashboard({ data, blueprint, fileId }) {
           </div>
 
           {/* Pinned section */}
-          {(pinnedAutoIds.length>0||pinnedCustom.length>0)&&(
+          {(validPinnedIds.length>0||pinnedCustom.length>0)&&(
             <>
-              <div style={{fontSize:11,fontWeight:700,color:LW.green,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>📌 Pinned Charts</div>
+              <div style={{fontSize:11,fontWeight:700,color:LW.green,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>📌 Pinned Charts & Tables</div>
+
+              {/* Pinned raw data table */}
+              {validPinnedIds.includes("raw_data_table")&&(
+                <Section pinned>
+                  <SectionHeader
+                    title="Data Table"
+                    subtitle={`${(isWide?wideFilteredData:filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide?wideVisibleHeaders:headers).length} columns`}
+                    badge="RAW DATA"
+                    onPin={()=>togglePin("raw_data_table")}
+                    pinned={true}
+                  />
+                  <DataTable
+                    headers={isWide?wideVisibleHeaders:headers}
+                    rows={isWide
+                      ?wideFilteredData.map(row=>wideVisibleHeaders.map(h=>row[h]===undefined?null:row[h]))
+                      :filteredRows
+                    }
+                  />
+                </Section>
+              )}
+
+              {/* Pinned AI filter tables */}
+              {filteredTables.filter(t=>validPinnedIds.includes(String(t.id))).map(table=>{
+                const matchedRows=objectData.filter(row=>(table.filters||[]).every(({column,operator,value})=>{
+                  const cell=row[column]; const cellStr=cell==null?"":String(cell).trim();
+                  const cellNum=parseFloat(cellStr.replace(/,/g,"")); const valNum=parseFloat(String(value).replace(/,/g,""));
+                  switch(operator){
+                    case "eq": return cellStr.toLowerCase()===String(value).toLowerCase();
+                    case "neq": return cellStr.toLowerCase()!==String(value).toLowerCase();
+                    case "contains": return cellStr.toLowerCase().includes(String(value).toLowerCase());
+                    case "gt": return !isNaN(cellNum)&&cellNum>valNum;
+                    case "gte": return !isNaN(cellNum)&&cellNum>=valNum;
+                    case "lt": return !isNaN(cellNum)&&cellNum<valNum;
+                    case "lte": return !isNaN(cellNum)&&cellNum<=valNum;
+                    default: return true;
+                  }
+                }));
+                const displayCols=(table.columns||[]).filter(c=>headers.includes(c));
+                const displayRows=matchedRows.map(row=>displayCols.map(col=>row[col]===undefined?null:row[col]));
+                return(
+                  <Section key={table.id} pinned>
+                    <SectionHeader
+                      title={table.title}
+                      subtitle={`${matchedRows.length} row${matchedRows.length!==1?"s":""} · AI filtered`}
+                      badge="AI FILTER"
+                      onPin={()=>togglePin(String(table.id))}
+                      pinned={true}
+                      onRemove={()=>removeFilteredTable(table.id)}
+                    />
+                    <DataTable headers={displayCols} rows={displayRows}/>
+                  </Section>
+                );
+              })}
 
               {pinnedCustom.map(chart=>(
                 <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1.5px solid ${LW.green}`,borderLeft:`4px solid ${LW.green}`}}>
@@ -1191,16 +1290,16 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 </div>
               ))}
 
-              {isWide&&pinnedAutoIds.includes("wide_line")&&periodData.length>1&&(
+              {isWide&&validPinnedIds.includes("wide_line")&&periodData.length>1&&(
                 <Section pinned><SectionHeader title={`${valueCol} over Time`} badge="PINNED" onPin={()=>togglePin("wide_line")} pinned={true}/><SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol}/></Section>
               )}
-              {isWide&&pinnedAutoIds.includes("wide_primary")&&primaryPivot&&(
+              {isWide&&validPinnedIds.includes("wide_primary")&&primaryPivot&&(
                 <Section pinned><SectionHeader title={`${valueCol} by ${primaryCol}`} badge="PINNED" onPin={()=>togglePin("wide_primary")} pinned={true}/><PivotTableRenderer data={primaryPivot}/></Section>
               )}
-              {isWide&&pinnedAutoIds.includes("wide_section")&&sectionPivot&&(
+              {isWide&&validPinnedIds.includes("wide_section")&&sectionPivot&&(
                 <Section pinned><SectionHeader title={`${valueCol} by Section`} badge="PINNED" onPin={()=>togglePin("wide_section")} pinned={true}/><PivotTableRenderer data={sectionPivot}/></Section>
               )}
-              {!isWide&&blueprint.charts?.filter(c=>pinnedAutoIds.includes(c.id)).map(chart=>(
+              {!isWide&&blueprint.charts?.filter(c=>validPinnedIds.includes(c.id)).map(chart=>(
                 <Section key={chart.id} pinned>
                   <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(chart.id)} pinned={true}/>
                   {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
@@ -1208,7 +1307,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
                   {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
                 </Section>
               ))}
-              {!isWide&&blueprint.pivots?.filter(p=>pinnedAutoIds.includes(p.id)).map(pivot=>(
+              {!isWide&&blueprint.pivots?.filter(p=>validPinnedIds.includes(p.id)).map(pivot=>(
                 <Section key={pivot.id} pinned>
                   <SectionHeader title={pivot.title} badge="PINNED" onPin={()=>togglePin(pivot.id)} pinned={true}/>
                   <PivotTableRenderer data={buildLongPivot(pivot)}/>
@@ -1223,17 +1322,21 @@ export default function Dashboard({ data, blueprint, fileId }) {
             <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table"/>
             <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
               const id=Date.now(); let result;
-              if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
-              else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
-              else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
-              else if(config.outputType==="line")result={id,type:"line",title:config.title,config:{x:config.rowGroup,y:config.metric}};
-              else if(config.outputType==="donut")result={id,type:"donut",title:config.title,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
-              if(result)setCustomCharts(prev=>[result,...prev]);
+              const spec=config;
+              if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
+              else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
+              else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
+              else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
+              else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
+              if(result) {
+                setCustomCharts(prev=>[result,...prev]);
+                addCustomChart(result); // persist to Firestore + auto-pin
+              }
             }}/>
           </Section>
 
           {/* Unpinned custom charts */}
-          {customCharts.filter(c=>!pinnedIds.includes(String(c.id))).map(chart=>(
+          {allCustomCharts.filter(c=>!pinnedIds.includes(String(c.id))).map(chart=>(
             <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,borderLeft:`4px solid ${LW.saffron}`}}>
                <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>togglePin(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)}/>
                <RenderChart chart={chart} filteredData={filteredData} onDrilldown={handleDrilldown}/>
@@ -1291,4 +1394,3 @@ export default function Dashboard({ data, blueprint, fileId }) {
     </div>
   );
 }
-

@@ -3,7 +3,6 @@ import { useCallback } from "react";
 const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 
 export function useDrivePicker() {
-    console.log(API_KEY);
     
   const openFolderPicker = useCallback((accessToken, onFolderSelected) => {
     // Load the picker API
