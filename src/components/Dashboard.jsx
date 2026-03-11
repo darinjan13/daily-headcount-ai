@@ -2,7 +2,7 @@ import SummaryCards from "./SummaryCards";
 import BarChartRenderer from "./BarChartRenderer";
 import LineChartRenderer from "./LineChartRenderer";
 import DonutChartRenderer from "./DonutChartRenderer";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useLayoutEffect, useRef } from "react";
 import ChartBuilder from "./ChartBuilder";
 import PivotTableRenderer from "./PivotTableRenderer";
 import DataTable from "./DataTable";
@@ -768,6 +768,38 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const [filters, setFilters] = useState({ dateFrom:"all", dateTo:"all", categories:{} });
   // Wide-format filter state — section, name (primary entity), and active date columns
   const [wideFilters, setWideFilters] = useState({ section:"all", name:"all", dateFrom:"all", dateTo:"all" });
+  const filterBarRef = useRef(null);
+  const filterPlaceholderRef = useRef(null);
+  const [filterBarHeight, setFilterBarHeight] = useState(0);
+  const [isFilterPinned, setIsFilterPinned] = useState(false);
+  const [filterVisible, setFilterVisible] = useState(false);
+  const filterPinOffset = 56;
+
+  const renderFilterBlock = () => (
+    <>
+      {/* Wide format: WideFilterBar with section/name/date dropdowns
+          Long format: GlobalFilterBar with date + category dropdowns */}
+      {isWide
+        ? <WideFilterBar
+            wideDateCols={wideDateCols}
+            objectData={objectData}
+            wideFilters={wideFilters}
+            setWideFilters={setWideFilters}
+            primaryCol={dataPrimaryCol}
+            sectionCol={dataSectionCol}
+          />
+        : <GlobalFilterBar
+            dateCol={dateCol}
+            dateOptions={dateOptions}
+            filters={filters}
+            setFilters={setFilters}
+            categoryColumns={categoryColumns}
+            objectData={objectData}
+          />
+      }
+      <DrilldownBanner filters={filters} setFilters={setFilters}/>
+    </>
+  );
 
   const isWide = blueprint.tableFormat==="wide";
   const analytics = blueprint.analytics||data.analytics||null;
@@ -786,6 +818,33 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const [pinnedIds, setPinnedIds] = useState(()=>{ try{return JSON.parse(localStorage.getItem(pinKey)||"[]");}catch{return[];} });
   const savePins = (ids) => { setPinnedIds(ids); try{localStorage.setItem(pinKey,JSON.stringify(ids));}catch{} };
   const togglePin = (id) => savePins(pinnedIds.includes(id)?pinnedIds.filter(p=>p!==id):[...pinnedIds,id]);
+
+  useLayoutEffect(() => {
+    if (!filterBarRef.current) return;
+    const updateHeight = () => {
+      if (filterBarRef.current) {
+        setFilterBarHeight(filterBarRef.current.offsetHeight || 0);
+      }
+    };
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(filterBarRef.current);
+    return () => observer.disconnect();
+  }, [activeView]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (!filterPlaceholderRef.current) return;
+      const top = filterPlaceholderRef.current.getBoundingClientRect().top;
+      const pinned = top <= filterPinOffset;
+      setIsFilterPinned(pinned);
+      setFilterVisible(pinned);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [filterPinOffset]);
+
   const isPinned = (id) => pinnedIds.includes(id);
 
   // Object data
@@ -984,27 +1043,32 @@ export default function Dashboard({ data, blueprint, fileId }) {
       {/* ── HOME TAB ─────────────────────────────────────── */}
       {activeView==="home" && (
         <>
-          {/* Wide format: WideFilterBar with section/name/date dropdowns
-              Long format: GlobalFilterBar with date + category dropdowns */}
-          {isWide
-            ? <WideFilterBar
-                wideDateCols={wideDateCols}
-                objectData={objectData}
-                wideFilters={wideFilters}
-                setWideFilters={setWideFilters}
-                primaryCol={dataPrimaryCol}
-                sectionCol={dataSectionCol}
-              />
-            : <GlobalFilterBar
-                dateCol={dateCol}
-                dateOptions={dateOptions}
-                filters={filters}
-                setFilters={setFilters}
-                categoryColumns={categoryColumns}
-                objectData={objectData}
-              />
-          }
-          <DrilldownBanner filters={filters} setFilters={setFilters}/>
+            <div ref={filterPlaceholderRef} style={{ height: isFilterPinned ? filterBarHeight : 0 }} />
+            <div
+              style={{
+                position: isFilterPinned ? "fixed" : "static",
+                top: isFilterPinned ? filterPinOffset : "auto",
+                left: isFilterPinned ? 320 : "auto",
+                right: isFilterPinned ? 0 : "auto",
+                zIndex: 45,
+                pointerEvents: "none",
+              }}
+            >
+              <div style={{
+                maxWidth: isFilterPinned ? 1280 : "100%",
+                width: "100%",
+                margin: isFilterPinned ? "0 auto" : 0,
+                padding: isFilterPinned ? "0 32px" : 0,
+                pointerEvents: "auto",
+                transition: "transform 0.2s ease, opacity 0.2s ease",
+                transform: isFilterPinned ? (filterVisible ? "translateY(0)" : "translateY(-6px)") : "translateY(0)",
+                opacity: isFilterPinned && filterVisible ? 1 : isFilterPinned ? 0 : 1,
+              }}>
+                <div ref={filterBarRef}>
+                  {renderFilterBlock()}
+                </div>
+              </div>
+            </div>
 
           {isWide&&blueprint.cards?.length>0&&<StaticSummaryCards
             cards={blueprint.cards}
@@ -1088,7 +1152,32 @@ export default function Dashboard({ data, blueprint, fileId }) {
       {/* ── CHARTS TAB ───────────────────────────────────── */}
       {activeView==="charts" && (
         <>
-          <DrilldownBanner filters={filters} setFilters={setFilters}/>
+          <div ref={filterPlaceholderRef} style={{ height: isFilterPinned ? filterBarHeight : 0 }} />
+          <div
+            style={{
+              position: isFilterPinned ? "fixed" : "static",
+              top: isFilterPinned ? filterPinOffset : "auto",
+              left: isFilterPinned ? 320 : "auto",
+              right: isFilterPinned ? 0 : "auto",
+              zIndex: 45,
+              pointerEvents: "none",
+            }}
+          >
+            <div style={{
+              maxWidth: isFilterPinned ? 1280 : "100%",
+              width: "100%",
+              margin: isFilterPinned ? "0 auto" : 0,
+              padding: isFilterPinned ? "0 32px" : 0,
+              pointerEvents: "auto",
+              transition: "transform 0.2s ease, opacity 0.2s ease",
+              transform: isFilterPinned ? (filterVisible ? "translateY(0)" : "translateY(-6px)") : "translateY(0)",
+              opacity: isFilterPinned && filterVisible ? 1 : isFilterPinned ? 0 : 1,
+            }}>
+              <div ref={filterBarRef}>
+                {renderFilterBlock()}
+              </div>
+            </div>
+          </div>
 
           {/* Pinned section */}
           {(pinnedAutoIds.length>0||pinnedCustom.length>0)&&(
