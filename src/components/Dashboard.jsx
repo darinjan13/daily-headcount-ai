@@ -794,35 +794,30 @@ function getCardPixelWidth(span, workspaceWidth) {
 
 function buildChartLayouts(cards, previousLayouts, workspaceWidth) {
   const gap = 20;
-  let cursorX = 0;
-  let cursorY = 0;
-  let rowHeight = 0;
+  const existingBottom = cards.reduce((maxBottom, card) => {
+    const prev = previousLayouts?.[card.id];
+    if (typeof prev?.x !== "number" || typeof prev?.y !== "number") return maxBottom;
+    return Math.max(maxBottom, prev.y + (prev.height ?? getChartWorkspaceDefault(card).height));
+  }, 0);
+  let nextStackY = existingBottom > 0 ? existingBottom + gap : 0;
 
   return cards.reduce((acc, card) => {
     const defaults = getChartWorkspaceDefault(card);
     const prev = previousLayouts?.[card.id] || {};
     const span = prev.span ?? defaults.span;
     const height = prev.height ?? defaults.height;
-    const cardWidth = getCardPixelWidth(span, workspaceWidth);
     const hasStoredPosition = typeof prev.x === "number" && typeof prev.y === "number";
-
-    if (!hasStoredPosition && cursorX > 0 && cursorX + cardWidth > workspaceWidth) {
-      cursorX = 0;
-      cursorY += rowHeight + gap;
-      rowHeight = 0;
-    }
 
     acc[card.id] = {
       span,
       height,
       hidden: prev.hidden ?? false,
-      x: hasStoredPosition ? prev.x : cursorX,
-      y: hasStoredPosition ? prev.y : cursorY,
+      x: hasStoredPosition ? prev.x : 0,
+      y: hasStoredPosition ? prev.y : nextStackY,
     };
 
     if (!hasStoredPosition) {
-      cursorX += cardWidth + gap;
-      rowHeight = Math.max(rowHeight, height);
+      nextStackY += height + gap;
     }
 
     return acc;
