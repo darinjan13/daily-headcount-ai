@@ -18,13 +18,14 @@ export function useDriveFiles() {
       const query = encodeURIComponent(
         `'${folderId}' in parents and trashed = false and (` +
         `mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or ` +
-        `mimeType = 'application/vnd.ms-excel')`
+        `mimeType = 'application/vnd.ms-excel' or ` +
+        `mimeType = 'application/vnd.google-apps.spreadsheet')`
       );
 
       const res = await fetch(
         `https://www.googleapis.com/drive/v3/files` +
         `?q=${query}` +
-        `&fields=files(id,name,modifiedTime,size,iconLink,webViewLink)` +
+        `&fields=files(id,name,modifiedTime,size,iconLink,webViewLink,mimeType)` +
         `&orderBy=modifiedTime+desc`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },

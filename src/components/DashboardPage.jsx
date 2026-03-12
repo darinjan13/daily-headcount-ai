@@ -1,13 +1,18 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import Dashboard from "./Dashboard";
+import Sidebar from "./Sidebar";
+import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
 
 export default function DashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const state = location.state;
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   const [data, setData] = useState(state?.tableData || null);
   const [blueprint, setBlueprint] = useState(state?.blueprint || null);
@@ -25,15 +30,28 @@ export default function DashboardPage() {
     if (!state?.tableData) navigate("/");
   }, [state, navigate]);
 
-  if (!data || !blueprint) return null;
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/");
+    }
+  }, [authLoading, user, navigate]);
 
-  const switchSheet = async (sheet) => {
-    if (sheet === currentSheet || switching) return;
+  useEffect(() => {
+    const onScroll = () => {
+      setShowBackToTop(window.scrollY > 500);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  if (authLoading) return null;
+  if (!data || !blueprint || !user) return null;
+
+  const fetchSheetData = async (sheet) => {
     setSwitching(true);
     setSwitchError("");
 
     try {
-      // Re-download file from Drive
       const dlRes = await fetch(
         `https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -45,7 +63,6 @@ export default function DashboardPage() {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
 
-      // Single call — extract + blueprint for the selected sheet
       const formData = new FormData();
       formData.append("file", blob, fileName);
 
@@ -71,66 +88,128 @@ export default function DashboardPage() {
     setSwitching(false);
   };
 
+  const switchSheet = async (sheet) => {
+    if (switching) return;
+    await fetchSheetData(sheet);
+  };
+
+  const refreshDashboard = async () => {
+    const targetSheet = currentSheet || allSheets[0] || "";
+    if (!targetSheet || switching) {
+      if (!targetSheet) setSwitchError("No sheet selected to refresh");
+      return;
+    }
+    await fetchSheetData(targetSheet);
+  };
+
   return (
-    <div className="min-h-screen w-screen bg-gray-50">
-      {/* Top bar */}
-      <div className="bg-emerald-800 shadow-lg sticky top-0 z-50">
-        <div className="max-w-screen-2xl mx-auto px-6 py-3 flex items-center gap-4">
+    <div className="min-h-screen w-screen" style={{ backgroundColor: "var(--color-bg)" }}>
+      <aside
+        className="ui-auto-hide-sidebar"
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "var(--sidebar-width)",
+          height: "100vh",
+          zIndex: 60,
+          background: "var(--color-surface)",
+          backdropFilter: "blur(10px)",
+          borderRight: "1px solid var(--color-border)",
+          overflow: "hidden",
+        }}
+      >
+        <Sidebar
+          folder={{ name: fileName }}
+          files={[]}
+          filesLoading={switching}
+          onSelectFolder={null}
+          onRefresh={refreshDashboard}
+          onBack={() => navigate("/")}
+        />
+      </aside>
 
-          <button
-            onClick={() => navigate("/")}
-            className="flex items-center gap-1.5 text-emerald-300 hover:text-white text-sm font-medium transition-colors cursor-pointer bg-transparent border-none shrink-0"
+      <div style={{ marginLeft: "var(--sidebar-offset)", width: "calc(100% - var(--sidebar-offset))", minHeight: "100vh", display: "flex", flexDirection: "column", overflowX: "hidden", paddingTop: 56 }}>
+        {/* Top bar */}
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: "var(--sidebar-offset)",
+            right: 0,
+            height: 56,
+            zIndex: 55,
+            backgroundColor: "var(--color-surface)",
+            borderBottom: "1px solid var(--color-border)",
+            boxShadow: "var(--color-shadow-soft)",
+          }}
+        >
+          <div
+            className="flex items-center gap-4"
+            style={{ maxWidth: "1280px", width: "100%", margin: "0 auto", padding: "8px 24px", height: "100%" }}
           >
-            ← Home
-          </button>
-
-          <div className="w-px h-6 bg-emerald-600 shrink-0" />
-
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xl">📊</span>
-            <div>
-              <div className="text-white font-extrabold text-sm leading-tight">AI Dashboard</div>
-              <div className="text-emerald-300 text-xs">Generator</div>
+            <div className="flex items-center gap-3 min-w-0" style={{ flex: 1 }}>
+              <div className="flex items-center gap-2 min-w-0">
+                <img src={lifewoodIconSquared} alt="Workbook" className="w-5 h-5 shrink-0" />
+                <span className="text-sm font-semibold truncate" style={{ color: "var(--color-text)" }}>
+                  {fileName}
+                </span>
+              </div>
             </div>
-          </div>
 
-          <div className="w-px h-6 bg-emerald-600 shrink-0" />
-
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-lg shrink-0">📗</span>
-            <span className="text-white text-sm font-semibold truncate">{fileName}</span>
-          </div>
-
-          {/* Sheet switcher — full dropdown when multiple sheets */}
-          {allSheets.length > 1 && (
-            <>
-              <div className="w-px h-6 bg-emerald-600 shrink-0" />
-              <div className="flex items-center gap-2 shrink-0">
-                <label className="text-emerald-300 text-xs font-bold uppercase tracking-wide">Sheet</label>
+            {/* Sheet switcher — full dropdown when multiple sheets */}
+            {allSheets.length > 1 && (
+              <div className="flex items-center gap-2 shrink-0" style={{ marginLeft: "auto" }}>
+                <label
+                  className="text-xs font-bold uppercase tracking-wide"
+                  style={{ color: "var(--color-text)" }}
+                >
+                  Sheet
+                </label>
                 <select
                   value={currentSheet}
                   onChange={(e) => switchSheet(e.target.value)}
                   disabled={switching}
-                  className="px-3 py-1.5 rounded-lg border border-emerald-600 text-sm text-white bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer disabled:opacity-60"
+                  className="px-3 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 cursor-pointer disabled:opacity-60"
+                  style={{
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text)",
+                    backgroundColor: "var(--color-surface-elevated)",
+                  }}
                 >
                   {allSheets.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
                 {switching && (
-                  <svg className="animate-spin w-4 h-4 text-emerald-300" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-castleton-green)" }}>
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
                   </svg>
                 )}
-                {switchError && <span className="text-red-300 text-xs">{switchError}</span>}
+                {switchError && <span className="text-xs" style={{ color: "var(--color-saffron)" }}>{switchError}</span>}
               </div>
-            </>
-          )}
+            )}
+          </div>
         </div>
-      </div>
 
-      <Dashboard data={data} blueprint={blueprint} fileId={driveFileId} />
+        <Dashboard data={data} blueprint={blueprint} fileId={driveFileId} />
+
+        {showBackToTop && (
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="fixed bottom-6 right-24 z-40 w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-xl transition-all duration-200 cursor-pointer border-none"
+            style={{
+              backgroundColor: "var(--color-castleton-green)",
+              color: "#fff",
+              boxShadow: "0 10px 25px rgba(4, 98, 65, 0.25)",
+            }}
+            title="Back to top"
+          >
+            ^
+          </button>
+        )}
+      </div>
     </div>
   );
 }

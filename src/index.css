@@ -1,13 +1,54 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+  /* Brand Colors */
+  --color-castleton-green: #046241;
+  --color-dark-serpent: #133020;
+  --color-saffron: #FFB347;
+  --color-paper: #F5EEDB;
+  --color-white: #FFFFFF;
+  --color-sea-salt: #F9F7F7;
+  --color-light-gray: #F5F5F5;
+  --color-medium-gray: #E8E8E8;
+  --color-text: #1C2B23;
+  --color-text-light: #5F7267;
+
+  /* Semantic Tokens */
+  --color-bg: var(--color-white);
+  --color-surface: var(--color-white);
+  --color-surface-elevated: #FFFFFF;
+  --color-surface-soft: rgba(4, 98, 65, 0.04);
+  --color-border: rgba(19, 48, 32, 0.14);
+  --color-border-strong: rgba(19, 48, 32, 0.22);
+  --color-grid: rgba(19, 48, 32, 0.12);
+  --color-chart-axis: #5E7167;
+  --color-chart-line-primary: var(--color-castleton-green);
+  --color-shadow-soft: 0 8px 24px rgba(19, 48, 32, 0.08);
+  --color-shadow-strong: 0 14px 30px rgba(19, 48, 32, 0.16);
+  --color-chip-bg: rgba(4, 98, 65, 0.08);
+  --color-chip-text: var(--color-castleton-green);
+  --color-chip-border: rgba(4, 98, 65, 0.2);
+  --color-meta-text: var(--color-text-light);
+  --color-alert-bg: rgba(255, 179, 71, 0.08);
+  --color-alert-border: rgba(255, 179, 71, 0.3);
+  --color-on-primary: var(--color-white);
+  --color-pin-accent: var(--color-castleton-green);
+  --color-pin-accent-bg: rgba(4, 98, 65, 0.1);
+  --color-badge-custom-bg: rgba(255, 179, 71, 0.18);
+  --color-badge-custom-text: #8A5A00;
+  --sidebar-width: 320px;
+  --sidebar-peek: 22px;
+  --sidebar-offset: var(--sidebar-peek);
+
+  /* Typography */
+  font-family: "Manrope", system-ui, sans-serif;
+  line-height: 1.6;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  color-scheme: light;
+  color: var(--color-text);
+  background-color: var(--color-bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -15,56 +56,394 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root[data-theme="dark"] {
+  /* Lifewood-branded dark palette (deep greens + paper + saffron) */
+  --color-text: var(--color-paper);
+  --color-text-light: rgba(245, 238, 219, 0.78);
+
+  --color-bg: #0B1511;
+  --color-surface: #10251B;
+  --color-surface-elevated: #163126;
+  --color-surface-soft: rgba(4, 98, 65, 0.16);
+  --color-border: rgba(245, 238, 219, 0.24);
+  --color-border-strong: rgba(245, 238, 219, 0.38);
+  --color-grid: rgba(245, 238, 219, 0.14);
+  --color-chart-axis: rgba(245, 238, 219, 0.86);
+  --color-chart-line-primary: var(--color-saffron);
+  --color-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.32);
+  --color-shadow-strong: 0 14px 30px rgba(0, 0, 0, 0.45);
+  --color-chip-bg: rgba(255, 179, 71, 0.18);
+  --color-chip-text: var(--color-paper);
+  --color-chip-border: rgba(255, 179, 71, 0.42);
+  --color-meta-text: rgba(245, 238, 219, 0.92);
+  --color-alert-bg: rgba(255, 179, 71, 0.16);
+  --color-alert-border: rgba(255, 179, 71, 0.4);
+  --color-on-primary: var(--color-paper);
+  --color-pin-accent: var(--color-saffron);
+  --color-pin-accent-bg: rgba(255, 179, 71, 0.18);
+  --color-badge-custom-bg: rgba(255, 179, 71, 0.2);
+  --color-badge-custom-text: var(--color-paper);
+
+  color-scheme: dark;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-dark-serpent);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-saffron);
+}
+
+/* Scroll Progress Bar */
+.scroll-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(to right, var(--color-dark-serpent), var(--color-saffron));
+  z-index: 9999;
+  transition: width 0.1s ease-out;
+}
+
 a {
   font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+  color: var(--color-dark-serpent);
+  text-decoration: none;
+  transition: color 0.3s ease;
 }
+
 a:hover {
-  color: #535bf2;
+  color: var(--color-saffron);
 }
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
   min-width: 320px;
   min-height: 100vh;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  margin: 0;
+  color: var(--color-text);
+}
+
+h1 { font-size: 3.2rem; line-height: 1.2; }
+h2 { font-size: 1.6rem; line-height: 1.2; }
+h3 { font-size: 0.8rem; line-height: 1.2; }
+
+p {
+  margin: 0;
+  color: var(--color-text-light);
+  font-weight: 400;
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
+  border-radius: 12px;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background-color: var(--color-dark-serpent);
+  color: var(--color-on-primary);
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  transition: all 0.3s ease;
 }
 
-@media (prefers-color-scheme: light) {
+button:hover {
+  background-color: var(--color-saffron);
+  color: var(--color-dark-serpent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(255, 179, 71, 0.2);
+}
+
+/* Shared dropdown control styling (selects + <summary> buttons) */
+.ui-dropdown-control {
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+select.ui-dropdown-control,
+summary.ui-dropdown-control {
+  cursor: pointer;
+}
+
+.ui-dropdown-control:focus,
+.ui-dropdown-control:focus-visible {
+  outline: 2px solid var(--color-saffron);
+  outline-offset: 2px;
+}
+
+/* Prevent toolbar dropdown controls from resizing when selection changes */
+.ui-toolbar-dropdown {
+  min-width: 8.5rem;
+  white-space: nowrap;
+}
+
+/* Simple dropdown menu buttons (opt out of global button hover effects) */
+button.ui-dropdown-item {
+  --_dropdown-item-bg: transparent;
+  --_dropdown-item-color: var(--color-text);
+
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+  border: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  background-color: var(--_dropdown-item-bg);
+  color: var(--_dropdown-item-color);
+  cursor: pointer;
+  transition: none;
+  box-shadow: none;
+  transform: none;
+}
+
+button.ui-dropdown-item.is-active {
+  --_dropdown-item-bg: var(--color-surface-soft);
+}
+
+button.ui-dropdown-item:hover,
+button.ui-dropdown-item:focus-visible {
+  background-color: var(--_dropdown-item-bg);
+  color: var(--_dropdown-item-color);
+  box-shadow: none;
+  transform: none;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 2px solid var(--color-saffron);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Auto-hide sidebar: keeps a small "peek" handle and expands on hover/focus */
+.ui-auto-hide-sidebar {
+  transform: translateX(calc(var(--sidebar-peek) - var(--sidebar-width)));
+  transition: transform 180ms ease;
+  will-change: transform;
+}
+
+.ui-auto-hide-sidebar:hover,
+.ui-auto-hide-sidebar:focus-within {
+  transform: translateX(0);
+}
+
+@media (max-width: 900px) {
   :root {
-    color: #213547;
-    background-color: #ffffff;
+    --sidebar-offset: var(--sidebar-width);
   }
-  a:hover {
-    color: #747bff;
+  .ui-auto-hide-sidebar {
+    transform: none;
   }
-  button {
-    background-color: #f9f9f9;
+}
+
+.login-glass-card {
+  background:
+    radial-gradient(120% 90% at 5% 10%, rgba(245, 238, 219, 0.72), transparent 60%),
+    radial-gradient(90% 70% at 95% 0%, rgba(4, 98, 65, 0.14), transparent 65%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(249, 247, 247, 0.66));
+}
+
+:root[data-theme="dark"] .login-glass-card {
+  background:
+    radial-gradient(120% 90% at 5% 10%, rgba(255, 195, 112, 0.12), transparent 60%),
+    radial-gradient(90% 70% at 95% 0%, rgba(4, 98, 65, 0.25), transparent 65%),
+    linear-gradient(145deg, rgba(22, 38, 30, 0.85), rgba(30, 49, 40, 0.7));
+}
+
+.login-google-wave-btn {
+  padding: 10px 16px;
+  font-weight: 700;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+  border-radius: 35px;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  cursor: pointer;
+  background: linear-gradient(90deg, var(--color-dark-serpent), var(--color-castleton-green));
+  box-shadow: 0 12px 28px rgba(19, 48, 32, 0.24);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-google-wave-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 32px rgba(19, 48, 32, 0.32);
+}
+
+.login-google-wave-btn:focus-visible {
+  outline: 3px solid var(--color-saffron);
+  outline-offset: 3px;
+}
+
+.login-google-wave-svg {
+  height: 22px;
+  margin-right: 10px;
+  z-index: 6;
+  position: relative;
+}
+
+.login-google-wave-text {
+  z-index: 10;
+  position: relative;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-white);
+  transition: color 0.25s ease;
+}
+
+.login-google-wave-btn:hover .login-google-wave-text {
+  animation: loginGoogleText 2.5s linear infinite;
+}
+
+@keyframes loginGoogleText {
+  0%, 8% { color: var(--color-dark-serpent); }
+  16%, 100% { color: var(--color-white); }
+}
+
+.login-google-wave-btn:hover::before {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 9%;
+  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
+  opacity: 0;
+  border-radius: 300px;
+  animation: loginWave1 2.5s linear infinite;
+}
+
+.login-google-wave-btn:hover::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 9%;
+  transform: translate(-50%, -50%);
+  width: 0;
+  height: 0;
+  opacity: 0;
+  border-radius: 300px;
+  animation: loginWave2 2.5s linear infinite;
+}
+
+@keyframes loginWave1 {
+  0% { z-index: 1; background: #EB4335; width: 0; height: 0; opacity: 0; }
+  4% { z-index: 1; background: #EB4335; width: 0; height: 0; opacity: 1; }
+  26% { z-index: 1; background: #EB4335; width: 800px; height: 800px; opacity: 1; }
+  27% { z-index: 3; background: #34A853; width: 0; height: 0; opacity: 1; }
+  56% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 1; }
+  92% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 1; }
+  100% { z-index: 3; background: #34A853; width: 800px; height: 800px; opacity: 0; }
+}
+
+@keyframes loginWave2 {
+  0% { z-index: 2; background: #FBBC05; width: 0; height: 0; opacity: 0; }
+  12% { z-index: 2; background: #FBBC05; width: 0; height: 0; opacity: 1; }
+  40% { z-index: 2; background: #FBBC05; width: 800px; height: 800px; opacity: 1; }
+  41% { z-index: 4; background: #4285F4; width: 0; height: 0; opacity: 1; }
+  70% { z-index: 4; background: #4285F4; width: 800px; height: 800px; opacity: 1; }
+  92% { z-index: 4; background: #4285F4; width: 800px; height: 800px; opacity: 1; }
+  100% { z-index: 4; background: #4285F4; width: 800px; height: 800px; opacity: 0; }
+}
+
+.login-google-wave-btn:hover .red {
+  animation: loginGoogleDisappear 2.5s linear infinite;
+  animation-delay: 0.1s;
+}
+
+.login-google-wave-btn:hover .yellow {
+  animation: loginGoogleDisappear 2.5s linear infinite;
+  animation-delay: 0.3s;
+}
+
+.login-google-wave-btn:hover .green {
+  animation: loginGoogleDisappear 2.5s linear infinite;
+  animation-delay: 0.7s;
+}
+
+.login-google-wave-btn:hover .blue {
+  animation: loginGoogleDisappear 2.5s linear infinite;
+  animation-delay: 1.1s;
+}
+
+@keyframes loginGoogleDisappear {
+  0%, 4% { filter: brightness(1); }
+  8%, 14% { filter: brightness(100); }
+  22%, 100% { filter: brightness(1); }
+}
+
+@media (max-width: 640px) {
+  .login-google-wave-text {
+    font-size: 14px;
   }
+  .login-google-wave-svg {
+    height: 19px;
+  }
+}
+
+/* Icon Styling */
+img[src*="icon"],
+img[alt*="icon"],
+.icon {
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+
+/* Glassmorphism Components */
+.glass-card {
+  background: var(--color-surface-elevated);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: var(--color-shadow-soft);
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  box-shadow: var(--color-shadow-strong);
+  border: 1px solid rgba(255, 179, 71, 0.3);
+  transform: translateY(-2px);
 }

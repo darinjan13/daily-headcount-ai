@@ -1,4 +1,6 @@
+# ==================================================
 # Logs
+# ==================================================
 logs
 *.log
 npm-debug.log*
@@ -7,17 +9,66 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# ==================================================
+# Dependencies
+# ==================================================
+node_modules/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# ==================================================
+# Build Outputs
+# ==================================================
+dist/
+dist-ssr/
+out/
+coverage/
+.vite/
+
+# ==================================================
+# Environment Files
+# ==================================================
 .env
+.env.*
+*.local
+.runtimeconfig.json
+
+# ==================================================
+# Firebase
+# ==================================================
+.firebase/
+.firebaserc
+
+# ==================================================
+# OS Files
+# ==================================================
 .DS_Store
+Thumbs.db
+
+# ==================================================
+# IntelliJ / WebStorm / JetBrains
+# ==================================================
+.idea/
+*.iws
+*.iml
+.idea_modules/
+cmake-build-*/
+
+# ==================================================
+# VS Code
+# ==================================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+.history/
+*.vsix
+.ionide
+
+# ==================================================
+# Misc / Temp
+# ==================================================
 *.suo
 *.ntvs*
 *.njsproj

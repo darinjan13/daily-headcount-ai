@@ -1,6 +1,13 @@
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
-const COLORS = ["#046241", "#059669", "#10b981", "#34d399", "#6ee7b7", "#a7f3d0", "#d1fae5"];
+const COLORS = [
+  "var(--color-chart-1, #0f9d71)",
+  "var(--color-chart-2, #1c4732)",
+  "var(--color-chart-3, #2f6a4d)",
+  "var(--color-chart-4, #3c7a5a)",
+  "var(--color-chart-5, #6ea186)",
+  "var(--color-chart-6, #ffb347)",
+];
 
 function groupData(data, xField, yField, topN = 10) {
   const grouped = {};   // key → { label, value }
@@ -23,7 +30,7 @@ export default function DonutChartRenderer({ data, config }) {
   const chartData = groupData(data, config.x, config.y, config.topN || 10);
 
   if (chartData.length === 0)
-    return <p className="text-gray-400 text-sm">No data available.</p>;
+    return <p className="text-sm" style={{ color: "var(--color-text-light)" }}>No data available.</p>;
 
   const total = chartData.reduce((s, d) => s + d.value, 0);
 
@@ -45,10 +52,12 @@ export default function DonutChartRenderer({ data, config }) {
         </Pie>
         <Tooltip
           formatter={(v) => [v.toLocaleString(), `${((v / total) * 100).toFixed(1)}%`]}
-          contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 13 }}
+          contentStyle={{ borderRadius: 8, border: "1px solid var(--color-border)", fontSize: 13, backgroundColor: "var(--color-surface-elevated)", color: "var(--color-text)" }}
+          labelStyle={{ color: "var(--color-text)" }}
+          itemStyle={{ color: "var(--color-text)" }}
         />
         <Legend
-          formatter={(value) => <span style={{ fontSize: 12, color: "#6b7280" }}>{value}</span>}
+          formatter={(value) => <span style={{ fontSize: 12, color: "var(--color-text)" }}>{value}</span>}
         />
       </PieChart>
     </ResponsiveContainer>
