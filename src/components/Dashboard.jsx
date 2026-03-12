@@ -9,6 +9,14 @@ import DataTable from "./DataTable";
 import DataChatbot from "./DataChatBot";
 import { useAuth } from "../context/AuthContext";
 import { usePins } from "../hooks/usePins";
+import GridLayout, { WidthProvider } from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
+import minimizeIcon from "../../images/window-minimize.png";
+import maximizeIcon from "../../images/maximize.png";
+import closeIcon from "../../images/close.png";
+import pinIcon from "../../images/thumbtacks.png";
+import padlockIcon from "../../images/padlock.png";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ResponsiveContainer, Cell, AreaChart, Area,
@@ -32,6 +40,8 @@ const CHART_THEME = {
 };
 const CHART_COLORS = ["#046241","#059669","#10b981","#34d399","#6ee7b7","#a7f3d0","#FFB347","#f97316","#3b82f6","#8b5cf6"];
 const CMP = { a:"#046241", b:"#FFB347" };
+const MINIMIZED_ROWS = 2;
+const ReactGridLayout = WidthProvider(GridLayout);
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -174,15 +184,23 @@ function Section({ children, accent, pinned }) {
   );
 }
 
+const BADGE_STYLES = {
+  AI:{bg:LW.dark,color:LW.saffron},
+  AUTO:{bg:LW.green,color:"#fff"},
+  "RAW DATA":{bg:LW.paper,color:LW.dark},
+  CUSTOM:{bg:"#fff3dc",color:"#c17110"},
+  PINNED:{bg:LW.green,color:"#fff"},
+  "AI FILTER":{bg:LW.dark,color:LW.saffron},
+};
+
 function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRename }) {
-  const bs = { AI:{bg:LW.dark,color:LW.saffron}, AUTO:{bg:LW.green,color:"#fff"}, "RAW DATA":{bg:LW.paper,color:LW.dark}, CUSTOM:{bg:"#fff3dc",color:"#c17110"}, PINNED:{bg:LW.green,color:"#fff"}, "AI FILTER":{bg:LW.dark,color:LW.saffron} };
-  const b = bs[badge]||{bg:LW.paper,color:LW.dark};
+  const b = BADGE_STYLES[badge]||{bg:LW.paper,color:LW.dark};
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
   const inputRef = useRef(null);
 
   const startEdit = () => { if (!onRename) return; setDraft(title); setEditing(true); setTimeout(()=>inputRef.current?.select(), 30); };
-  const commit = () => { const t = draft.trim(); if (t && t !== title) onRename(t); setEditing(false); };
+  const commit = () => { const t = draft.trim(); if (onRename && t && t !== title) onRename(t); setEditing(false); };
   const cancel = () => setEditing(false);
 
   return (
@@ -213,8 +231,13 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRena
       </div>
       <div style={{ display:"flex", gap:8, alignItems:"center" }}>
         {onPin && (
-          <button onClick={onPin} style={{ background:"none", border:`1px solid ${pinned?LW.green:"#e8e3d9"}`, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, color:pinned?LW.green:"#9cafa4" }}>
-            {pinned?"📌 Pinned":"📌 Pin"}
+          <button
+            onClick={onPin}
+            aria-label={pinned ? "Pinned" : "Pin"}
+            title={pinned ? "Pinned" : "Pin"}
+            style={{ background:"none", border:`1px solid ${pinned?LW.green:"#e8e3d9"}`, borderRadius:8, padding:"4px 10px", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}
+          >
+            <img src={pinIcon} alt="" style={{ width:14, height:14, opacity:pinned?1:0.7 }} />
           </button>
         )}
         {onRemove && (
@@ -222,6 +245,99 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRena
             onMouseEnter={e=>e.currentTarget.style.color="#9cafa4"}
             onMouseLeave={e=>e.currentTarget.style.color="#d1d5db"}>×</button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ChartWidget({ item, locked, minimized, onToggleMinimize, onMaximize, onClose, onToggleLock }) {
+  const { title, badge, onPin, pinned, onRename, render } = item;
+  const b = BADGE_STYLES[badge]||{bg:LW.paper,color:LW.dark};
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!editing) setDraft(title);
+  }, [title, editing]);
+
+  const startEdit = () => { if (!onRename) return; setDraft(title); setEditing(true); setTimeout(()=>inputRef.current?.select(), 30); };
+  const commit = () => { const t = draft.trim(); if (t && t !== title) onRename(t); setEditing(false); };
+  const cancel = () => setEditing(false);
+
+  const handleHeaderClick = () => {};
+
+  return (
+    <div className={`chart-widget ${minimized ? "is-minimized" : ""}`}>
+      <div className={`chart-widget__header ${locked ? "is-locked" : ""}`} onClick={handleHeaderClick}>
+        <div className="chart-widget__title">
+          {onPin && (
+            <button className="chart-widget__pin" onClick={onPin} aria-label={pinned ? "Pinned" : "Pin"} title={pinned ? "Pinned" : "Pin"}>
+              <img src={pinIcon} alt="" />
+            </button>
+          )}
+          {editing ? (
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={e=>setDraft(e.target.value)}
+              onBlur={commit}
+              onKeyDown={e=>{ if(e.key==="Enter"){e.preventDefault();commit();} if(e.key==="Escape")cancel(); }}
+              onClick={e=>e.stopPropagation()}
+              style={{ fontSize:14, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em", border:"none", borderBottom:`2px solid ${LW.green}`, outline:"none", background:"transparent", width:"100%", maxWidth:320, fontFamily:"inherit" }}
+            />
+          ) : (
+            <h3
+              onClick={e=>{ e.stopPropagation(); startEdit(); }}
+              title={onRename ? "Click to rename" : undefined}
+              style={{ fontSize:14, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em", cursor:onRename?"text":"default", borderBottom:onRename?"1px dashed transparent":"none" }}
+              onMouseEnter={e=>{ if(onRename) e.currentTarget.style.borderBottomColor="#9cafa4"; }}
+              onMouseLeave={e=>{ if(onRename) e.currentTarget.style.borderBottomColor="transparent"; }}
+            >{title}</h3>
+          )}
+          {!minimized && badge && <span className="chart-widget__badge" style={{ background:b.bg, color:b.color }}>{badge}</span>}
+        </div>
+        <div className="chart-widget__actions" onClick={e=>e.stopPropagation()}>
+          {!minimized && (
+            <button
+              className={`chart-widget__icon chart-widget__lock ${locked ? "is-locked" : "is-unlocked"}`}
+              title={locked ? "Enable Drag Mode" : "Lock Layout"}
+              aria-label={locked ? "Enable Drag Mode" : "Lock Layout"}
+              onClick={onToggleLock}
+              style={{ backgroundImage: `url(${padlockIcon})` }}
+            />
+          )}
+          <button
+            className="chart-widget__icon"
+            title={minimized ? "Restore chart" : "Minimize chart"}
+            aria-label={minimized ? "Restore chart" : "Minimize chart"}
+            onClick={onToggleMinimize}
+            style={{ backgroundImage: `url(${minimizeIcon})` }}
+          />
+          {!minimized && (
+            <button
+              className="chart-widget__icon"
+              title="Maximize chart"
+              aria-label="Maximize chart"
+              onClick={onMaximize}
+              style={{ backgroundImage: `url(${maximizeIcon})` }}
+            />
+          )}
+          {!minimized && onClose && (
+            <button
+              className="chart-widget__icon chart-widget__icon--danger"
+              title="Close chart"
+              aria-label="Close chart"
+              onClick={onClose}
+              style={{ backgroundImage: `url(${closeIcon})` }}
+            />
+          )}
+        </div>
+      </div>
+      <div className={`chart-widget__body ${minimized ? "is-collapsed" : ""}`}>
+        <div className="chart-widget__content">
+          {render()}
+        </div>
       </div>
     </div>
   );
@@ -571,7 +687,7 @@ function ClickableBarChart({ data, config, onDrilldown, labels }) {
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
   return (
-    <ResponsiveContainer width="100%" height={320}>
+    <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
         <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0} label={undefined}/>
@@ -590,7 +706,7 @@ function HorizontalBarChart({ data, config, onDrilldown, labels }) {
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
   return (
-    <ResponsiveContainer width="100%" height={Math.max(260,data.length*34)}>
+    <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} layout="vertical" margin={{top:5,right:40,left:120,bottom:5}}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} horizontal={false}/>
         <XAxis type="number" tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
@@ -608,7 +724,7 @@ function StackedBarChart({ data }) {
   if (!data||!data.length) return <p style={{color:"#9cafa4",fontSize:13}}>No data.</p>;
   const stackKeys=Object.keys(data[0]).filter(k=>k!=="name");
   return (
-    <ResponsiveContainer width="100%" height={320}>
+    <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
         <XAxis dataKey="name" tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0}/>
@@ -623,7 +739,7 @@ function StackedBarChart({ data }) {
 function SimpleAreaChart({ data, xKey, yKey }) {
   const angle=data.length>14?-45:0, mb=angle!==0?60:10;
   return (
-    <ResponsiveContainer width="100%" height={340}>
+    <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{top:8,right:20,left:10,bottom:mb}}>
         <defs><linearGradient id="lwGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={LW.green} stopOpacity={0.15}/><stop offset="95%" stopColor={LW.green} stopOpacity={0}/></linearGradient></defs>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
@@ -798,6 +914,62 @@ export default function Dashboard({ data, blueprint, fileId }) {
   // customCharts from usePins is already seeded from localStorage on first render
   // and synced from Firestore in background — use directly
   const [sessionCharts, setCustomCharts] = useState([]);
+  const layoutStorageKey = useMemo(() => `dashboardLayout_${fileId || "default"}`, [fileId]);
+  const minimizedStorageKey = useMemo(() => `${layoutStorageKey}_minimized`, [layoutStorageKey]);
+  const [layoutLocked, setLayoutLocked] = useState(true);
+  const [gridLayout, setGridLayout] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(layoutStorageKey) || "[]"); } catch { return []; }
+  });
+  const [minimizedIds, setMinimizedIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(minimizedStorageKey) || "[]"); } catch { return []; }
+  });
+  const [maximizedId, setMaximizedId] = useState(null);
+  const minimizedIdsRef = useRef(minimizedIds);
+  const skipNextLayoutChangeRef = useRef(false);
+  const minimizedSet = useMemo(() => new Set(minimizedIds), [minimizedIds]);
+
+  useEffect(() => {
+    try { setGridLayout(JSON.parse(localStorage.getItem(layoutStorageKey) || "[]")); }
+    catch { setGridLayout([]); }
+  }, [layoutStorageKey]);
+
+  useEffect(() => {
+    try { setMinimizedIds(JSON.parse(localStorage.getItem(minimizedStorageKey) || "[]")); }
+    catch { setMinimizedIds([]); }
+  }, [minimizedStorageKey]);
+
+  useEffect(() => {
+    try { localStorage.setItem(minimizedStorageKey, JSON.stringify(minimizedIds)); } catch {}
+  }, [minimizedIds, minimizedStorageKey]);
+
+  useEffect(() => {
+    minimizedIdsRef.current = minimizedIds;
+  }, [minimizedIds]);
+
+
+
+
+  useEffect(() => {
+    if (!minimizedIds.length) return;
+    setGridLayout(prev => {
+      let changed = false;
+      const next = prev.map(item => {
+        if (!minimizedSet.has(item.i)) return item;
+        if (item.h === MINIMIZED_ROWS && item.minH === MINIMIZED_ROWS) return item;
+        changed = true;
+        return {
+          ...item,
+          origH: item.origH ?? item.h,
+          origMinH: item.origMinH ?? item.minH,
+          origMaxH: item.origMaxH ?? item.maxH,
+          h: MINIMIZED_ROWS,
+          minH: MINIMIZED_ROWS,
+          maxH: MINIMIZED_ROWS,
+        };
+      });
+      return changed ? next : prev;
+    });
+  }, [minimizedIds, minimizedSet]);
 
 
   // Object data
@@ -855,8 +1027,6 @@ export default function Dashboard({ data, blueprint, fileId }) {
     filteredTables.some(t => String(t.id) === id)
   );
 
-  const pinnedCustom = allCustomCharts.filter(c => validPinnedIds.includes(String(c.id)));
-
   // Wide-format: filter by section/name
   const wideFilteredData = useMemo(()=>{
     if(!isWide) return objectData;
@@ -899,29 +1069,281 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const activeDateCol = activeDateRange.length === 1 ? activeDateRange[0] : null;
   const effectiveValueCol = activeDateCol || valueCol;
 
-  function buildLongPivot(pivotDef) {
-    return generatePivot(filteredData, pivotDef.rowDim, pivotDef.colDim||null, pivotDef.measure, pivotDef.aggregation||"sum");
-  }
+  const buildLongPivot = useCallback((pivotDef) => (
+    generatePivot(filteredData, pivotDef.rowDim, pivotDef.colDim||null, pivotDef.measure, pivotDef.aggregation||"sum")
+  ), [filteredData]);
 
-  const pinCustomChart = (id, chartObj = null) => {
+  const pinCustomChart = useCallback((id, chartObj = null) => {
     const chart = chartObj || allCustomCharts.find(c => String(c.id) === String(id));
     if (!chart) return;
     if (!isPinned(String(id))) {
-      addAndPinChart(chart); // single atomic save — chart + pinId together
+      addAndPinChart(chart); // single atomic save ??? chart + pinId together
     }
-  };
+  }, [addAndPinChart, allCustomCharts, isPinned]);
 
-  const removeCustom = (id) => {
+  const removeCustom = useCallback((id) => {
     setCustomCharts(prev => prev.filter(c => String(c.id) !== String(id)));
     removeCustomChart(id);
-  };
+  }, [removeCustomChart]);
 
-  const renameChart = (id, newTitle) => {
+  const renameChart = useCallback((id, newTitle) => {
     setCustomCharts(prev => prev.map(c =>
       c.id !== id ? c : { ...c, title: newTitle, spec: c.spec ? { ...c.spec, title: newTitle } : c.spec }
     ));
     renameCustomChart(id, newTitle);
-  };
+  }, [renameCustomChart]);
+
+const chartWidgets = useMemo(() => {
+    const items = [];
+    const addItem = (item) => items.push(item);
+    const sizeFor = () => ({ w: 12, h: 11, minH: 11, minW: 6 });
+
+    allCustomCharts.forEach(chart => {
+      const pinned = isPinned(String(chart.id));
+      const layoutId = `custom_${chart.id}`;
+      const size = sizeFor();
+      addItem({
+        layoutId,
+        title: chart.title || "Chart",
+        badge: pinned ? "PINNED" : "CUSTOM",
+        pinned,
+        onPin: () => pinCustomChart(String(chart.id)),
+        onClose: () => removeCustom(chart.id),
+        onRename: (t) => renameChart(chart.id, t),
+        defaultW: size.w,
+        defaultH: size.h,
+        minH: size.minH,
+        minW: size.minW,
+        render: () => <RenderChart chart={chart} filteredData={filteredData} />,
+      });
+    });
+
+    if (isWide) {
+      if (validPinnedIds.includes("wide_line") && periodData.length > 1) {
+        const size = sizeFor();
+        addItem({
+          layoutId: "auto_wide_line",
+          title: `${valueCol} over Time`,
+          badge: "PINNED",
+          pinned: true,
+          onPin: () => togglePin("wide_line"),
+          onClose: () => togglePin("wide_line"),
+          defaultW: size.w,
+          defaultH: size.h,
+          minH: size.minH,
+          minW: size.minW,
+          render: () => <SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol} />,
+        });
+      }
+      if (validPinnedIds.includes("wide_primary") && primaryPivot) {
+        const size = sizeFor();
+        addItem({
+          layoutId: "auto_wide_primary",
+          title: `${valueCol} by ${primaryCol}`,
+          badge: "PINNED",
+          pinned: true,
+          onPin: () => togglePin("wide_primary"),
+          onClose: () => togglePin("wide_primary"),
+          defaultW: size.w,
+          defaultH: size.h,
+          minH: size.minH,
+          minW: size.minW,
+          render: () => <PivotTableRenderer data={primaryPivot} />,
+        });
+      }
+      if (validPinnedIds.includes("wide_section") && sectionPivot) {
+        const size = sizeFor();
+        addItem({
+          layoutId: "auto_wide_section",
+          title: `${valueCol} by Section`,
+          badge: "PINNED",
+          pinned: true,
+          onPin: () => togglePin("wide_section"),
+          onClose: () => togglePin("wide_section"),
+          defaultW: size.w,
+          defaultH: size.h,
+          minH: size.minH,
+          minW: size.minW,
+          render: () => <PivotTableRenderer data={sectionPivot} />,
+        });
+      }
+    } else {
+      (blueprint.charts||[]).filter(c=>validPinnedIds.includes(c.id)).forEach(chart => {
+        const size = sizeFor();
+        addItem({
+          layoutId: `auto_${chart.id}`,
+          title: chart.title,
+          badge: "PINNED",
+          pinned: true,
+          onPin: () => togglePin(chart.id),
+          onClose: () => togglePin(chart.id),
+          defaultW: size.w,
+          defaultH: size.h,
+          minH: size.minH,
+          minW: size.minW,
+          render: () => (
+            <>
+              {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
+              {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} labels={{x:chart.x,y:chart.y}}/>}
+              {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
+            </>
+          ),
+        });
+      });
+      (blueprint.pivots||[]).filter(p=>validPinnedIds.includes(p.id)).forEach(pivot => {
+        const size = sizeFor();
+        addItem({
+          layoutId: `auto_${pivot.id}`,
+          title: pivot.title,
+          badge: "PINNED",
+          pinned: true,
+          onPin: () => togglePin(pivot.id),
+          onClose: () => togglePin(pivot.id),
+          defaultW: size.w,
+          defaultH: size.h,
+          minH: size.minH,
+          minW: size.minW,
+          render: () => <PivotTableRenderer data={buildLongPivot(pivot)} />,
+        });
+      });
+    }
+
+    return items;
+  }, [
+    allCustomCharts,
+    blueprint.charts,
+    blueprint.pivots,
+    buildLongPivot,
+    filteredData,
+    isPinned,
+    isWide,
+    periodCol,
+    periodData,
+    pinCustomChart,
+    primaryCol,
+    primaryPivot,
+    removeCustom,
+    renameChart,
+    sectionPivot,
+    togglePin,
+    validPinnedIds,
+    valueCol,
+  ]);
+
+  useEffect(() => {
+    const ids = new Set(chartWidgets.map(item => item.layoutId));
+    setMinimizedIds(prev => {
+      const next = prev.filter(id => ids.has(id));
+      if (next.length === prev.length && next.every((id, idx) => id === prev[idx])) return prev;
+      return next;
+    });
+    if (maximizedId && !ids.has(maximizedId)) setMaximizedId(null);
+  }, [chartWidgets, maximizedId]);
+
+  const persistLayout = useCallback((layout) => {
+    try { localStorage.setItem(layoutStorageKey, JSON.stringify(layout)); } catch {}
+  }, [layoutStorageKey]);
+
+  const mergeLayout = useCallback((prevLayout, widgets, minimizedSet) => {
+    const prevById = new Map(prevLayout.map(item => [item.i, item]));
+    const next = [];
+    let nextY = prevLayout.reduce((max, item) => Math.max(max, (item.y || 0) + (item.h || 0)), 0);
+    widgets.forEach((item, index) => {
+      const existing = prevById.get(item.layoutId);
+      if (existing) {
+        const isMinimized = minimizedSet?.has(item.layoutId);
+        const minH = existing.minH ?? item.minH ?? 11;
+        const minW = item.minW || 6;
+        const targetW = Math.max(existing.w || 0, item.defaultW || 0, minW);
+        const targetH = isMinimized ? Math.max(existing.h || 0, minH) : Math.max(existing.h || 0, item.defaultH || 0, minH);
+        next.push({
+          ...existing,
+          w: targetW,
+          h: targetH,
+          minH,
+          minW,
+        });
+        return;
+      }
+      const w = item.defaultW || 6;
+      const h = item.defaultH || 11;
+      const x = w === 12 ? 0 : (index * 6) % 12;
+      const newItem = { i: item.layoutId, x, y: nextY, w, h, minW: item.minW || 6, minH: item.minH || 11 };
+      next.push(newItem);
+      nextY += h;
+    });
+    return next;
+  }, []);
+
+  const layoutsEqual = useCallback((a, b) => {
+    if (a.length !== b.length) return false;
+    const byId = new Map(a.map(item => [item.i, item]));
+    for (const bi of b) {
+      const ai = byId.get(bi.i);
+      if (!ai) return false;
+      if (ai.x !== bi.x || ai.y !== bi.y || ai.w !== bi.w || ai.h !== bi.h || ai.minW !== bi.minW || ai.minH !== bi.minH) {
+        return false;
+      }
+    }
+    return true;
+  }, []);
+
+  const resolvedLayout = useMemo(() => mergeLayout(gridLayout, chartWidgets, minimizedSet), [gridLayout, chartWidgets, minimizedSet, mergeLayout]);
+
+  useEffect(() => {
+    if (!layoutsEqual(gridLayout, resolvedLayout)) {
+      setGridLayout(resolvedLayout);
+      persistLayout(resolvedLayout);
+    }
+  }, [gridLayout, resolvedLayout, layoutsEqual, persistLayout]);
+
+  const handleLayoutChange = useCallback((nextLayout) => {
+    setGridLayout(prev => {
+      if (skipNextLayoutChangeRef.current) {
+        skipNextLayoutChangeRef.current = false;
+        return prev;
+      }
+      const prevById = new Map(prev.map(item => [item.i, item]));
+      const mergedLayout = nextLayout.map(item => {
+        const prevItem = prevById.get(item.i);
+        return prevItem ? { ...prevItem, ...item } : item;
+      });
+      if (layoutsEqual(prev, mergedLayout)) return prev;
+      persistLayout(mergedLayout);
+      return mergedLayout;
+    });
+  }, [layoutsEqual, persistLayout]);
+
+  const toggleMinimize = useCallback((layoutId) => {
+    const isMinimized = minimizedIdsRef.current.includes(layoutId);
+    setGridLayout(prev => prev.map(item => {
+      if (item.i !== layoutId) return item;
+      if (isMinimized) {
+        const { origH, origMinH, origMaxH, minH: _minH, maxH: _maxH, ...rest } = item;
+        const next = {
+          ...rest,
+          h: origH ?? item.h,
+          minH: origMinH ?? _minH,
+        };
+        if (origMaxH != null) next.maxH = origMaxH;
+        return next;
+      }
+      return {
+        ...item,
+        origH: item.origH ?? item.h,
+        origMinH: item.origMinH ?? item.minH,
+        origMaxH: item.origMaxH ?? item.maxH,
+        h: MINIMIZED_ROWS,
+        minH: MINIMIZED_ROWS,
+        maxH: MINIMIZED_ROWS,
+      };
+    }));
+    setMinimizedIds(prev => isMinimized ? prev.filter(id => id !== layoutId) : [...prev, layoutId]);
+  }, []);
+
+  const maximizedWidget = useMemo(() => (
+    chartWidgets.find(item => item.layoutId === maximizedId) || null
+  ), [chartWidgets, maximizedId]);
 
   // Build a chart result from a spec, applying limit/sort/row-filters
   const buildChartResult = (spec, id) => {
@@ -1115,7 +1537,54 @@ export default function Dashboard({ data, blueprint, fileId }) {
 
   return (
     <div style={{ padding: "48px 32px 80px", maxWidth: 1280, width: "100%", margin: "0 auto", fontFamily: "'Manrope',sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+        .chart-grid { margin: 12px 0 28px; }
+        .chart-widget { height:100%; min-height:400px; background: var(--color-surface-elevated); border:1px solid var(--color-border); border-radius:16px; display:flex; flex-direction:column; box-shadow: var(--color-shadow-soft); transition: box-shadow 0.2s ease, transform 0.2s ease; overflow:hidden; box-sizing:border-box; position:relative; }
+        .chart-widget:hover { box-shadow: 0 10px 26px rgba(0,0,0,0.18); transform: translateY(-2px); }
+        .chart-widget__header { display:flex; align-items:center; justify-content:space-between; gap:12px; height:48px; padding:0 14px; border-bottom:1px solid var(--color-border); background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0)); cursor: grab; }
+        .chart-widget__header.is-locked { cursor: default; }
+        .chart-widget__title { display:flex; align-items:center; gap:10px; min-width:0; }
+        .chart-widget__badge { font-size:10px; padding:2px 8px; border-radius:100px; font-weight:700; letter-spacing:0.08em; white-space:nowrap; }
+        .chart-widget__actions { display:flex; align-items:center; gap:6px; }
+        .chart-widget__pin { background:none; border:1px solid #e8e3d9; border-radius:8px; padding:4px 8px; cursor:pointer; font-size:11px; font-weight:700; color:#9cafa4; display:flex; align-items:center; justify-content:center; }
+        .chart-widget__pin:hover { border-color:#046241; color:#046241; }
+        .chart-widget__pin img { width:14px; height:14px; display:block; opacity:0.8; }
+        .chart-widget__pin:hover img { opacity:1; }
+        .chart-widget__icon { width:28px; height:26px; border-radius:8px; border:1px solid #e8e3d9; background:#fff; cursor:pointer; font-size:12px; font-weight:700; color:#5b6b62; display:flex; align-items:center; justify-content:center; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease; background-repeat:no-repeat; background-position:center; background-size:16px 16px; }
+        .chart-widget__icon:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.12); border-color:#9cafa4; }
+        .chart-widget__icon--danger { color:#b45309; }
+        .chart-widget__lock.is-locked { background-color:#f3f1ed; border-color:#d6d0c6; }
+        .chart-widget__lock.is-unlocked { background-color:#ecf9f1; border-color:#046241; box-shadow: 0 0 0 2px rgba(4,98,65,0.12); }
+        .chart-widget__body { padding:16px; flex:1; overflow:hidden; transition: opacity 0.2s ease; }
+        .chart-widget__body.is-collapsed { opacity:0; visibility:hidden; }
+        .chart-widget__content { width:100%; height:100%; }
+        .chart-widget.is-minimized { height:48px; min-height:48px; border-color:#d7e2dc; }
+        .chart-widget.is-minimized .chart-widget__header { border-bottom:none; height:44px; padding:0 12px; }
+        .chart-widget.is-minimized .chart-widget__body { display:none; }
+        .react-grid-item { overflow: visible; }
+        .react-resizable-handle { opacity:0; background-image:none; background:transparent; z-index:10; pointer-events:auto; }
+        .react-resizable-handle::after { content:none; }
+        .react-resizable-handle-se,
+        .react-resizable-handle-sw,
+        .react-resizable-handle-ne,
+        .react-resizable-handle-nw { width:16px; height:16px; }
+        .react-resizable-handle-n,
+        .react-resizable-handle-s { width:100%; height:14px; left:0; transform:none; }
+        .react-resizable-handle-e,
+        .react-resizable-handle-w { height:100%; width:14px; top:0; transform:none; }
+        .react-grid-item.react-draggable-dragging .chart-widget { box-shadow: 0 16px 30px rgba(0,0,0,0.2); }
+        .chart-empty { border:1px dashed #d7e2dc; border-radius:16px; padding:28px; background: var(--color-surface-elevated); text-align:center; color:#6b7a71; }
+        .chart-empty h2 { margin:0 0 8px; font-size:18px; color: var(--color-text); }
+        .chart-empty p { margin:0; font-size:13px; }
+        .chart-modal { position: fixed; inset: 0; background: rgba(12, 18, 16, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: chart-modal-fade 0.2s ease; }
+        .chart-modal__panel { width: min(1200px, 92vw); height: min(80vh, 820px); background: var(--color-surface-elevated); border-radius: 18px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.28); animation: chart-modal-zoom 0.25s ease; display:flex; flex-direction:column; }
+        .chart-modal__header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+        .chart-modal__title { font-size:16px; font-weight:800; color: var(--color-text); }
+        .chart-modal__body { flex:1; overflow:auto; }
+        @keyframes chart-modal-fade { from { opacity:0; } to { opacity:1; } }
+        @keyframes chart-modal-zoom { from { transform: scale(0.96); opacity:0; } to { transform: scale(1); opacity:1; } }
+      `}</style>
 
       {aiGenerated&&datasetSummary&&<AIBanner summary={datasetSummary}/>}
       <DashboardNav activeView={activeView} setActiveView={setActiveView} pinnedCount={validPinnedIds.length} filteredTableCount={filteredTables.length}/>
@@ -1229,46 +1698,6 @@ export default function Dashboard({ data, blueprint, fileId }) {
       {/* ── CHARTS TAB ───────────────────────────────────── */}
       {activeView==="charts" && (
         <>
-
-          {/* Pinned section */}
-          {validPinnedIds.length>0&&(
-            <>
-              {pinnedCustom.map(chart=>(
-                <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1.5px solid ${LW.green}`,borderLeft:`4px solid ${LW.green}`}}>
-                  <SectionHeader title={chart.title} badge="PINNED" onPin={()=>pinCustomChart(String(chart.id))} pinned={true} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
-                  <RenderChart chart={chart} filteredData={filteredData}/>
-                </div>
-              ))}
-
-              {isWide&&validPinnedIds.includes("wide_line")&&periodData.length>1&&(
-                <Section pinned><SectionHeader title={`${valueCol} over Time`} badge="PINNED" onPin={()=>togglePin("wide_line")} pinned={true}/><SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol}/></Section>
-              )}
-              {isWide&&validPinnedIds.includes("wide_primary")&&primaryPivot&&(
-                <Section pinned><SectionHeader title={`${valueCol} by ${primaryCol}`} badge="PINNED" onPin={()=>togglePin("wide_primary")} pinned={true}/><PivotTableRenderer data={primaryPivot}/></Section>
-              )}
-              {isWide&&validPinnedIds.includes("wide_section")&&sectionPivot&&(
-                <Section pinned><SectionHeader title={`${valueCol} by Section`} badge="PINNED" onPin={()=>togglePin("wide_section")} pinned={true}/><PivotTableRenderer data={sectionPivot}/></Section>
-              )}
-              {!isWide&&blueprint.charts?.filter(c=>validPinnedIds.includes(c.id)).map(chart=>(
-                <Section key={chart.id} pinned>
-                  <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(chart.id)} pinned={true}/>
-                  {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
-                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} labels={{x:chart.x,y:chart.y}}/>}
-                  {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
-                </Section>
-              ))}
-              {!isWide&&blueprint.pivots?.filter(p=>validPinnedIds.includes(p.id)).map(pivot=>(
-                <Section key={pivot.id} pinned>
-                  <SectionHeader title={pivot.title} badge="PINNED" onPin={()=>togglePin(pivot.id)} pinned={true}/>
-                  <PivotTableRenderer data={buildLongPivot(pivot)}/>
-                </Section>
-              ))}
-
-              <Divider label="All Charts"/>
-            </>
-          )}
-
-          {/* Custom builder */}
           <Section>
             <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table"/>
             <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
@@ -1280,90 +1709,74 @@ export default function Dashboard({ data, blueprint, fileId }) {
               else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
               else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
               if(result) {
-                setCustomCharts(prev=>[result,...prev]); // session only — persists on pin
+                setCustomCharts(prev=>[result,...prev]); // session only - persists on pin
               }
             }}/>
           </Section>
-
-          {/* Unpinned custom charts */}
-          {allCustomCharts.filter(c=>!validPinnedIds.includes(String(c.id))).map(chart=>(
-            <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,borderLeft:`4px solid ${LW.saffron}`}}>
-               <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>pinCustomChart(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
-               <RenderChart chart={chart} filteredData={filteredData}/>
-             </div>
-          ))}
-
-          <Divider label="Analytics"/>
-
-          {/* Wide auto charts */}
-          {isWide&&(
+          {chartWidgets.length === 0 ? (
+            <div className="chart-empty">
+              <h2>Charts Dashboard</h2>
+              <p>No charts added yet.</p>
+              <p>Create charts using the chatbot and pin them here.</p>
+            </div>
+          ) : (
             <>
-              {periodData.length>1&&<Section><SectionHeader title={`${valueCol} over Time`} badge="AUTO" onPin={()=>togglePin("wide_line")} pinned={isPinned("wide_line")}/><SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol}/></Section>}
-              <div style={{display:"grid",gap:20,gridTemplateColumns:sectionPivot?"1fr 1fr":"1fr"}}>
-                {primaryPivot&&(
-                  <Section>
-                    <SectionHeader title={`${valueCol} by ${primaryCol}`} badge="AUTO" onPin={()=>togglePin("wide_primary")} pinned={isPinned("wide_primary")}/>
-                    <PivotTableRenderer data={
-                      wideFilters.section!=="all"||wideFilters.name!=="all"
-                        ? analyticsToPrebuiltPivot({
-                            headers:[primaryCol,"Production"],
-                            rows:wideFilteredData.map(r=>[
-                              r[primaryCol],
-                              activeDateRange.length > 1
-                                ? activeDateRange.reduce((s,dc)=>s+(Number(r[dc])||0),0)
-                                : (Number(r[effectiveValueCol])||0)
-                            ])
-                          }, primaryCol, "Production")
-                        : primaryPivot
-                    }/>
-                  </Section>
-                )}
-                {sectionPivot&&(
-                  <Section>
-                    <SectionHeader title={`${valueCol} by Section`} badge="AUTO" onPin={()=>togglePin("wide_section")} pinned={isPinned("wide_section")}/>
-                    <PivotTableRenderer data={
-                      wideFilters.section!=="all"||wideFilters.name!=="all"
-                        ? (()=>{
-                            const grouped={};
-                            wideFilteredData.forEach(r=>{
-                              const s=r[dataSectionCol||"Section"]||"Unknown";
-                              const v = activeDateRange.length > 1
-                                ? activeDateRange.reduce((sum,dc)=>sum+(Number(r[dc])||0),0)
-                                : (Number(r[effectiveValueCol])||0);
-                              grouped[s]=(grouped[s]||0)+v;
-                            });
-                            const rows=Object.entries(grouped).sort((a,b)=>b[1]-a[1]).map(([s,v])=>({Section:s,[effectiveValueCol]:v}));
-                            const total=rows.reduce((s,r)=>s+(Number(r[effectiveValueCol])||0),0);
-                            return{columns:["Section",effectiveValueCol],rows,totalRow:{Section:"Grand Total",[valueCol]:total},hasColDim:false};
-                          })()
-                        : sectionPivot
-                    }/>
-                  </Section>
-                )}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16, gap:16 }}>
+                <div>
+                  <div style={{ fontSize:18, fontWeight:800, color:LW.dark, marginBottom:4 }}>Charts Dashboard</div>
+                  <div style={{ fontSize:12, color:"#9cafa4", fontWeight:500 }}>Drag charts by the header and resize when unlocked.</div>
+                </div>
+              </div>
+              <div className="chart-grid">
+                <ReactGridLayout
+                  layout={resolvedLayout}
+                  cols={12}
+                  rowHeight={24}
+                  margin={[16,16]}
+                  containerPadding={[0,0]}
+                  isDraggable={!layoutLocked}
+                  isResizable={!layoutLocked}
+                  resizeHandles={["s","e","n","w","se","sw","ne","nw"]}
+                  draggableHandle=".chart-widget__header"
+                  draggableCancel=".chart-widget__actions, .chart-widget__pin, input, textarea"
+                  onLayoutChange={handleLayoutChange}
+                  compactType="vertical"
+                >
+                  {chartWidgets.map(item => (
+                    <div key={item.layoutId}>
+                      <ChartWidget
+                        item={item}
+                        locked={layoutLocked}
+                        minimized={minimizedIds.includes(item.layoutId)}
+                        onToggleLock={() => setLayoutLocked(v=>!v)}
+                        onToggleMinimize={() => toggleMinimize(item.layoutId)}
+                        onMaximize={() => setMaximizedId(item.layoutId)}
+                        onClose={item.onClose ? () => item.onClose() : null}
+                      />
+                    </div>
+                  ))}
+                </ReactGridLayout>
               </div>
             </>
           )}
 
-          {/* Long auto charts */}
-          {!isWide&&(
-            <>
-              {blueprint.charts?.map(chart=>(
-                <Section key={chart.id}>
-                  <SectionHeader title={chart.title} badge={aiGenerated?"AI":"AUTO"} onPin={()=>togglePin(chart.id)} pinned={isPinned(chart.id)}/>
-                  {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
-                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} labels={{x:chart.x,y:chart.y}}/>}
-                  {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
-                </Section>
-              ))}
-              <div style={{display:"grid",gap:20,gridTemplateColumns:blueprint.pivots?.length>1?"1fr 1fr":"1fr"}}>
-                {blueprint.pivots?.map(pivot=>(
-                  <Section key={pivot.id}>
-                    <SectionHeader title={pivot.title} badge={aiGenerated?"AI":"AUTO"} onPin={()=>togglePin(pivot.id)} pinned={isPinned(pivot.id)}/>
-                    <PivotTableRenderer data={buildLongPivot(pivot)}/>
-                  </Section>
-                ))}
+          {maximizedWidget && (
+            <div className="chart-modal" onClick={()=>setMaximizedId(null)}>
+              <div className="chart-modal__panel" onClick={e=>e.stopPropagation()}>
+                <div className="chart-modal__header">
+                  <div className="chart-modal__title">{maximizedWidget.title}</div>
+                  <button
+                    className="chart-widget__icon"
+                    aria-label="Close modal"
+                    onClick={()=>setMaximizedId(null)}
+                    style={{ backgroundImage: `url(${closeIcon})` }}
+                  />
+                </div>
+                <div className="chart-modal__body">
+                  {maximizedWidget.render()}
+                </div>
               </div>
-            </>
+            </div>
           )}
         </>
       )}

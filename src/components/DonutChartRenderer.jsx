@@ -35,7 +35,7 @@ export default function DonutChartRenderer({ data, config }) {
   const total = chartData.reduce((s, d) => s + d.value, 0);
 
   return (
-    <ResponsiveContainer width="100%" height={320}>
+    <ResponsiveContainer width="100%" height="100%">
       <PieChart>
         <Pie
           data={chartData}

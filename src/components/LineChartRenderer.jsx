@@ -69,7 +69,7 @@ export default function LineChartRenderer({ data, config }) {
   const marginBottom = angle !== 0 ? 60 : 10;
 
   return (
-    <ResponsiveContainer width="100%" height={340}>
+    <ResponsiveContainer width="100%" height="100%">
       <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: marginBottom }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-grid)" />
         <XAxis
