@@ -275,7 +275,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
     abortRef.current = new AbortController();
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/chat", {
+      const response = await fetch("https://daily-headcount-ai-backend.onrender.com/chat", {
         signal: abortRef.current.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
