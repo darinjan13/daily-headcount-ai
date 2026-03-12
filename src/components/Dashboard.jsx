@@ -174,7 +174,7 @@ function Section({ children, accent, pinned }) {
   );
 }
 
-function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRename }) {
+function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRename, onHide }) {
   const bs = { AI:{bg:LW.dark,color:LW.saffron}, AUTO:{bg:LW.green,color:"#fff"}, "RAW DATA":{bg:LW.paper,color:LW.dark}, CUSTOM:{bg:"#fff3dc",color:"#c17110"}, PINNED:{bg:LW.green,color:"#fff"}, "AI FILTER":{bg:LW.dark,color:LW.saffron} };
   const b = bs[badge]||{bg:LW.paper,color:LW.dark};
   const [editing, setEditing] = useState(false);
@@ -212,6 +212,14 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRena
         {subtitle && <p style={{ fontSize:12, color:"#9cafa4", margin:"4px 0 0", fontWeight:500 }}>{subtitle}</p>}
       </div>
       <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+        {onHide && (
+          <button
+            onClick={onHide}
+            style={{ background:"none", border:`1px solid ${UI.border}`, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, color:"#9cafa4" }}
+          >
+            Hide
+          </button>
+        )}
         {onPin && (
           <button onClick={onPin} style={{ background:"none", border:`1px solid ${pinned?LW.green:"#e8e3d9"}`, borderRadius:8, padding:"4px 10px", cursor:"pointer", fontSize:12, fontWeight:700, color:pinned?LW.green:"#9cafa4" }}>
             {pinned?"📌 Pinned":"📌 Pin"}
@@ -765,6 +773,374 @@ function RenderChart({ chart, filteredData, onDrilldown }) {
   return null;
 }
 
+function getChartWorkspaceDefault(card) {
+  if (card.kind === "pivot") return { span: 6, height: 460 };
+  if (card.kind === "wide_line") return { span: 12, height: 460 };
+  if (card.kind === "line") return { span: 12, height: 440 };
+  return { span: 6, height: 430 };
+}
+
+function getWorkspaceMetrics(width) {
+  const gap = 20;
+  const safeWidth = Math.max(width || 0, 360);
+  const colWidth = Math.max((safeWidth - gap * 11) / 12, 20);
+  return { gap, colWidth };
+}
+
+function getCardPixelWidth(span, workspaceWidth) {
+  const { gap, colWidth } = getWorkspaceMetrics(workspaceWidth);
+  return colWidth * span + gap * Math.max(span - 1, 0);
+}
+
+function buildChartLayouts(cards, previousLayouts, workspaceWidth) {
+  const gap = 20;
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+
+  return cards.reduce((acc, card) => {
+    const defaults = getChartWorkspaceDefault(card);
+    const prev = previousLayouts?.[card.id] || {};
+    const span = prev.span ?? defaults.span;
+    const height = prev.height ?? defaults.height;
+    const cardWidth = getCardPixelWidth(span, workspaceWidth);
+    const hasStoredPosition = typeof prev.x === "number" && typeof prev.y === "number";
+
+    if (!hasStoredPosition && cursorX > 0 && cursorX + cardWidth > workspaceWidth) {
+      cursorX = 0;
+      cursorY += rowHeight + gap;
+      rowHeight = 0;
+    }
+
+    acc[card.id] = {
+      span,
+      height,
+      hidden: prev.hidden ?? false,
+      x: hasStoredPosition ? prev.x : cursorX,
+      y: hasStoredPosition ? prev.y : cursorY,
+    };
+
+    if (!hasStoredPosition) {
+      cursorX += cardWidth + gap;
+      rowHeight = Math.max(rowHeight, height);
+    }
+
+    return acc;
+  }, {});
+}
+
+function WindowActionButton({ label, title, active = false, tone = "neutral", compact = false, onClick }) {
+  const tones = {
+    neutral: {
+      border: UI.border,
+      color: "#7c8f85",
+      glow: "rgba(19, 48, 32, 0.12)",
+      activeBg: UI.surface,
+      activeColor: UI.text,
+    },
+    green: {
+      border: "rgba(4, 98, 65, 0.26)",
+      color: LW.green,
+      glow: "rgba(4, 98, 65, 0.18)",
+      activeBg: "rgba(4, 98, 65, 0.10)",
+      activeColor: LW.green,
+    },
+    saffron: {
+      border: "rgba(255, 179, 71, 0.34)",
+      color: "#c17110",
+      glow: "rgba(255, 179, 71, 0.24)",
+      activeBg: "rgba(255, 179, 71, 0.14)",
+      activeColor: "#9a5e08",
+    },
+  };
+
+  const theme = tones[tone] || tones.neutral;
+  const basePadding = compact ? "0" : "0 12px";
+
+  return (
+    <button
+      type="button"
+      title={title || label}
+      onClick={onClick}
+      style={{
+        minWidth: compact ? 34 : "auto",
+        height: 30,
+        padding: basePadding,
+        borderRadius: 10,
+        border: `1px solid ${theme.border}`,
+        background: active ? theme.activeBg : "rgba(255,255,255,0.7)",
+        color: active ? theme.activeColor : theme.color,
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        boxShadow: active ? `0 8px 16px ${theme.glow}` : "0 1px 2px rgba(19, 48, 32, 0.06)",
+        transition: "transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease",
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = "translateY(-1px)";
+        e.currentTarget.style.boxShadow = `0 10px 18px ${theme.glow}`;
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = "translateY(0)";
+        e.currentTarget.style.boxShadow = active ? `0 8px 16px ${theme.glow}` : "0 1px 2px rgba(19, 48, 32, 0.06)";
+      }}
+      onMouseDown={e => {
+        e.stopPropagation();
+        e.currentTarget.style.transform = "translateY(1px) scale(0.98)";
+      }}
+      onPointerDown={e => {
+        e.stopPropagation();
+      }}
+      onMouseUp={e => {
+        e.currentTarget.style.transform = "translateY(-1px)";
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function MacWindowControls({
+  canHide,
+  isMinimized,
+  isFullscreen,
+  onHide,
+  onToggleMinimize,
+  onToggleFullscreen,
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  const controls = [
+    {
+      key: "hide",
+      bg: "#ff5f57",
+      symbol: "x",
+      action: onHide,
+      enabled: canHide,
+      title: "Hide chart",
+    },
+    {
+      key: "minimize",
+      bg: "#febc2e",
+      symbol: isMinimized ? "+" : "-",
+      action: onToggleMinimize,
+      enabled: true,
+      title: isMinimized ? "Restore chart" : "Minimize chart",
+    },
+    {
+      key: "fullscreen",
+      bg: "#28c840",
+      symbol: isFullscreen ? "−" : "+",
+      action: onToggleFullscreen,
+      enabled: true,
+      title: isFullscreen ? "Exit fullscreen" : "Open fullscreen",
+    },
+  ];
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}
+    >
+      {controls.map(control => (
+        <button
+          key={control.key}
+          type="button"
+          title={control.title}
+          disabled={!control.enabled}
+          onClick={control.action}
+          onMouseDown={e=>e.stopPropagation()}
+          onPointerDown={e=>e.stopPropagation()}
+          style={{
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            border: "1px solid rgba(0,0,0,0.14)",
+            background: control.enabled ? control.bg : "rgba(156, 175, 164, 0.45)",
+            color: "rgba(0,0,0,0.62)",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+            cursor: control.enabled ? "pointer" : "not-allowed",
+            boxShadow: hovered && control.enabled ? "0 4px 10px rgba(0,0,0,0.14)" : "none",
+            transform: hovered && control.enabled ? "translateY(-1px)" : "translateY(0)",
+            transition: "transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease",
+            filter: control.enabled ? "saturate(1)" : "saturate(0.6)",
+            fontSize: 8,
+            fontWeight: 800,
+            lineHeight: 1,
+          }}
+        >
+          <span style={{ opacity: hovered && control.enabled ? 1 : 0, transition: "opacity 0.14s ease" }}>
+            {control.symbol}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ChartWorkspaceCard({
+  card,
+  layout,
+  workspaceWidth,
+  locked,
+  minimized,
+  visibilityState,
+  isDragging,
+  onDragStart,
+  onResizeStart,
+  onToggleMinimize,
+  onToggleFullscreen,
+  children,
+}) {
+  const accent = card.accent || (card.badge === "PINNED" ? LW.green : card.badge === "CUSTOM" ? LW.saffron : LW.green);
+  const borderColor = card.badge === "PINNED" ? LW.green : UI.border;
+  const cardHeight = minimized ? 58 : layout.height;
+  const cardWidth = getCardPixelWidth(layout.span, workspaceWidth);
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: layout.x || 0,
+        top: layout.y || 0,
+        width: cardWidth,
+        opacity: visibilityState === "closing" ? 0 : isDragging ? 0.42 : 1,
+        transform: visibilityState === "closing"
+          ? "scale(0.96) translateY(-6px)"
+          : visibilityState === "opening"
+            ? "scale(0.985) translateY(4px)"
+            : "none",
+        transition: "transform 0.22s ease, opacity 0.22s ease, box-shadow 0.18s ease",
+        zIndex: isDragging ? 25 : 1,
+      }}
+    >
+      <div
+        style={{
+          height: cardHeight,
+          minHeight: minimized ? 58 : 320,
+          background: UI.surfaceElevated,
+          borderRadius: 16,
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: isDragging ? "0 18px 32px rgba(4, 98, 65, 0.16)" : "var(--color-shadow-soft)",
+          border: `1.5px solid ${borderColor}`,
+          borderLeft: `4px solid ${accent}`,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          onPointerDown={(event) => onDragStart(event, card.id)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+            padding: "12px 16px",
+            background: "linear-gradient(180deg, rgba(19,48,32,0.04), rgba(19,48,32,0))",
+            borderBottom: `1px solid ${UI.border}`,
+            cursor: locked ? "default" : isDragging ? "grabbing" : "grab",
+            userSelect: "none",
+            touchAction: "none",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+            <MacWindowControls
+              canHide={Boolean(card.onHide)}
+              isMinimized={minimized}
+              isFullscreen={Boolean(card.isFullscreen)}
+              onHide={card.onHide}
+              onToggleMinimize={onToggleMinimize}
+              onToggleFullscreen={onToggleFullscreen}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: UI.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {card.title}
+                </div>
+                {card.badge && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 100, fontWeight: 700, letterSpacing: "0.08em", background: card.badge === "PINNED" ? LW.green : card.badge === "CUSTOM" ? "#fff3dc" : LW.green, color: card.badge === "CUSTOM" ? "#c17110" : "#fff", flexShrink: 0 }}>{card.badge}</span>}
+              </div>
+              {card.subtitle && <div style={{ fontSize: 11, color: "#9cafa4", marginTop: 2 }}>{card.subtitle}</div>}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#9cafa4", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              {locked ? "Locked" : "Drag"}
+            </span>
+            {card.onPin && (
+              <WindowActionButton
+                label={card.pinned ? "Unpin" : "Pin"}
+                title={card.pinned ? "Remove from pinned charts" : "Pin chart"}
+                active={card.pinned}
+                tone={card.pinned ? "green" : "saffron"}
+                onClick={card.onPin}
+              />
+            )}
+            {card.onRemove && (
+              <WindowActionButton
+                label="x"
+                title="Remove chart"
+                compact
+                tone="saffron"
+                onClick={card.onRemove}
+              />
+            )}
+          </div>
+        </div>
+
+        <div
+          style={{
+            flex: minimized ? "0 0 auto" : 1,
+            minHeight: 0,
+            overflow: "hidden",
+            maxHeight: minimized ? 0 : Math.max(180, layout.height - 70),
+            opacity: minimized ? 0 : 1,
+            transition: "max-height 0.24s ease, opacity 0.2s ease",
+          }}
+        >
+          <div style={{ height: "100%", overflow: "auto", padding: 16 }}>
+            {children}
+          </div>
+        </div>
+
+        {!locked && !minimized && (
+          <button
+            type="button"
+            aria-label={`Resize ${card.title}`}
+            onPointerDown={(event) => onResizeStart(event, card.id)}
+            style={{
+              position: "absolute",
+              right: 10,
+              bottom: 10,
+              width: 18,
+              height: 18,
+              border: "none",
+              background: "transparent",
+              cursor: "nwse-resize",
+              padding: 0,
+            }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <path d="M6 12L12 6" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M9 14L14 9" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
+              <path d="M12 16L16 12" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 
 export default function Dashboard({ data, blueprint, fileId }) {
@@ -855,7 +1231,18 @@ export default function Dashboard({ data, blueprint, fileId }) {
     filteredTables.some(t => String(t.id) === id)
   );
 
-  const pinnedCustom = allCustomCharts.filter(c => validPinnedIds.includes(String(c.id)));
+  const chartWorkspaceStorageKey = `chart_workspace_${fileId||"default"}`;
+  const workspaceRef = useRef(null);
+  const resizeRef = useRef(null);
+  const dragRef = useRef(null);
+  const [chartOrder, setChartOrder] = useState([]);
+  const [chartLayouts, setChartLayouts] = useState({});
+  const [draggedChartId, setDraggedChartId] = useState(null);
+  const [layoutLocked, setLayoutLocked] = useState(false);
+  const [minimizedCharts, setMinimizedCharts] = useState({});
+  const [fullscreenChartId, setFullscreenChartId] = useState(null);
+  const [chartVisibilityState, setChartVisibilityState] = useState({});
+  const [workspaceWidth, setWorkspaceWidth] = useState(1120);
 
   // Wide-format: filter by section/name
   const wideFilteredData = useMemo(()=>{
@@ -1106,12 +1493,334 @@ export default function Dashboard({ data, blueprint, fileId }) {
     }
   };
 
-  const Divider = ({label}) => (
-    <div style={{position:"relative",margin:"8px 0 24px",textAlign:"center"}}>
-      <div style={{height:1,background:"#e8e3d9"}}/>
-      <span style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:LW.salt,padding:"0 16px",fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.12em",textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>
-    </div>
-  );
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(chartWorkspaceStorageKey) || "{}");
+      setChartOrder(Array.isArray(saved.order) ? saved.order : []);
+      setChartLayouts(saved.layouts && typeof saved.layouts === "object" ? saved.layouts : {});
+      setLayoutLocked(Boolean(saved.locked));
+      setMinimizedCharts(saved.minimized && typeof saved.minimized === "object" ? saved.minimized : {});
+    } catch {
+      setChartOrder([]);
+      setChartLayouts({});
+      setLayoutLocked(false);
+      setMinimizedCharts({});
+    }
+  }, [chartWorkspaceStorageKey]);
+
+  const setChartHidden = (cardId, hidden) => {
+    if (hidden) {
+      setChartVisibilityState(prev => ({ ...prev, [cardId]: "closing" }));
+      window.setTimeout(() => {
+        setChartLayouts(prev => ({
+          ...prev,
+          [cardId]: {
+            ...(prev[cardId] || {}),
+            hidden: true,
+          },
+        }));
+        setChartVisibilityState(prev => {
+          const next = { ...prev };
+          delete next[cardId];
+          return next;
+        });
+      }, 180);
+      return;
+    }
+
+    setChartLayouts(prev => ({
+      ...prev,
+      [cardId]: {
+        ...(prev[cardId] || {}),
+        hidden: false,
+      },
+    }));
+    setChartVisibilityState(prev => ({ ...prev, [cardId]: "opening" }));
+    window.setTimeout(() => {
+      setChartVisibilityState(prev => {
+        const next = { ...prev };
+        delete next[cardId];
+        return next;
+      });
+    }, 220);
+  };
+
+  const chartCards = [
+    ...allCustomCharts.map(chart => ({
+      id: `custom-${chart.id}`,
+      kind: chart.type === "pivot" ? "pivot" : chart.type,
+      title: chart.title,
+      badge: isPinned(String(chart.id)) ? "PINNED" : "CUSTOM",
+      pinned: isPinned(String(chart.id)),
+      onPin: () => {
+        if (isPinned(String(chart.id))) togglePin(String(chart.id));
+        else pinCustomChart(String(chart.id));
+      },
+      onRemove: () => removeCustom(chart.id),
+      onRename: t => renameChart(chart.id, t),
+      onHide: () => setChartHidden(`custom-${chart.id}`, true),
+      isFullscreen: fullscreenChartId === `custom-${chart.id}`,
+      render: <RenderChart chart={chart} filteredData={filteredData} />,
+    })),
+    ...(isWide && isPinned("wide_line") && periodData.length > 1 ? [{
+      id: "auto-wide-line",
+      sourceId: "wide_line",
+      kind: "wide_line",
+      title: `${valueCol} over Time`,
+      badge: isPinned("wide_line") ? "PINNED" : "AUTO",
+      pinned: isPinned("wide_line"),
+      onPin: () => togglePin("wide_line"),
+      onHide: () => setChartHidden("auto-wide-line", true),
+      isFullscreen: fullscreenChartId === "auto-wide-line",
+      render: <SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol} />,
+    }] : []),
+    ...(isWide && isPinned("wide_primary") && primaryPivot ? [{
+      id: "auto-wide-primary",
+      sourceId: "wide_primary",
+      kind: "pivot",
+      title: `${valueCol} by ${primaryCol}`,
+      badge: isPinned("wide_primary") ? "PINNED" : "AUTO",
+      pinned: isPinned("wide_primary"),
+      onPin: () => togglePin("wide_primary"),
+      onHide: () => setChartHidden("auto-wide-primary", true),
+      isFullscreen: fullscreenChartId === "auto-wide-primary",
+      render: (
+        <PivotTableRenderer data={
+          wideFilters.section!=="all"||wideFilters.name!=="all"
+            ? analyticsToPrebuiltPivot({
+                headers:[primaryCol,"Production"],
+                rows:wideFilteredData.map(r=>[
+                  r[primaryCol],
+                  activeDateRange.length > 1
+                    ? activeDateRange.reduce((s,dc)=>s+(Number(r[dc])||0),0)
+                    : (Number(r[effectiveValueCol])||0)
+                ])
+              }, primaryCol, "Production")
+            : primaryPivot
+        } />
+      ),
+    }] : []),
+    ...(isWide && isPinned("wide_section") && sectionPivot ? [{
+      id: "auto-wide-section",
+      sourceId: "wide_section",
+      kind: "pivot",
+      title: `${valueCol} by Section`,
+      badge: isPinned("wide_section") ? "PINNED" : "AUTO",
+      pinned: isPinned("wide_section"),
+      onPin: () => togglePin("wide_section"),
+      onHide: () => setChartHidden("auto-wide-section", true),
+      isFullscreen: fullscreenChartId === "auto-wide-section",
+      render: (
+        <PivotTableRenderer data={
+          wideFilters.section!=="all"||wideFilters.name!=="all"
+            ? (()=> {
+                const grouped={};
+                wideFilteredData.forEach(r=>{
+                  const s=r[dataSectionCol||"Section"]||"Unknown";
+                  const v = activeDateRange.length > 1
+                    ? activeDateRange.reduce((sum,dc)=>sum+(Number(r[dc])||0),0)
+                    : (Number(r[effectiveValueCol])||0);
+                  grouped[s]=(grouped[s]||0)+v;
+                });
+                const rows=Object.entries(grouped).sort((a,b)=>b[1]-a[1]).map(([s,v])=>({Section:s,[effectiveValueCol]:v}));
+                const total=rows.reduce((s,r)=>s+(Number(r[effectiveValueCol])||0),0);
+                return { columns:["Section",effectiveValueCol], rows, totalRow:{Section:"Grand Total",[valueCol]:total}, hasColDim:false };
+              })()
+            : sectionPivot
+        } />
+      ),
+    }] : []),
+    ...(!isWide ? (blueprint.charts || []).filter(chart => isPinned(chart.id)).map(chart => ({
+      id: `auto-chart-${chart.id}`,
+      sourceId: chart.id,
+      kind: chart.type,
+      title: chart.title,
+      badge: isPinned(chart.id) ? "PINNED" : (aiGenerated ? "AI" : "AUTO"),
+      pinned: isPinned(chart.id),
+      onPin: () => togglePin(chart.id),
+      onHide: () => setChartHidden(`auto-chart-${chart.id}`, true),
+      isFullscreen: fullscreenChartId === `auto-chart-${chart.id}`,
+      render: (
+        <>
+          {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
+          {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} labels={{x:chart.x,y:chart.y}}/>}
+          {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
+        </>
+      ),
+    })) : []),
+    ...(!isWide ? (blueprint.pivots || []).filter(pivot => isPinned(pivot.id)).map(pivot => ({
+      id: `auto-pivot-${pivot.id}`,
+      sourceId: pivot.id,
+      kind: "pivot",
+      title: pivot.title,
+      badge: isPinned(pivot.id) ? "PINNED" : (aiGenerated ? "AI" : "AUTO"),
+      pinned: isPinned(pivot.id),
+      onPin: () => togglePin(pivot.id),
+      onHide: () => setChartHidden(`auto-pivot-${pivot.id}`, true),
+      isFullscreen: fullscreenChartId === `auto-pivot-${pivot.id}`,
+      render: <PivotTableRenderer data={buildLongPivot(pivot)} />,
+    })) : []),
+  ];
+
+  const chartCardIds = chartCards.map(card => card.id);
+  const orderedChartCards = chartOrder
+    .map(id => chartCards.find(card => card.id === id))
+    .filter(Boolean);
+
+  const visibleChartCards = orderedChartCards.filter(card => !chartLayouts[card.id]?.hidden);
+  const hiddenChartCards = orderedChartCards.filter(card => chartLayouts[card.id]?.hidden);
+  const workspaceHeight = visibleChartCards.length
+    ? Math.max(
+        ...visibleChartCards.map(card => {
+          const layout = chartLayouts[card.id] || getChartWorkspaceDefault(card);
+          const cardHeight = minimizedCharts[card.id] ? 58 : layout.height;
+          return (layout.y || 0) + cardHeight;
+        }),
+      ) + 24
+    : 360;
+
+  useEffect(() => {
+    if (activeView !== "charts") return;
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+
+    const syncWidth = () => {
+      const nextWidth = workspace.getBoundingClientRect().width;
+      if (nextWidth > 0) setWorkspaceWidth(nextWidth);
+    };
+
+    syncWidth();
+
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(syncWidth);
+    observer.observe(workspace);
+    return () => observer.disconnect();
+  }, [activeView, chartCardIds.length]);
+
+  useEffect(() => {
+    setChartOrder(prev => {
+      const kept = prev.filter(id => chartCardIds.includes(id));
+      const missing = chartCardIds.filter(id => !kept.includes(id));
+      return [...kept, ...missing];
+    });
+
+    setChartLayouts(prev => buildChartLayouts(chartCards, prev, workspaceWidth));
+  }, [chartCardIds.join("|"), workspaceWidth]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(chartWorkspaceStorageKey, JSON.stringify({
+        order: chartOrder,
+        layouts: chartLayouts,
+        locked: layoutLocked,
+        minimized: minimizedCharts,
+      }));
+    } catch {}
+  }, [chartWorkspaceStorageKey, chartOrder, chartLayouts, layoutLocked, minimizedCharts]);
+
+  const handleChartDragStart = (event, cardId) => {
+    if (layoutLocked) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.button !== 0) return;
+
+    const workspace = workspaceRef.current;
+    const layout = chartLayouts[cardId];
+    if (!workspace || !layout) return;
+
+    const workspaceRect = workspace.getBoundingClientRect();
+    const cardWidth = getCardPixelWidth(layout.span, workspaceRect.width);
+    dragRef.current = {
+      cardId,
+      workspaceRect,
+      cardWidth,
+      offsetX: event.clientX - workspaceRect.left - (layout.x || 0),
+      offsetY: event.clientY - workspaceRect.top - (layout.y || 0),
+    };
+    setDraggedChartId(cardId);
+
+    const onPointerMove = moveEvent => {
+      const state = dragRef.current;
+      if (!state) return;
+
+      const nextX = Math.max(
+        0,
+        Math.min(
+          state.workspaceRect.width - state.cardWidth,
+          moveEvent.clientX - state.workspaceRect.left - state.offsetX,
+        ),
+      );
+      const nextY = Math.max(0, moveEvent.clientY - state.workspaceRect.top - state.offsetY);
+
+      setChartLayouts(prev => ({
+        ...prev,
+        [cardId]: {
+          ...(prev[cardId] || {}),
+          x: nextX,
+          y: nextY,
+        },
+      }));
+    };
+
+    const onPointerUp = () => {
+      dragRef.current = null;
+      setDraggedChartId(null);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  };
+
+  const handleChartResizeStart = (event, cardId) => {
+    if (layoutLocked) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+
+    const current = chartLayouts[cardId] || { span: 6, height: 430 };
+    resizeRef.current = {
+      cardId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startSpan: current.span,
+      startHeight: current.height,
+      workspaceWidth: workspace.getBoundingClientRect().width,
+    };
+
+    const onPointerMove = moveEvent => {
+      const state = resizeRef.current;
+      if (!state) return;
+      const dx = moveEvent.clientX - state.startX;
+      const dy = moveEvent.clientY - state.startY;
+      const colWidth = Math.max(state.workspaceWidth / 12, 1);
+      const span = Math.max(4, Math.min(12, Math.round((state.startSpan * colWidth + dx) / colWidth)));
+      const height = Math.max(320, Math.min(760, state.startHeight + dy));
+      setChartLayouts(prev => ({
+        ...prev,
+        [cardId]: {
+          ...(prev[cardId] || {}),
+          span,
+          height,
+          x: Math.max(0, Math.min(prev[cardId]?.x ?? 0, state.workspaceWidth - getCardPixelWidth(span, state.workspaceWidth))),
+        },
+      }));
+    };
+
+    const onPointerUp = () => {
+      resizeRef.current = null;
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  };
 
   return (
     <div style={{ padding: "48px 32px 80px", maxWidth: 1280, width: "100%", margin: "0 auto", fontFamily: "'Manrope',sans-serif" }}>
@@ -1229,45 +1938,6 @@ export default function Dashboard({ data, blueprint, fileId }) {
       {/* ── CHARTS TAB ───────────────────────────────────── */}
       {activeView==="charts" && (
         <>
-
-          {/* Pinned section */}
-          {validPinnedIds.length>0&&(
-            <>
-              {pinnedCustom.map(chart=>(
-                <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1.5px solid ${LW.green}`,borderLeft:`4px solid ${LW.green}`}}>
-                  <SectionHeader title={chart.title} badge="PINNED" onPin={()=>pinCustomChart(String(chart.id))} pinned={true} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
-                  <RenderChart chart={chart} filteredData={filteredData}/>
-                </div>
-              ))}
-
-              {isWide&&validPinnedIds.includes("wide_line")&&periodData.length>1&&(
-                <Section pinned><SectionHeader title={`${valueCol} over Time`} badge="PINNED" onPin={()=>togglePin("wide_line")} pinned={true}/><SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol}/></Section>
-              )}
-              {isWide&&validPinnedIds.includes("wide_primary")&&primaryPivot&&(
-                <Section pinned><SectionHeader title={`${valueCol} by ${primaryCol}`} badge="PINNED" onPin={()=>togglePin("wide_primary")} pinned={true}/><PivotTableRenderer data={primaryPivot}/></Section>
-              )}
-              {isWide&&validPinnedIds.includes("wide_section")&&sectionPivot&&(
-                <Section pinned><SectionHeader title={`${valueCol} by Section`} badge="PINNED" onPin={()=>togglePin("wide_section")} pinned={true}/><PivotTableRenderer data={sectionPivot}/></Section>
-              )}
-              {!isWide&&blueprint.charts?.filter(c=>validPinnedIds.includes(c.id)).map(chart=>(
-                <Section key={chart.id} pinned>
-                  <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(chart.id)} pinned={true}/>
-                  {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
-                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} labels={{x:chart.x,y:chart.y}}/>}
-                  {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
-                </Section>
-              ))}
-              {!isWide&&blueprint.pivots?.filter(p=>validPinnedIds.includes(p.id)).map(pivot=>(
-                <Section key={pivot.id} pinned>
-                  <SectionHeader title={pivot.title} badge="PINNED" onPin={()=>togglePin(pivot.id)} pinned={true}/>
-                  <PivotTableRenderer data={buildLongPivot(pivot)}/>
-                </Section>
-              ))}
-
-              <Divider label="All Charts"/>
-            </>
-          )}
-
           {/* Custom builder */}
           <Section>
             <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table"/>
@@ -1285,86 +1955,118 @@ export default function Dashboard({ data, blueprint, fileId }) {
             }}/>
           </Section>
 
-          {/* Unpinned custom charts */}
-          {allCustomCharts.filter(c=>!validPinnedIds.includes(String(c.id))).map(chart=>(
-            <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,borderLeft:`4px solid ${LW.saffron}`}}>
-               <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>pinCustomChart(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
-               <RenderChart chart={chart} filteredData={filteredData}/>
-             </div>
-          ))}
-
-          <Divider label="Analytics"/>
-
-          {/* Wide auto charts */}
-          {isWide&&(
-            <>
-              {periodData.length>1&&<Section><SectionHeader title={`${valueCol} over Time`} badge="AUTO" onPin={()=>togglePin("wide_line")} pinned={isPinned("wide_line")}/><SimpleAreaChart data={periodData} xKey={periodCol} yKey={valueCol}/></Section>}
-              <div style={{display:"grid",gap:20,gridTemplateColumns:sectionPivot?"1fr 1fr":"1fr"}}>
-                {primaryPivot&&(
-                  <Section>
-                    <SectionHeader title={`${valueCol} by ${primaryCol}`} badge="AUTO" onPin={()=>togglePin("wide_primary")} pinned={isPinned("wide_primary")}/>
-                    <PivotTableRenderer data={
-                      wideFilters.section!=="all"||wideFilters.name!=="all"
-                        ? analyticsToPrebuiltPivot({
-                            headers:[primaryCol,"Production"],
-                            rows:wideFilteredData.map(r=>[
-                              r[primaryCol],
-                              activeDateRange.length > 1
-                                ? activeDateRange.reduce((s,dc)=>s+(Number(r[dc])||0),0)
-                                : (Number(r[effectiveValueCol])||0)
-                            ])
-                          }, primaryCol, "Production")
-                        : primaryPivot
-                    }/>
-                  </Section>
-                )}
-                {sectionPivot&&(
-                  <Section>
-                    <SectionHeader title={`${valueCol} by Section`} badge="AUTO" onPin={()=>togglePin("wide_section")} pinned={isPinned("wide_section")}/>
-                    <PivotTableRenderer data={
-                      wideFilters.section!=="all"||wideFilters.name!=="all"
-                        ? (()=>{
-                            const grouped={};
-                            wideFilteredData.forEach(r=>{
-                              const s=r[dataSectionCol||"Section"]||"Unknown";
-                              const v = activeDateRange.length > 1
-                                ? activeDateRange.reduce((sum,dc)=>sum+(Number(r[dc])||0),0)
-                                : (Number(r[effectiveValueCol])||0);
-                              grouped[s]=(grouped[s]||0)+v;
-                            });
-                            const rows=Object.entries(grouped).sort((a,b)=>b[1]-a[1]).map(([s,v])=>({Section:s,[effectiveValueCol]:v}));
-                            const total=rows.reduce((s,r)=>s+(Number(r[effectiveValueCol])||0),0);
-                            return{columns:["Section",effectiveValueCol],rows,totalRow:{Section:"Grand Total",[valueCol]:total},hasColDim:false};
-                          })()
-                        : sectionPivot
-                    }/>
-                  </Section>
-                )}
+          {hiddenChartCards.length > 0 && (
+            <div style={{ marginBottom: 20, padding: "14px 16px", borderRadius: 14, background: UI.surfaceElevated, border: `1px solid ${UI.border}`, boxShadow: "var(--color-shadow-soft)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#9cafa4", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 10 }}>
+                Hidden Charts
               </div>
-            </>
-          )}
-
-          {/* Long auto charts */}
-          {!isWide&&(
-            <>
-              {blueprint.charts?.map(chart=>(
-                <Section key={chart.id}>
-                  <SectionHeader title={chart.title} badge={aiGenerated?"AI":"AUTO"} onPin={()=>togglePin(chart.id)} pinned={isPinned(chart.id)}/>
-                  {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
-                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} labels={{x:chart.x,y:chart.y}}/>}
-                  {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
-                </Section>
-              ))}
-              <div style={{display:"grid",gap:20,gridTemplateColumns:blueprint.pivots?.length>1?"1fr 1fr":"1fr"}}>
-                {blueprint.pivots?.map(pivot=>(
-                  <Section key={pivot.id}>
-                    <SectionHeader title={pivot.title} badge={aiGenerated?"AI":"AUTO"} onPin={()=>togglePin(pivot.id)} pinned={isPinned(pivot.id)}/>
-                    <PivotTableRenderer data={buildLongPivot(pivot)}/>
-                  </Section>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                {hiddenChartCards.map(card => (
+                  <button
+                    key={card.id}
+                    onClick={() => setChartHidden(card.id, false)}
+                    style={{ padding: "8px 12px", borderRadius: 999, border: `1px solid ${UI.border}`, background: UI.surface, color: UI.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    Show {card.title}
+                  </button>
                 ))}
               </div>
-            </>
+            </div>
           )}
+
+          <div style={{ marginBottom: 18, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#9cafa4", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>
+                Chart Workspace
+              </div>
+              <p style={{ fontSize: 13, color: UI.textLight, margin: 0 }}>
+                Created charts and pinned charts live here. Drag from the window header, resize from the corner, and use the window controls to minimize, expand, or hide charts.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <WindowActionButton
+                label={layoutLocked ? "Unlock Layout" : "Enable Drag Mode"}
+                active={!layoutLocked}
+                tone="green"
+                onClick={() => setLayoutLocked(prev => !prev)}
+              />
+              <WindowActionButton
+                label="Reset layout"
+                tone="neutral"
+                onClick={() => {
+                  setChartOrder(chartCards.map(card => card.id));
+                  setChartLayouts(buildChartLayouts(chartCards, {}, workspaceWidth));
+                  setMinimizedCharts({});
+                  setFullscreenChartId(null);
+                }}
+              />
+            </div>
+          </div>
+
+          {chartCards.length === 0 ? (
+            <div style={{ background: UI.surfaceElevated, border: `1px solid ${UI.border}`, borderRadius: 18, padding: "48px 32px", textAlign: "center", boxShadow: "var(--color-shadow-soft)" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#9cafa4", textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 10 }}>
+                Charts Dashboard
+              </div>
+              <h2 style={{ fontSize: 26, fontWeight: 800, color: UI.text, margin: 0 }}>No charts added yet.</h2>
+              <p style={{ fontSize: 14, color: UI.textLight, marginTop: 10 }}>
+                Create charts using the chatbot or pin them here from the generated results.
+              </p>
+            </div>
+          ) : (
+            <div
+              ref={workspaceRef}
+              style={{ position: "relative", minHeight: workspaceHeight }}
+            >
+              {visibleChartCards.filter(card => card.id !== fullscreenChartId).map(card => (
+              <ChartWorkspaceCard
+                key={card.id}
+                card={card}
+                layout={chartLayouts[card.id] || getChartWorkspaceDefault(card)}
+                workspaceWidth={workspaceWidth}
+                locked={layoutLocked}
+                minimized={Boolean(minimizedCharts[card.id])}
+                visibilityState={chartVisibilityState[card.id]}
+                isDragging={draggedChartId === card.id}
+                onDragStart={handleChartDragStart}
+                onResizeStart={handleChartResizeStart}
+                onToggleMinimize={() => setMinimizedCharts(prev => ({ ...prev, [card.id]: !prev[card.id] }))}
+                onToggleFullscreen={() => setFullscreenChartId(prev => prev === card.id ? null : card.id)}
+                >
+                  {card.render}
+                </ChartWorkspaceCard>
+              ))}
+            </div>
+          )}
+
+          {fullscreenChartId && (() => {
+            const fullscreenCard = chartCards.find(card => card.id === fullscreenChartId);
+            if (!fullscreenCard) return null;
+            return (
+              <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(6, 16, 12, 0.64)", backdropFilter: "blur(8px)", padding: 24, display: "flex", alignItems: "stretch", justifyContent: "center" }}>
+                <div style={{ width: "min(1400px, 100%)", height: "100%", background: UI.surfaceElevated, borderRadius: 20, border: `1px solid ${UI.border}`, boxShadow: "0 24px 60px rgba(0,0,0,0.24)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "16px 20px", borderBottom: `1px solid ${UI.border}`, background: "linear-gradient(180deg, rgba(19,48,32,0.04), rgba(19,48,32,0))" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 999, background: "#ef4444" }} />
+                        <span style={{ width: 10, height: 10, borderRadius: 999, background: "#f59e0b" }} />
+                        <span style={{ width: 10, height: 10, borderRadius: 999, background: "#10b981" }} />
+                      </div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: UI.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {fullscreenCard.title}
+                      </div>
+                    </div>
+                    <button onClick={() => setFullscreenChartId(null)} style={{ background: "none", border: `1px solid ${UI.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: UI.text }}>
+                      Close fullscreen
+                    </button>
+                  </div>
+                  <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 20 }}>
+                    {fullscreenCard.render}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
 
