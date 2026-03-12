@@ -17,6 +17,8 @@ import maximizeIcon from "../../images/maximize.png";
 import closeIcon from "../../images/close.png";
 import pinIcon from "../../images/thumbtacks.png";
 import padlockIcon from "../../images/padlock.png";
+import upArrowIcon from "../../images/upload.png";
+import downArrowIcon from "../../images/down-arrow.png";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ResponsiveContainer, Cell, AreaChart, Area,
@@ -193,7 +195,7 @@ const BADGE_STYLES = {
   "AI FILTER":{bg:LW.dark,color:LW.saffron},
 };
 
-function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRename }) {
+function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRename, actionSlot }) {
   const b = BADGE_STYLES[badge]||{bg:LW.paper,color:LW.dark};
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
@@ -230,6 +232,7 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRena
         {subtitle && <p style={{ fontSize:12, color:"#9cafa4", margin:"4px 0 0", fontWeight:500 }}>{subtitle}</p>}
       </div>
       <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+        {actionSlot}
         {onPin && (
           <button
             onClick={onPin}
@@ -924,12 +927,13 @@ export default function Dashboard({ data, blueprint, fileId }) {
     try { return JSON.parse(localStorage.getItem(minimizedStorageKey) || "[]"); } catch { return []; }
   });
   const [maximizedId, setMaximizedId] = useState(null);
-  const minimizedIdsRef = useRef(minimizedIds);
+  const [customBuilderCollapsed, setCustomBuilderCollapsed] = useState(false);
   const customBuilderWrapRef = useRef(null);
   const customBuilderContentRef = useRef(null);
   const [customBuilderHeight, setCustomBuilderHeight] = useState(0);
   const [customBuilderRect, setCustomBuilderRect] = useState({ left: 0, width: 0 });
   const [customBuilderStuck, setCustomBuilderStuck] = useState(false);
+  const minimizedIdsRef = useRef(minimizedIds);
   const skipNextLayoutChangeRef = useRef(false);
   const minimizedSet = useMemo(() => new Set(minimizedIds), [minimizedIds]);
 
@@ -971,9 +975,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
       window.requestAnimationFrame(() => {
         if (customBuilderWrapRef.current) {
           const rect = customBuilderWrapRef.current.getBoundingClientRect();
-          const shouldStick = rect.top <= 56;
-          setCustomBuilderStuck(prev => (prev === shouldStick ? prev : shouldStick));
           setCustomBuilderRect(prev => (prev.left === rect.left && prev.width === rect.width ? prev : { left: rect.left, width: rect.width }));
+          setCustomBuilderStuck(prev => (prev === (rect.top <= 56) ? prev : rect.top <= 56));
         }
         ticking = false;
       });
@@ -1615,9 +1618,10 @@ const chartWidgets = useMemo(() => {
         .react-resizable-handle-s { width:100%; height:14px; left:0; transform:none; }
         .react-resizable-handle-e,
         .react-resizable-handle-w { height:100%; width:14px; top:0; transform:none; }
+        .section-collapse { width:28px; height:28px; border-radius:999px; border:1px solid #f0b34a; background:#ffd896; color:#6b4b00; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow: 0 4px 10px rgba(240,179,74,0.25); background-repeat:no-repeat; background-position:center; background-size:14px 14px; }
         .custom-builder-wrap { position: relative; }
         .custom-builder-spacer { height: 0; }
-        .custom-builder-sticky { position: relative; }
+        .custom-builder-sticky { position: sticky; top: 56px; z-index: 40; }
         .react-grid-item.react-draggable-dragging .chart-widget { box-shadow: 0 16px 30px rgba(0,0,0,0.2); }
         .chart-empty { border:1px dashed #d7e2dc; border-radius:16px; padding:28px; background: var(--color-surface-elevated); text-align:center; color:#6b7a71; }
         .chart-empty h2 { margin:0 0 8px; font-size:18px; color: var(--color-text); }
@@ -1750,21 +1754,36 @@ const chartWidgets = useMemo(() => {
               ref={customBuilderContentRef}
               style={customBuilderStuck ? { position:"fixed", top:56, left: customBuilderRect.left, width: customBuilderRect.width, zIndex:60 } : undefined}
             >
-            <Section>
-              <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table"/>
-              <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
-                const id=Date.now(); let result;
-                const spec=config; // save full config as spec for Firestore rebuild
-                if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
-                else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
-                else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
-                else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
-                else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
-                if(result) {
-                  setCustomCharts(prev=>[result,...prev]); // session only - persists on pin
-                }
-              }}/>
-            </Section>
+              <Section>
+                <SectionHeader
+                  title="Custom Builder"
+                  subtitle="Build your own chart or pivot table"
+                  actionSlot={
+                    <button
+                      className={`section-collapse ${customBuilderCollapsed ? "is-collapsed" : ""}`}
+                      onClick={()=>setCustomBuilderCollapsed(v=>!v)}
+                      aria-label={customBuilderCollapsed ? "Show Custom Builder" : "Hide Custom Builder"}
+                      title={customBuilderCollapsed ? "Show Custom Builder" : "Hide Custom Builder"}
+                      style={{ backgroundImage: `url(${customBuilderCollapsed ? downArrowIcon : upArrowIcon})` }}
+                    >
+                    </button>
+                  }
+                />
+                {!customBuilderCollapsed && (
+                  <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
+                    const id=Date.now(); let result;
+                    const spec=config; // save full config as spec for Firestore rebuild
+                    if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
+                    else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
+                    else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
+                    else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
+                    else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
+                    if(result) {
+                      setCustomCharts(prev=>[result,...prev]); // session only - persists on pin
+                    }
+                  }}/>
+                )}
+              </Section>
             </div>
           </div>
           {chartWidgets.length === 0 ? (
