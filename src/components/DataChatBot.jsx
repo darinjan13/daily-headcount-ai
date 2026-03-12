@@ -499,16 +499,17 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
             fontSize: 11,
             fontWeight: 600,
             color: activeId ? "var(--color-castleton-green)" : "var(--color-text-light)",
-            background: "transparent",
+            backgroundColor: BRAND.white,
             border: "none",
             outline: "none",
             cursor: "pointer",
             minWidth: 0,
+            colorScheme: "dark",
           }}
         >
-          <option value="">Select a chart to edit…</option>
+          <option value="" style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>Select a chart to edit…</option>
           {customCharts.map(c => (
-            <option key={c.id} value={String(c.id)}>
+            <option key={c.id} value={String(c.id)} style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>
               {typeIcon(c.type)} {c.title}
             </option>
           ))}
@@ -516,7 +517,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
         {activeId && (
           <button
             onClick={() => setActiveChartState(null)}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "var(--color-text-light)", padding: 0, lineHeight: 1, flexShrink: 0 }}
+            style={{ width: 24, height: 24, borderRadius: 8, background: BRAND.white, border: `1px solid ${BRAND.border}`, cursor: "pointer", fontSize: 14, color: BRAND.dark, padding: 0, lineHeight: 1, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
             title="Stop editing"
           >×</button>
         )}
@@ -531,8 +532,10 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
         onClick={() => setOpen((v) => !v)}
         className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl transition-all duration-200 cursor-pointer border-none"
         style={{
-          color: BRAND.white,
-          backgroundColor: open ? "rgba(4, 98, 65, 0.4)" : BRAND.green,
+          color: open ? BRAND.dark : BRAND.white,
+          backgroundColor: open ? BRAND.white : BRAND.green,
+          border: `1px solid ${open ? BRAND.border : "rgba(255,255,255,0.18)"}`,
+          boxShadow: open ? "0 10px 24px rgba(0,0,0,0.22)" : "0 12px 26px rgba(4,98,65,0.28)",
           transform: open ? "scale(0.92)" : "scale(1)",
         }}
         title="Ask about your data"

@@ -162,19 +162,20 @@ function getMonthRange(dateKey) {
 
 // ── UI primitives ──────────────────────────────────────────────────────────────
 
-function Section({ children, accent, pinned }) {
+function Section({ children, accent, pinned, style }) {
   return (
     <div style={{ background:UI.surfaceElevated, borderRadius:16, padding:24, marginBottom:20,
       boxShadow: pinned?"0 2px 16px rgba(4,98,65,0.18)":"var(--color-shadow-soft)",
       border: pinned?`1.5px solid ${LW.green}`:`1px solid ${UI.border}`,
       borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid ${LW.green}`:`1px solid ${UI.border}`,
-      fontFamily:"'Manrope',sans-serif" }}>
+      fontFamily:"'Manrope',sans-serif",
+      ...style }}>
       {children}
     </div>
   );
 }
 
-function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRename, onHide }) {
+function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRename, onHide, onToggleMinimize, minimized = false, marginBottom = 20 }) {
   const bs = { AI:{bg:LW.dark,color:LW.saffron}, AUTO:{bg:LW.green,color:"#fff"}, "RAW DATA":{bg:LW.paper,color:LW.dark}, CUSTOM:{bg:"#fff3dc",color:"#c17110"}, PINNED:{bg:LW.green,color:"#fff"}, "AI FILTER":{bg:LW.dark,color:LW.saffron} };
   const b = bs[badge]||{bg:LW.paper,color:LW.dark};
   const [editing, setEditing] = useState(false);
@@ -186,7 +187,7 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRena
   const cancel = () => setEditing(false);
 
   return (
-    <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:20 }}>
+    <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom }}>
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           {editing ? (
@@ -212,6 +213,29 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRena
         {subtitle && <p style={{ fontSize:12, color:"#9cafa4", margin:"4px 0 0", fontWeight:500 }}>{subtitle}</p>}
       </div>
       <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+        {onToggleMinimize && (
+          <button
+            onClick={onToggleMinimize}
+            title={minimized ? "Restore section" : "Minimize section"}
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 999,
+              border: "1px solid rgba(0,0,0,0.14)",
+              background: "#febc2e",
+              color: "rgba(0,0,0,0.62)",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 12,
+              fontWeight: 800,
+              padding: 0,
+            }}
+          >
+            {minimized ? "+" : "-"}
+          </button>
+        )}
         {onHide && (
           <button
             onClick={onHide}
@@ -991,11 +1015,12 @@ function ChartWorkspaceCard({
   isDragging,
   onDragStart,
   onResizeStart,
+  onToggleDrag,
+  onResetLayout,
   onToggleMinimize,
   onToggleFullscreen,
   children,
 }) {
-  const accent = card.accent || (card.badge === "PINNED" ? LW.green : card.badge === "CUSTOM" ? LW.saffron : LW.green);
   const borderColor = card.badge === "PINNED" ? LW.green : UI.border;
   const cardHeight = minimized ? 58 : layout.height;
   const cardWidth = getCardPixelWidth(layout.span, workspaceWidth);
@@ -1027,7 +1052,6 @@ function ChartWorkspaceCard({
           flexDirection: "column",
           boxShadow: isDragging ? "0 18px 32px rgba(4, 98, 65, 0.16)" : "var(--color-shadow-soft)",
           border: `1.5px solid ${borderColor}`,
-          borderLeft: `4px solid ${accent}`,
           position: "relative",
           overflow: "hidden",
         }}
@@ -1068,9 +1092,19 @@ function ChartWorkspaceCard({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "#9cafa4", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              {locked ? "Locked" : "Drag"}
-            </span>
+            <WindowActionButton
+              label={locked ? "Enable Drag" : "Lock Drag"}
+              title={locked ? "Enable dragging for this chart" : "Lock this chart position"}
+              active={!locked}
+              tone="green"
+              onClick={onToggleDrag}
+            />
+            <WindowActionButton
+              label="Reset"
+              title="Reset this chart layout"
+              tone="neutral"
+              onClick={onResetLayout}
+            />
             {card.onPin && (
               <WindowActionButton
                 label={card.pinned ? "Unpin" : "Pin"}
@@ -1144,6 +1178,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
   // filteredTables now persisted via usePins
   const [activeView, setActiveView] = useState("home");
   const [showCompare, setShowCompare] = useState(false);
+  const [customBuilderMinimized, setCustomBuilderMinimized] = useState(false);
   const [filters, setFilters] = useState({ dateFrom:"all", dateTo:"all", categories:{} });
   // Wide-format filter state — section, name (primary entity), and active date columns
   const [wideFilters, setWideFilters] = useState({ section:"all", name:"all", dateFrom:"all", dateTo:"all" });
@@ -1233,7 +1268,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const [chartOrder, setChartOrder] = useState([]);
   const [chartLayouts, setChartLayouts] = useState({});
   const [draggedChartId, setDraggedChartId] = useState(null);
-  const [layoutLocked, setLayoutLocked] = useState(false);
+  const [lockedCharts, setLockedCharts] = useState({});
   const [minimizedCharts, setMinimizedCharts] = useState({});
   const [fullscreenChartId, setFullscreenChartId] = useState(null);
   const [chartVisibilityState, setChartVisibilityState] = useState({});
@@ -1493,12 +1528,12 @@ export default function Dashboard({ data, blueprint, fileId }) {
       const saved = JSON.parse(localStorage.getItem(chartWorkspaceStorageKey) || "{}");
       setChartOrder(Array.isArray(saved.order) ? saved.order : []);
       setChartLayouts(saved.layouts && typeof saved.layouts === "object" ? saved.layouts : {});
-      setLayoutLocked(Boolean(saved.locked));
+      setLockedCharts(saved.lockedCharts && typeof saved.lockedCharts === "object" ? saved.lockedCharts : {});
       setMinimizedCharts(saved.minimized && typeof saved.minimized === "object" ? saved.minimized : {});
     } catch {
       setChartOrder([]);
       setChartLayouts({});
-      setLayoutLocked(false);
+      setLockedCharts({});
       setMinimizedCharts({});
     }
   }, [chartWorkspaceStorageKey]);
@@ -1674,6 +1709,30 @@ export default function Dashboard({ data, blueprint, fileId }) {
       ) + 24
     : 360;
 
+  const resetSingleChartLayout = (cardId) => {
+    const card = chartCards.find(item => item.id === cardId);
+    if (!card) return;
+    const defaults = getChartWorkspaceDefault(card);
+    const nextY = chartCards.reduce((maxBottom, item) => {
+      if (item.id === cardId) return maxBottom;
+      const layout = chartLayouts[item.id];
+      if (!layout || typeof layout.y !== "number") return maxBottom;
+      return Math.max(maxBottom, layout.y + (layout.height ?? getChartWorkspaceDefault(item).height));
+    }, 0);
+
+    setChartLayouts(prev => ({
+      ...prev,
+      [cardId]: {
+        ...defaults,
+        hidden: false,
+        x: 0,
+        y: nextY > 0 ? nextY + 20 : 0,
+      },
+    }));
+    setMinimizedCharts(prev => ({ ...prev, [cardId]: false }));
+    setFullscreenChartId(prev => prev === cardId ? null : prev);
+  };
+
   useEffect(() => {
     if (activeView !== "charts") return;
     const workspace = workspaceRef.current;
@@ -1707,14 +1766,14 @@ export default function Dashboard({ data, blueprint, fileId }) {
       localStorage.setItem(chartWorkspaceStorageKey, JSON.stringify({
         order: chartOrder,
         layouts: chartLayouts,
-        locked: layoutLocked,
+        lockedCharts,
         minimized: minimizedCharts,
       }));
     } catch {}
-  }, [chartWorkspaceStorageKey, chartOrder, chartLayouts, layoutLocked, minimizedCharts]);
+  }, [chartWorkspaceStorageKey, chartOrder, chartLayouts, lockedCharts, minimizedCharts]);
 
   const handleChartDragStart = (event, cardId) => {
-    if (layoutLocked) {
+    if (lockedCharts[cardId]) {
       event.preventDefault();
       return;
     }
@@ -1772,7 +1831,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
   };
 
   const handleChartResizeStart = (event, cardId) => {
-    if (layoutLocked) return;
+    if (lockedCharts[cardId]) return;
     event.preventDefault();
     event.stopPropagation();
     const workspace = workspaceRef.current;
@@ -1912,7 +1971,11 @@ export default function Dashboard({ data, blueprint, fileId }) {
             );
           })}
 
-          <Section>
+          <Section style={{
+            padding: customBuilderMinimized ? "16px 20px" : 24,
+            minHeight: customBuilderMinimized ? 70 : "auto",
+            transition: "padding 0.28s ease, min-height 0.28s ease, box-shadow 0.24s ease"
+          }}>
             <SectionHeader
               title="Data Table"
               subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
@@ -1934,9 +1997,26 @@ export default function Dashboard({ data, blueprint, fileId }) {
       {activeView==="charts" && (
         <>
           {/* Custom builder */}
-          <Section>
-            <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table"/>
-            <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
+          <Section style={{ paddingBottom: customBuilderMinimized ? 18 : 24, transition: "padding 0.28s ease, box-shadow 0.24s ease" }}>
+            <SectionHeader
+              title="Custom Builder"
+              subtitle="Build your own chart or pivot table"
+              onToggleMinimize={() => setCustomBuilderMinimized(prev => !prev)}
+              minimized={customBuilderMinimized}
+              marginBottom={customBuilderMinimized ? 0 : 20}
+            />
+            <div
+              style={{
+                maxHeight: customBuilderMinimized ? 0 : 420,
+                opacity: customBuilderMinimized ? 0 : 1,
+                overflow: "hidden",
+                transform: customBuilderMinimized ? "translateY(-6px)" : "translateY(0)",
+                transition: "max-height 0.34s ease, opacity 0.22s ease, transform 0.22s ease",
+                pointerEvents: customBuilderMinimized ? "none" : "auto",
+                marginTop: customBuilderMinimized ? 0 : 2,
+              }}
+            >
+              <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
               const id=Date.now(); let result;
               const spec=config; // save full config as spec for Firestore rebuild
               if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
@@ -1948,6 +2028,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 setCustomCharts(prev=>[result,...prev]); // session only — persists on pin
               }
             }}/>
+            </div>
           </Section>
 
           {hiddenChartCards.length > 0 && (
@@ -1975,26 +2056,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 Chart Workspace
               </div>
               <p style={{ fontSize: 13, color: UI.textLight, margin: 0 }}>
-                Created charts and pinned charts live here. Drag from the window header, resize from the corner, and use the window controls to minimize, expand, or hide charts.
+                Created charts and pinned charts live here. Each chart has its own drag and reset controls in the window header.
               </p>
-            </div>
-            <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <WindowActionButton
-                label={layoutLocked ? "Unlock Layout" : "Enable Drag Mode"}
-                active={!layoutLocked}
-                tone="green"
-                onClick={() => setLayoutLocked(prev => !prev)}
-              />
-              <WindowActionButton
-                label="Reset layout"
-                tone="neutral"
-                onClick={() => {
-                  setChartOrder(chartCards.map(card => card.id));
-                  setChartLayouts(buildChartLayouts(chartCards, {}, workspaceWidth));
-                  setMinimizedCharts({});
-                  setFullscreenChartId(null);
-                }}
-              />
             </div>
           </div>
 
@@ -2019,12 +2082,14 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 card={card}
                 layout={chartLayouts[card.id] || getChartWorkspaceDefault(card)}
                 workspaceWidth={workspaceWidth}
-                locked={layoutLocked}
+                locked={Boolean(lockedCharts[card.id])}
                 minimized={Boolean(minimizedCharts[card.id])}
                 visibilityState={chartVisibilityState[card.id]}
                 isDragging={draggedChartId === card.id}
                 onDragStart={handleChartDragStart}
                 onResizeStart={handleChartResizeStart}
+                onToggleDrag={() => setLockedCharts(prev => ({ ...prev, [card.id]: !prev[card.id] }))}
+                onResetLayout={() => resetSingleChartLayout(card.id)}
                 onToggleMinimize={() => setMinimizedCharts(prev => ({ ...prev, [card.id]: !prev[card.id] }))}
                 onToggleFullscreen={() => setFullscreenChartId(prev => prev === card.id ? null : card.id)}
                 >
@@ -2069,3 +2134,4 @@ export default function Dashboard({ data, blueprint, fileId }) {
     </div>
   );
 }
+
