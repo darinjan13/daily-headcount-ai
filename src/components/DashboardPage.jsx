@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Dashboard from "./Dashboard";
 import Sidebar from "./Sidebar";
+import ThemeToggle from "./ThemeToggle";
 import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
@@ -157,9 +158,13 @@ export default function DashboardPage() {
               </div>
             </div>
 
+            <div className="shrink-0" style={{ marginLeft: "auto" }}>
+              <ThemeToggle />
+            </div>
+
             {/* Sheet switcher — full dropdown when multiple sheets */}
             {allSheets.length > 1 && (
-              <div className="flex items-center gap-2 shrink-0" style={{ marginLeft: "auto" }}>
+              <div className="flex items-center gap-2 shrink-0">
                 <label
                   className="text-xs font-bold uppercase tracking-wide"
                   style={{ color: "var(--color-text)" }}

@@ -7,6 +7,7 @@ import { useDriveFiles } from "../hooks/useDriveFiles";
 import Sidebar from "./Sidebar";
 import Grainient from "./Grainient";
 import UserAvatar from "./UserAvatar";
+import ThemeToggle from "./ThemeToggle";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
@@ -730,6 +731,9 @@ export default function HomePage() {
                   No folder selected
                 </p>
               )}
+            </div>
+            <div className="flex items-center justify-end">
+              <ThemeToggle />
             </div>
           </div>
         </header>
