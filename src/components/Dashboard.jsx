@@ -87,8 +87,8 @@ function generatePivot(data, rowField, columnField, metric, aggregation) {
   const colLabelMap=columnField?buildLabelMap(data,columnField):{};
   data.forEach(row=>{
     const rowKey=row[rowField]!=null?String(row[rowField]).trim().toLowerCase():null;
-    const colRaw=columnField?row[columnField]:"Value";
-    const colKey=columnField?(colRaw!=null?String(colRaw).trim().toLowerCase():null):"Value";
+    const colRaw=columnField?row[columnField]:(metric||"Value");
+    const colKey=columnField?(colRaw!=null?String(colRaw).trim().toLowerCase():null):(metric||"Value");
     const value=Number(row[metric])||0;
     if(!rowKey||!colKey)return;
     columnSet.add(colKey);
@@ -97,7 +97,7 @@ function generatePivot(data, rowField, columnField, metric, aggregation) {
     result[rowKey][colKey].push(value);
   });
   const columnKeys=Array.from(columnSet).sort();
-  const columnLabels=columnField?columnKeys.map(k=>colLabelMap[k]||k):["Value"];
+  const columnLabels=columnField?columnKeys.map(k=>colLabelMap[k]||k):[metric||"Value"];
   const pivotRows=Object.entries(result).map(([rowKey,colValues])=>{
     const label=rowLabelMap[rowKey]||rowKey;
     const rowObj={[rowField]:label};
@@ -566,15 +566,17 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
 
 // ── Clickable charts ───────────────────────────────────────────────────────────
 
-function ClickableBarChart({ data, config, onDrilldown }) {
+function ClickableBarChart({ data, config, onDrilldown, labels }) {
   const xKey=config?.x||"name", yKey=config?.y||"value";
+  const xLabel = labels?.x || xKey;
+  const yLabel = labels?.y || yKey;
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
-        <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0}/>
+        <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0} label={undefined}/>
         <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
+        <Tooltip formatter={(v,_)=>[v.toLocaleString(), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
         <Bar dataKey={yKey} radius={[4,4,0,0]} cursor={onDrilldown?"pointer":"default"} onClick={d=>onDrilldown&&onDrilldown(d[xKey])}>
           {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
         </Bar>
@@ -583,15 +585,17 @@ function ClickableBarChart({ data, config, onDrilldown }) {
   );
 }
 
-function HorizontalBarChart({ data, config, onDrilldown }) {
+function HorizontalBarChart({ data, config, onDrilldown, labels }) {
   const xKey=config?.x||"name", yKey=config?.y||"value";
+  const xLabel = labels?.x || xKey;
+  const yLabel = labels?.y || yKey;
   return (
     <ResponsiveContainer width="100%" height={Math.max(260,data.length*34)}>
       <BarChart data={data} layout="vertical" margin={{top:5,right:40,left:120,bottom:5}}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} horizontal={false}/>
         <XAxis type="number" tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
         <YAxis type="category" dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} width={110}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
+        <Tooltip formatter={(v,_)=>[v.toLocaleString(), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
         <Bar dataKey={yKey} radius={[0,4,4,0]} cursor={onDrilldown?"pointer":"default"} onClick={d=>onDrilldown&&onDrilldown(d[xKey])}>
           {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
         </Bar>
@@ -753,8 +757,8 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
 
 function RenderChart({ chart, filteredData, onDrilldown }) {
   if (chart.type==="pivot") return <PivotTableRenderer data={chart.pivotData}/>;
-  if (chart.type==="bar") return <ClickableBarChart data={chart.chartData} config={{x:"name",y:"value"}} onDrilldown={v=>onDrilldown&&onDrilldown(chart.xCol,v)}/>;
-  if (chart.type==="hbar") return <HorizontalBarChart data={chart.chartData} config={{x:"name",y:"value"}} onDrilldown={v=>onDrilldown&&onDrilldown(chart.xCol,v)}/>;
+  if (chart.type==="bar") return <ClickableBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} onDrilldown={v=>onDrilldown&&onDrilldown(chart.xCol,v)}/>;
+  if (chart.type==="hbar") return <HorizontalBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} onDrilldown={v=>onDrilldown&&onDrilldown(chart.xCol,v)}/>;
   if (chart.type==="stacked") return <StackedBarChart data={chart.chartData}/>;
   if (chart.type==="line") return <LineChartRenderer data={filteredData} config={chart.config}/>;
   if (chart.type==="donut") return <DonutChartRenderer data={filteredData} config={chart.config}/>;
@@ -788,8 +792,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
   // Pin storage per file
   const { user } = useAuth();
   const { pinnedIds, customCharts: savedCustomCharts, filteredTables, loading: pinsLoading,
-          togglePin, isPinned, addCustomChart, removeCustomChart, renameCustomChart,
-          addFilteredTable, removeFilteredTable } = usePins(user?.uid, fileId||"default");
+          togglePin, isPinned, addCustomChart, addAndPinChart, removeCustomChart, clearAllCustomCharts, renameCustomChart,
+          addFilteredTable, removeFilteredTable, renameFilteredTable, addAndPinTable, clearAllFilteredTables } = usePins(user?.uid, fileId||"default");
 
   // customCharts from usePins is already seeded from localStorage on first render
   // and synced from Firestore in background — use directly
@@ -899,8 +903,16 @@ export default function Dashboard({ data, blueprint, fileId }) {
     return generatePivot(filteredData, pivotDef.rowDim, pivotDef.colDim||null, pivotDef.measure, pivotDef.aggregation||"sum");
   }
 
+  const pinCustomChart = (id, chartObj = null) => {
+    const chart = chartObj || allCustomCharts.find(c => String(c.id) === String(id));
+    if (!chart) return;
+    if (!isPinned(String(id))) {
+      addAndPinChart(chart); // single atomic save — chart + pinId together
+    }
+  };
+
   const removeCustom = (id) => {
-    setCustomCharts(prev => prev.filter(c => c.id !== id));
+    setCustomCharts(prev => prev.filter(c => String(c.id) !== String(id)));
     removeCustomChart(id);
   };
 
@@ -953,7 +965,117 @@ export default function Dashboard({ data, blueprint, fileId }) {
     return null;
   };
 
-  const handleChatResult = ({ chartSpec, filterSpec, action, targetId, updateChartId }) => {
+  const handleChatResult = ({ chartSpec, filterSpec, action, targetId, updateChartId, deleteSpec, pinSpec, newChartSpecs, renameSpec, tab, modifyChartSpec, tableActionSpec }) => {
+    if (action === "delete_table" && deleteTableSpec) {
+      if (deleteTableSpec.deleteAll) {
+        clearAllFilteredTables();
+      } else {
+        const match = filteredTables.find(t =>
+          t.title?.toLowerCase() === deleteTableSpec.targetTitle?.toLowerCase()
+        );
+        if (match) removeFilteredTable(match.id);
+      }
+      return;
+    }
+
+    if (action === "rename" && renameSpec) {
+      const match = allCustomCharts.find(c =>
+        c.title?.toLowerCase() === renameSpec.targetTitle?.toLowerCase()
+      );
+      if (match) renameChart(match.id, renameSpec.newTitle);
+      return;
+    }
+
+    if (action === "navigate" && tab) {
+      setActiveView(tab);
+      return;
+    }
+
+    if (action === "modify_chart" && modifyChartSpec) {
+      const match = allCustomCharts.find(c =>
+        c.title?.toLowerCase() === modifyChartSpec.targetTitle?.toLowerCase()
+      );
+      if (match) {
+        const updated = {
+          ...match,
+          spec: match.spec ? { ...match.spec, limit: modifyChartSpec.limit, sort: modifyChartSpec.sort } : match.spec,
+        };
+        setCustomCharts(prev => prev.map(c => String(c.id) === String(match.id) ? updated : c));
+        if (isPinned(String(match.id))) addCustomChart(updated);
+      }
+      return;
+    }
+
+    if (action === "table_action" && tableActionSpec) {
+      const { action: act, targetTitle, newTitle } = tableActionSpec;
+      if (act === "deleteAll") {
+        clearAllFilteredTables();
+      } else if (act === "delete") {
+        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        if (match) removeFilteredTable(match.id);
+      } else if (act === "pinAll") {
+        filteredTables.forEach(t => {
+          if (!isPinned(String(t.id))) addAndPinTable(t);
+        });
+      } else if (act === "pin") {
+        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        if (match && !isPinned(String(match.id))) addAndPinTable(match);
+      } else if (act === "rename") {
+        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        if (match) renameFilteredTable(match.id, newTitle);
+      }
+      return;
+    }
+
+    if (action === "pin" && pinSpec) {
+      if (pinSpec.pinAll) {
+        // Pin existing charts
+        allCustomCharts.forEach(c => pinCustomChart(String(c.id)));
+        // Pin charts created in this same batch via __pendingCharts registry
+        const pending = window.__pendingCharts || {};
+        Object.entries(pending).forEach(([id, chart]) => {
+          pinCustomChart(String(id), chart);
+        });
+        window.__pendingCharts = {};
+      } else if (pinSpec.unpinAll) {
+        allCustomCharts.forEach(c => {
+          if (isPinned(String(c.id))) togglePin(String(c.id));
+        });
+      } else if (pinSpec.targetTitle) {
+        const match = allCustomCharts.find(c =>
+          c.title?.toLowerCase() === pinSpec.targetTitle?.toLowerCase()
+        );
+        if (match) {
+          if (pinSpec.pinned && !isPinned(String(match.id))) pinCustomChart(String(match.id));
+          else if (!pinSpec.pinned && isPinned(String(match.id))) togglePin(String(match.id));
+        }
+      }
+      return;
+    }
+
+    if (action === "delete" && deleteSpec) {
+      if (deleteSpec.deleteAll) {
+        clearAllCustomCharts();
+        setCustomCharts([]); // clear sessionCharts (custom builder charts)
+      } else {
+        const match = allCustomCharts.find(c =>
+          (deleteSpec.targetId && String(c.id) === String(deleteSpec.targetId)) ||
+          (deleteSpec.targetTitle && c.title?.toLowerCase() === deleteSpec.targetTitle?.toLowerCase())
+        );
+        if (match) {
+          setCustomCharts(prev => prev.filter(c => c.id !== match.id));
+          removeCustomChart(match.id);
+        }
+      }
+      return;
+    }
+
+    if (action === "filter" && filterSpec) {
+      const id = filterSpec.id || Date.now();
+      addFilteredTable({ ...filterSpec, id });
+      setActiveView("home");
+      return;
+    }
     if (filterSpec) {
       const id = Date.now();
       addFilteredTable({ id, ...filterSpec });
@@ -972,8 +1094,12 @@ export default function Dashboard({ data, blueprint, fileId }) {
         const id = chartSpec._chatId || Date.now();
         const result = buildChartResult(chartSpec, id);
         if (result) {
-          setCustomCharts(prev => [result, ...prev]);
-          addCustomChart(result);
+          setCustomCharts(prev => [result, ...prev]); // session only — persists to Firestore on pin
+          // If a pinAll is coming in same batch, pre-register so pin can find it
+          if (chartSpec._chatId) {
+            window.__pendingCharts = window.__pendingCharts || {};
+            window.__pendingCharts[String(id)] = result;
+          }
           setActiveView("charts");
         }
       }
@@ -992,7 +1118,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
 
       {aiGenerated&&datasetSummary&&<AIBanner summary={datasetSummary}/>}
-      <DashboardNav activeView={activeView} setActiveView={setActiveView} pinnedCount={pinnedIds.length} filteredTableCount={filteredTables.length}/>
+      <DashboardNav activeView={activeView} setActiveView={setActiveView} pinnedCount={validPinnedIds.length} filteredTableCount={filteredTables.length}/>
 
       {/* ── HOME TAB ─────────────────────────────────────── */}
       {activeView==="home" && (
@@ -1042,21 +1168,6 @@ export default function Dashboard({ data, blueprint, fileId }) {
             <CompareCards blueprint={blueprint} objectData={objectData} dateCol={dateCol} dateOptions={dateOptions} isWide={isWide}/>
           )}
 
-          <Section>
-            <SectionHeader
-              title="Data Table"
-              subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
-              badge="RAW DATA"
-            />
-            <DataTable
-              headers={isWide ? wideVisibleHeaders : headers}
-              rows={isWide
-                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
-                : filteredRows
-              }
-            />
-          </Section>
-
           {/* AI filtered tables from chatbot — bottom of summary */}
           {filteredTables.map(table => {
             const applyTableFilter = () => {
@@ -1096,6 +1207,22 @@ export default function Dashboard({ data, blueprint, fileId }) {
               </Section>
             );
           })}
+
+          <Section>
+            <SectionHeader
+              title="Data Table"
+              subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
+              badge="RAW DATA"
+            />
+            <DataTable
+              headers={isWide ? wideVisibleHeaders : headers}
+              rows={isWide
+                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
+                : filteredRows
+              }
+            />
+          </Section>
+
         </>
       )}
 
@@ -1106,11 +1233,9 @@ export default function Dashboard({ data, blueprint, fileId }) {
           {/* Pinned section */}
           {validPinnedIds.length>0&&(
             <>
-              <div style={{fontSize:11,fontWeight:700,color:LW.green,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>📌 Pinned Charts</div>
-
               {pinnedCustom.map(chart=>(
                 <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1.5px solid ${LW.green}`,borderLeft:`4px solid ${LW.green}`}}>
-                  <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(String(chart.id))} pinned={true} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
+                  <SectionHeader title={chart.title} badge="PINNED" onPin={()=>pinCustomChart(String(chart.id))} pinned={true} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
                   <RenderChart chart={chart} filteredData={filteredData}/>
                 </div>
               ))}
@@ -1128,7 +1253,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 <Section key={chart.id} pinned>
                   <SectionHeader title={chart.title} badge="PINNED" onPin={()=>togglePin(chart.id)} pinned={true}/>
                   {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
-                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} />}
+                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} labels={{x:chart.x,y:chart.y}}/>}
                   {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
                 </Section>
               ))}
@@ -1155,16 +1280,15 @@ export default function Dashboard({ data, blueprint, fileId }) {
               else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
               else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
               if(result) {
-                setCustomCharts(prev=>[result,...prev]);
-                addCustomChart(result); // persist to Firestore + auto-pin
+                setCustomCharts(prev=>[result,...prev]); // session only — persists on pin
               }
             }}/>
           </Section>
 
           {/* Unpinned custom charts */}
-          {allCustomCharts.filter(c=>!pinnedIds.includes(String(c.id))).map(chart=>(
+          {allCustomCharts.filter(c=>!validPinnedIds.includes(String(c.id))).map(chart=>(
             <div key={chart.id} style={{background:UI.surfaceElevated,borderRadius:16,padding:24,marginBottom:20,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,borderLeft:`4px solid ${LW.saffron}`}}>
-               <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>togglePin(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
+               <SectionHeader title={chart.title} badge="CUSTOM" onPin={()=>pinCustomChart(String(chart.id))} pinned={isPinned(String(chart.id))} onRemove={()=>removeCustom(chart.id)} onRename={t=>renameChart(chart.id,t)}/>
                <RenderChart chart={chart} filteredData={filteredData}/>
              </div>
           ))}
@@ -1227,7 +1351,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 <Section key={chart.id}>
                   <SectionHeader title={chart.title} badge={aiGenerated?"AI":"AUTO"} onPin={()=>togglePin(chart.id)} pinned={isPinned(chart.id)}/>
                   {chart.type==="line"&&<LineChartRenderer data={filteredData} config={chart}/>}
-                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} />}
+                  {chart.type==="bar"&&<ClickableBarChart data={groupForBar(filteredData,chart.x,chart.y,20)} config={{x:"name",y:"value"}} labels={{x:chart.x,y:chart.y}}/>}
                   {chart.type==="donut"&&<DonutChartRenderer data={filteredData} config={chart}/>}
                 </Section>
               ))}
@@ -1244,7 +1368,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
         </>
       )}
 
-      <DataChatbot headers={headers} rows={filteredRows} blueprint={blueprint} onResult={handleChatResult} customCharts={allCustomCharts}/>
+      <DataChatbot headers={headers} rows={filteredRows} blueprint={blueprint} onResult={handleChatResult} customCharts={allCustomCharts.map(c=>({...c, pinned: isPinned(String(c.id))}))} filteredTables={filteredTables.map(t=>({...t, pinned: isPinned(String(t.id))}))}/>
     </div>
   );
 }

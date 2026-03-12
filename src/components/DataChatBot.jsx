@@ -237,7 +237,7 @@ function applyChartState(chartSpec, chartState) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DataChatbot({ headers, rows, blueprint, onResult, customCharts = [] }) {
+export default function DataChatbot({ headers, rows, blueprint, onResult, customCharts = [], filteredTables = [] }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME, chartSpec: null }]);
   const [input, setInput] = useState("");
@@ -300,65 +300,104 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
             sort: activeChartState.sort,
             filters: activeChartState.chartSpec?.filters || [],
           } : null,
+          existingCharts: customCharts.map(c => ({
+            id: c.id,
+            title: c.title,
+            type: c.type,
+            pinned: c.pinned || false,
+          })),
+          existingTables: (filteredTables || []).map(t => ({
+            id: t.id,
+            title: t.title,
+            pinned: t.pinned || false,
+            filters: t.filters || [],
+          })),
+          existingTables: filteredTables?.map(t => ({
+            id: t.id,
+            title: t.title,
+          })) || [],
         }),
       });
       const data = await response.json();
+      const steps = data.steps || [];
 
-      if (data.filterSpec) {
-        onResult({ chartSpec: null, filterSpec: data.filterSpec });
-        setMessages((prev) => [...prev, {
-          role: "assistant",
-          content: (data.reply || "") + "\n\n📋 *Table added to the Summary tab.*",
-          chartSpec: null,
-          filterSpec: null,
-        }]);
-        setLoading(false);
-        return;
-      }
+      // Execute steps in order
+      const statusLines = [];
+      const newChartSpecs = []; // track charts created in this batch for pinAll
 
-      if (data.chartSpec) {
-        // Apply any client-side state overrides (topN, sort, etc.)
-        const resolvedSpec = action === "update" && updatedState
-          ? applyChartState(data.chartSpec, updatedState)
-          : data.chartSpec;
+      for (const step of steps) {
+        if (step.type === "delete") {
+          onResult({ action: "delete", deleteSpec: step });
+          if (step.deleteAll) {
+            setActiveChartState(null);
+            statusLines.push("🗑️ All custom charts deleted.");
+          } else {
+            if (activeChartState?.chartSpec?.title === step.targetTitle) setActiveChartState(null);
+            statusLines.push(`🗑️ "${step.targetTitle}" deleted.`);
+          }
 
-        const isModify = !!activeChartState?.chartId;
+        } else if (step.type === "delete_table") {
+          onResult({ action: "delete_table", deleteTableSpec: step });
+          if (step.deleteAll) statusLines.push("🗑️ All filter tables deleted.");
+          else statusLines.push(`🗑️ "${step.targetTitle}" table deleted.`);
 
-        if (isModify) {
-          // Modify existing chart in place
-          const newState = {
-            ...activeChartState,
-            ...updatedState,
-            chartSpec: resolvedSpec,
-          };
-          setActiveChartState(newState);
-          onResult({
-            chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId },
-            filterSpec: null,
-            action: "modify",
-          });
-          setMessages((prev) => [...prev, {
-            role: "assistant",
-            content: data.reply || "Chart updated.",
-            chartSpec: null,
-            chartUpdated: true,
-          }]);
-        } else {
-          // New chart — show Add button, don't auto-add
-          setMessages((prev) => [...prev, {
-            role: "assistant",
-            content: data.reply || "Here's your chart.",
-            chartSpec: resolvedSpec,
-            chartAdded: false,
-          }]);
+        } else if (step.type === "pin") {
+          // Pass newly created charts so Dashboard can pin them even before state settles
+          onResult({ action: "pin", pinSpec: step, newChartSpecs });
+          if (step.pinAll) statusLines.push("📌 All charts pinned.");
+          else if (step.unpinAll) statusLines.push("📌 All charts unpinned.");
+          else statusLines.push(`📌 "${step.targetTitle}" ${step.pinned ? "pinned" : "unpinned"}.`);
+
+        } else if (step.type === "table_action") {
+          onResult({ action: "table_action", tableActionSpec: step });
+          const act = step.action;
+          if (act === "deleteAll") statusLines.push("🗑️ All filtered tables deleted.");
+          else if (act === "delete") statusLines.push(`🗑️ Table "${step.targetTitle}" deleted.`);
+          else if (act === "pinAll") statusLines.push("📌 All filtered tables pinned.");
+          else if (act === "pin") statusLines.push(`📌 "${step.targetTitle}" pinned.`);
+          else if (act === "rename") statusLines.push(`✏️ Table renamed to "${step.newTitle}".`);
+
+        } else if (step.type === "rename") {
+          onResult({ action: "rename", renameSpec: step });
+          statusLines.push(`✏️ Renamed to "${step.newTitle}".`);
+
+        } else if (step.type === "navigate") {
+          onResult({ action: "navigate", tab: step.tab });
+
+        } else if (step.type === "modify_chart") {
+          onResult({ action: "modify_chart", modifyChartSpec: step });
+          statusLines.push(`📊 "${step.targetTitle}" updated.`);
+
+        } else if (step.type === "filter") {
+          onResult({ action: "filter", filterSpec: step });
+          statusLines.push("📋 Table added to Summary tab.");
+
+        } else if (step.type === "chart") {
+          const spec = { ...step, type: step.chartType || "bar" };
+          const isModify = step.action === "modify" && activeChartState?.chartId;
+
+          if (isModify) {
+            const resolvedSpec = applyChartState(spec, updatedState || {});
+            setActiveChartState(prev => ({ ...prev, chartSpec: resolvedSpec }));
+            onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
+            statusLines.push("✏️ Chart updated.");
+          } else {
+            const chartId = Date.now() + Math.random(); // unique id stamped before dispatch
+            const specWithId = { ...spec, _chatId: chartId };
+            onResult({ chartSpec: specWithId, action: "new" });
+            newChartSpecs.push(specWithId);
+            statusLines.push("📊 Chart added to Charts tab.");
+          }
         }
-      } else {
-        setMessages((prev) => [...prev, {
-          role: "assistant",
-          content: data.reply || "Done.",
-          chartSpec: null,
-        }]);
       }
+
+      // Compose final message
+      const replyContent = [data.reply, ...statusLines].filter(Boolean).join("\n");
+      setMessages((prev) => [...prev, {
+        role: "assistant",
+        content: replyContent || "Done.",
+        chartSpec: null,
+      }]);
     } catch (err) {
       if (err?.name !== "AbortError") {
         setMessages((prev) => [...prev, {
@@ -383,24 +422,6 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
     }]);
   };
 
-  const handleAddChart = (msg, i) => {
-    const id = Date.now();
-    const specWithId = { ...msg.chartSpec, _chatId: id };
-    onResult({ chartSpec: specWithId, filterSpec: null });
-    // Set this as the active chart state for follow-up tracking
-    setActiveChartState({
-      chartId: id,
-      chartSpec: specWithId,
-      topN: msg.chartSpec.topN || null,
-      sort: msg.chartSpec.sort || null,
-      chartType: msg.chartSpec.type || null,
-      aggregation: msg.chartSpec.aggregation || null,
-      threshold: null,
-    });
-    setMessages((prev) =>
-      prev.map((m, idx) => idx === i ? { ...m, chartSpec: null, chartAdded: true } : m)
-    );
-  };
 
   const handleKey = (e) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
@@ -556,24 +577,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
                   </div>
                 </div>
 
-                {/* Add Chart button — only for new charts not yet added */}
-                {msg.role === "assistant" && msg.chartSpec && !msg.chartAdded && (
-                  <div className="ml-8 mt-1.5">
-                    <button
-                      onClick={() => handleAddChart(msg, i)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer"
-                      style={{ backgroundColor: "rgba(4, 98, 65, 0.08)", border: "1px solid rgba(4,98,65,0.28)", color: BRAND.green }}
-                    >
-                      <span>📊</span> Add Chart to Charts tab
-                    </button>
-                  </div>
-                )}
-                {msg.role === "assistant" && msg.chartAdded && (
-                  <div className="ml-8 mt-1 text-xs font-medium" style={{ color: BRAND.green }}>✓ Chart added — follow-up queries will update it</div>
-                )}
-                {msg.role === "assistant" && msg.chartUpdated && (
-                  <div className="ml-8 mt-1 text-xs font-medium" style={{ color: BRAND.green }}>✏️ Chart updated</div>
-                )}
+
               </div>
             ))}
 

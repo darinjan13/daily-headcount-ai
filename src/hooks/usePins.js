@@ -101,38 +101,48 @@ export function usePins(userId, fileId) {
   const isPinned = useCallback((id) => pinnedIds.includes(id), [pinnedIds]);
 
   // ── customCharts ──────────────────────────────────────────────────────────
-  const addCustomChart = useCallback((chart) => {
-    const serializable = {
-      id: chart.id,
-      type: chart.type,
-      title: chart.title,
-      xCol: chart.xCol || null,
-      config: chart.config || null,
-      spec: chart.spec || null,
-    };
+  const toSerializable = (chart) => ({
+    id: chart.id,
+    type: chart.type,
+    title: chart.title,
+    xCol: chart.xCol || null,
+    config: chart.config || null,
+    spec: chart.spec || null,
+  });
 
+  const addCustomChart = useCallback((chart) => {
+    const serializable = toSerializable(chart);
     setCustomCharts((prev) => {
       const exists = prev.some(c => String(c.id) === String(chart.id));
       const next = exists
         ? prev.map(c => String(c.id) === String(chart.id) ? chart : c)
         : [chart, ...prev];
       const nextSerializable = exists
-        ? prev.map(c => String(c.id) === String(chart.id) ? serializable : {
-            id: c.id, type: c.type, title: c.title,
-            xCol: c.xCol || null, config: c.config || null, spec: c.spec || null,
-          })
-        : [serializable, ...prev.map(c => ({
-            id: c.id, type: c.type, title: c.title,
-            xCol: c.xCol || null, config: c.config || null, spec: c.spec || null,
-          }))];
+        ? prev.map(c => String(c.id) === String(chart.id) ? serializable : toSerializable(c))
+        : [serializable, ...prev.map(toSerializable)];
+      save(pinnedRef.current, nextSerializable, tablesRef.current);
+      return next;
+    });
+  }, [save]);
+
+  // Atomic: save chart + pin ID in one operation — no race condition
+  const addAndPinChart = useCallback((chart) => {
+    const serializable = toSerializable(chart);
+    const chartId = String(chart.id);
+    setCustomCharts((prev) => {
+      const exists = prev.some(c => String(c.id) === chartId);
+      const nextCharts = exists
+        ? prev.map(c => String(c.id) === chartId ? chart : c)
+        : [chart, ...prev];
+      const nextSerializable = exists
+        ? prev.map(c => String(c.id) === chartId ? serializable : toSerializable(c))
+        : [serializable, ...prev.map(toSerializable)];
       setPinnedIds((prevPins) => {
-        const nextPins = prevPins.includes(String(chart.id))
-          ? prevPins
-          : [...prevPins, String(chart.id)];
+        const nextPins = prevPins.includes(chartId) ? prevPins : [...prevPins, chartId];
         save(nextPins, nextSerializable, tablesRef.current);
         return nextPins;
       });
-      return next;
+      return nextCharts;
     });
   }, [save]);
 
@@ -145,6 +155,17 @@ export function usePins(userId, fileId) {
         return nextPins;
       });
       return next;
+    });
+  }, [save]);
+
+  const clearAllCustomCharts = useCallback(() => {
+    setCustomCharts([]);
+    setPinnedIds((prevPins) => {
+      // Only keep pins for auto-charts (non-timestamp IDs like wide_line, chart_0, etc.)
+      // Custom charts have numeric timestamp IDs — remove those
+      const nextPins = prevPins.filter(id => isNaN(Number(id)));
+      save(nextPins, [], tablesRef.current);
+      return nextPins;
     });
   }, [save]);
 
@@ -172,13 +193,45 @@ export function usePins(userId, fileId) {
   const removeFilteredTable = useCallback((id) => {
     setFilteredTables((prev) => {
       const next = prev.filter((t) => String(t.id) !== String(id));
-      // Also unpin
       setPinnedIds((prevPins) => {
         const nextPins = prevPins.filter((p) => p !== String(id));
         save(nextPins, customRef.current, next);
         return nextPins;
       });
       return next;
+    });
+  }, [save]);
+
+  const renameFilteredTable = useCallback((id, newTitle) => {
+    setFilteredTables((prev) => {
+      const next = prev.map(t => String(t.id) === String(id) ? { ...t, title: newTitle } : t);
+      save(pinnedRef.current, customRef.current, next);
+      return next;
+    });
+  }, [save]);
+
+  // Atomic: save table + pin ID in one operation
+  const addAndPinTable = useCallback((table) => {
+    const tableId = String(table.id);
+    setFilteredTables((prev) => {
+      const exists = prev.some(t => String(t.id) === tableId);
+      const next = exists ? prev : [table, ...prev];
+      setPinnedIds((prevPins) => {
+        const nextPins = prevPins.includes(tableId) ? prevPins : [...prevPins, tableId];
+        save(nextPins, customRef.current, next);
+        return nextPins;
+      });
+      return next;
+    });
+  }, [save]);
+
+  const clearAllFilteredTables = useCallback(() => {
+    setFilteredTables([]);
+    setPinnedIds((prevPins) => {
+      const tableIds = new Set(tablesRef.current.map(t => String(t.id)));
+      const nextPins = prevPins.filter(id => !tableIds.has(id));
+      save(nextPins, customRef.current, []);
+      return nextPins;
     });
   }, [save]);
 
@@ -190,9 +243,14 @@ export function usePins(userId, fileId) {
     togglePin,
     isPinned,
     addCustomChart,
+    addAndPinChart,
     removeCustomChart,
+    clearAllCustomCharts,
     renameCustomChart,
     addFilteredTable,
     removeFilteredTable,
+    renameFilteredTable,
+    addAndPinTable,
+    clearAllFilteredTables,
   };
 }
