@@ -925,6 +925,11 @@ export default function Dashboard({ data, blueprint, fileId }) {
   });
   const [maximizedId, setMaximizedId] = useState(null);
   const minimizedIdsRef = useRef(minimizedIds);
+  const customBuilderWrapRef = useRef(null);
+  const customBuilderContentRef = useRef(null);
+  const [customBuilderHeight, setCustomBuilderHeight] = useState(0);
+  const [customBuilderRect, setCustomBuilderRect] = useState({ left: 0, width: 0 });
+  const [customBuilderStuck, setCustomBuilderStuck] = useState(false);
   const skipNextLayoutChangeRef = useRef(false);
   const minimizedSet = useMemo(() => new Set(minimizedIds), [minimizedIds]);
 
@@ -945,6 +950,42 @@ export default function Dashboard({ data, blueprint, fileId }) {
   useEffect(() => {
     minimizedIdsRef.current = minimizedIds;
   }, [minimizedIds]);
+
+  useEffect(() => {
+    if (!customBuilderContentRef.current || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(entries => {
+      const entry = entries[0];
+      if (!entry) return;
+      const next = Math.ceil(entry.contentRect.height);
+      setCustomBuilderHeight(prev => (prev === next ? prev : next));
+    });
+    observer.observe(customBuilderContentRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    let ticking = false;
+    const update = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        if (customBuilderWrapRef.current) {
+          const rect = customBuilderWrapRef.current.getBoundingClientRect();
+          const shouldStick = rect.top <= 56;
+          setCustomBuilderStuck(prev => (prev === shouldStick ? prev : shouldStick));
+          setCustomBuilderRect(prev => (prev.left === rect.left && prev.width === rect.width ? prev : { left: rect.left, width: rect.width }));
+        }
+        ticking = false;
+      });
+    };
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
 
 
@@ -1573,6 +1614,10 @@ const chartWidgets = useMemo(() => {
         .react-resizable-handle-s { width:100%; height:14px; left:0; transform:none; }
         .react-resizable-handle-e,
         .react-resizable-handle-w { height:100%; width:14px; top:0; transform:none; }
+        .custom-builder-wrap { position: relative; }
+        .custom-builder-spacer { height: 0; }
+        .custom-builder-sticky { transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease; }
+        .custom-builder-sticky.is-stuck { position: fixed; top: 56px; z-index: 60; box-shadow: 0 12px 28px rgba(0,0,0,0.18); transform: translateY(0); }
         .react-grid-item.react-draggable-dragging .chart-widget { box-shadow: 0 16px 30px rgba(0,0,0,0.2); }
         .chart-empty { border:1px dashed #d7e2dc; border-radius:16px; padding:28px; background: var(--color-surface-elevated); text-align:center; color:#6b7a71; }
         .chart-empty h2 { margin:0 0 8px; font-size:18px; color: var(--color-text); }
@@ -1698,21 +1743,30 @@ const chartWidgets = useMemo(() => {
       {/* ── CHARTS TAB ───────────────────────────────────── */}
       {activeView==="charts" && (
         <>
-          <Section>
-            <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table"/>
-            <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
-              const id=Date.now(); let result;
-              const spec=config; // save full config as spec for Firestore rebuild
-              if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
-              else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
-              else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
-              else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
-              else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
-              if(result) {
-                setCustomCharts(prev=>[result,...prev]); // session only - persists on pin
-              }
-            }}/>
-          </Section>
+          <div className="custom-builder-wrap" ref={customBuilderWrapRef}>
+            <div className="custom-builder-spacer" style={{ height: customBuilderStuck ? customBuilderHeight : 0 }} />
+            <div
+              className={`custom-builder-sticky ${customBuilderStuck ? "is-stuck" : ""}`}
+              ref={customBuilderContentRef}
+              style={customBuilderStuck ? { left: customBuilderRect.left, width: customBuilderRect.width } : undefined}
+            >
+              <Section>
+                <SectionHeader title="Custom Builder" subtitle="Build your own chart or pivot table"/>
+                <ChartBuilder columns={headers} sampleData={objectData.slice(0,50)} onGenerate={(config)=>{
+                  const id=Date.now(); let result;
+                  const spec=config; // save full config as spec for Firestore rebuild
+                  if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
+                  else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
+                  else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
+                  else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
+                  else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
+                  if(result) {
+                    setCustomCharts(prev=>[result,...prev]); // session only - persists on pin
+                  }
+                }}/>
+              </Section>
+            </div>
+          </div>
           {chartWidgets.length === 0 ? (
             <div className="chart-empty">
               <h2>Charts Dashboard</h2>
