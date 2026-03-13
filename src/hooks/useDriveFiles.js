@@ -26,7 +26,9 @@ export function useDriveFiles() {
         `https://www.googleapis.com/drive/v3/files` +
         `?q=${query}` +
         `&fields=files(id,name,modifiedTime,size,iconLink,webViewLink,mimeType)` +
-        `&orderBy=modifiedTime+desc`,
+        `&orderBy=modifiedTime+desc` +
+        `&includeItemsFromAllDrives=true` +
+        `&supportsAllDrives=true`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
         }
@@ -75,12 +77,28 @@ export function useDriveFiles() {
   const downloadFile = useCallback(async (fileId, accessToken) => {
     if (!accessToken) throw new Error("No access token");
 
-    const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+    // First get the mimeType so we know how to download
+    const metaRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType,name&supportsAllDrives=true`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
+    if (metaRes.status === 401) throw new Error("Session expired — please sign back in");
+    if (!metaRes.ok) throw new Error(`Failed to get file metadata: ${metaRes.status}`);
+    const meta = await metaRes.json();
+
+    const isGoogleSheet = meta.mimeType === "application/vnd.google-apps.spreadsheet";
+
+    // Google Sheets → export as xlsx; regular files → download directly
+    const downloadUrl = isGoogleSheet
+      ? `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&supportsAllDrives=true`
+      : `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`;
+
+    const res = await fetch(downloadUrl, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
 
     if (res.status === 401) throw new Error("Session expired — please sign back in");
+    if (res.status === 403) throw new Error("Access denied — make sure you have at least Viewer access to this file");
     if (!res.ok) throw new Error(`Failed to download file: ${res.status}`);
 
     return await res.arrayBuffer();

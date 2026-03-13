@@ -123,16 +123,23 @@ function generatePivot(data, rowField, columnField, metric, aggregation) {
   return{columns:[rowField,...columnLabels],rows:pivotRows,totalRow,hasColDim:!!columnField};
 }
 
-function groupForBar(data, xField, yField, topN=15) {
+function groupForBar(data, xField, yField, topN=15, aggregation="sum") {
   const grouped={};
   data.forEach(row=>{
     const raw=row[xField]!=null?String(row[xField]).trim():null;
     if(!raw)return;
     const k=raw.toLowerCase();
-    if(!grouped[k])grouped[k]={label:raw,value:0};
-    grouped[k].value+=Number(row[yField])||0;
+    if(!grouped[k])grouped[k]={label:raw,values:[]};
+    const n=Number(row[yField]);
+    if(!isNaN(n))grouped[k].values.push(n);
   });
-  return Object.values(grouped).map(({label,value})=>({name:label,value})).sort((a,b)=>b.value-a.value).slice(0,topN);
+  return Object.values(grouped).map(({label,values})=>{
+    let value=0;
+    if(aggregation==="count")value=values.length;
+    else if(aggregation==="avg")value=values.length?values.reduce((a,b)=>a+b,0)/values.length:0;
+    else value=values.reduce((a,b)=>a+b,0);
+    return{name:label,value:Math.round(value*100)/100};
+  }).sort((a,b)=>b.value-a.value).slice(0,topN);
 }
 
 function analyticsToObjects(payload) {
@@ -203,7 +210,7 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRena
             <h3
               onClick={startEdit}
               title={onRename ? "Click to rename" : undefined}
-              style={{ fontSize:15, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em", cursor:onRename?"text":"default", borderBottom:onRename?"1px dashed transparent":"none" }}
+              style={{ fontSize:15, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em", cursor:"default", borderBottom:"none" }}
               onMouseEnter={e=>{ if(onRename) e.currentTarget.style.borderBottomColor="#9cafa4"; }}
               onMouseLeave={e=>{ if(onRename) e.currentTarget.style.borderBottomColor="transparent"; }}
             >{title}</h3>
@@ -598,18 +605,18 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
 
 // ── Clickable charts ───────────────────────────────────────────────────────────
 
-function ClickableBarChart({ data, config, onDrilldown, labels }) {
+function ClickableBarChart({ data, config, labels, height = 320 }) {
   const xKey=config?.x||"name", yKey=config?.y||"value";
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}} style={{cursor:"default"}}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
         <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0} label={undefined}/>
         <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
         <Tooltip formatter={(v,_)=>[v.toLocaleString(), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        <Bar dataKey={yKey} radius={[4,4,0,0]} cursor={onDrilldown?"pointer":"default"} onClick={d=>onDrilldown&&onDrilldown(d[xKey])}>
+        <Bar dataKey={yKey} radius={[4,4,0,0]} cursor="default" isAnimationActive={false} activeBar={false}>
           {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
         </Bar>
       </BarChart>
@@ -617,18 +624,19 @@ function ClickableBarChart({ data, config, onDrilldown, labels }) {
   );
 }
 
-function HorizontalBarChart({ data, config, onDrilldown, labels }) {
+function HorizontalBarChart({ data, config, labels, height }) {
   const xKey=config?.x||"name", yKey=config?.y||"value";
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
+  const autoHeight = height || Math.max(260, data.length * 34);
   return (
-    <ResponsiveContainer width="100%" height={Math.max(260,data.length*34)}>
+    <ResponsiveContainer width="100%" height={autoHeight}>
       <BarChart data={data} layout="vertical" margin={{top:5,right:40,left:120,bottom:5}}>
         <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} horizontal={false}/>
         <XAxis type="number" tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
         <YAxis type="category" dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} width={110}/>
         <Tooltip formatter={(v,_)=>[v.toLocaleString(), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        <Bar dataKey={yKey} radius={[0,4,4,0]} cursor={onDrilldown?"pointer":"default"} onClick={d=>onDrilldown&&onDrilldown(d[xKey])}>
+        <Bar dataKey={yKey} radius={[0,4,4,0]} cursor="default" isAnimationActive={false} activeBar={false}>
           {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
         </Bar>
       </BarChart>
@@ -646,7 +654,7 @@ function StackedBarChart({ data }) {
         <XAxis dataKey="name" tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0}/>
         <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
         <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        {stackKeys.map((k,i)=><Bar key={k} dataKey={k} stackId="a" fill={CHART_COLORS[i%CHART_COLORS.length]} radius={i===stackKeys.length-1?[4,4,0,0]:[0,0,0,0]}/>)}
+        {stackKeys.map((k,i)=><Bar key={k} dataKey={k} stackId="a" fill={CHART_COLORS[i%CHART_COLORS.length]} radius={i===stackKeys.length-1?[4,4,0,0]:[0,0,0,0]} activeBar={false} isAnimationActive={false}/>)}
       </BarChart>
     </ResponsiveContainer>
   );
@@ -787,14 +795,47 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
 
 // ── Render a single chart/pivot by spec ───────────────────────────────────────
 
-function RenderChart({ chart, filteredData, onDrilldown }) {
+function RenderChart({ chart, filteredData }) {
   if (chart.type==="pivot") return <PivotTableRenderer data={chart.pivotData}/>;
-  if (chart.type==="bar") return <ClickableBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} onDrilldown={v=>onDrilldown&&onDrilldown(chart.xCol,v)}/>;
-  if (chart.type==="hbar") return <HorizontalBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} onDrilldown={v=>onDrilldown&&onDrilldown(chart.xCol,v)}/>;
+  if (chart.type==="bar") return <ClickableBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}}/>;
+  if (chart.type==="hbar") return <HorizontalBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}}/>;
   if (chart.type==="stacked") return <StackedBarChart data={chart.chartData}/>;
   if (chart.type==="line") return <LineChartRenderer data={filteredData} config={chart.config}/>;
   if (chart.type==="donut") return <DonutChartRenderer data={filteredData} config={chart.config}/>;
   return null;
+}
+
+// Fullscreen variant — measures container height and passes to chart components
+function FullscreenChartWrapper({ card }) {
+  const containerRef = useRef(null);
+  const [containerHeight, setContainerHeight] = useState(500);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerHeight(Math.floor(entry.contentRect.height));
+      }
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  if (!card) return null;
+
+  const renderWithHeight = (h) => {
+    if (!card.chart) return card.render;
+    const chart = card.chart;
+    if (chart.type === "bar") return <ClickableBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} height={h}/>;
+    if (chart.type === "hbar") return <HorizontalBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} height={h}/>;
+    return card.render;
+  };
+
+  return (
+    <div ref={containerRef} style={{ width: "100%", height: "100%", overflow: card.kind === "pivot" ? "auto" : "hidden" }}>
+      {renderWithHeight(containerHeight)}
+    </div>
+  );
 }
 
 function getChartWorkspaceDefault(card) {
@@ -964,7 +1005,7 @@ function MacWindowControls({
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}
+      style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}
     >
       {controls.map(control => (
         <button
@@ -976,8 +1017,8 @@ function MacWindowControls({
           onMouseDown={e=>e.stopPropagation()}
           onPointerDown={e=>e.stopPropagation()}
           style={{
-            width: 15,
-            height: 15,
+            width: 12,
+            height: 12,
             borderRadius: 999,
             border: "1px solid rgba(0,0,0,0.14)",
             background: control.enabled ? control.bg : "rgba(156, 175, 164, 0.45)",
@@ -991,24 +1032,12 @@ function MacWindowControls({
             transform: hovered && control.enabled ? "translateY(-1px)" : "translateY(0)",
             transition: "transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease",
             filter: control.enabled ? "saturate(1)" : "saturate(0.6)",
-            fontSize: 11,
+            fontSize: 8,
             fontWeight: 800,
             lineHeight: 1,
           }}
         >
-          <span
-            style={{
-              opacity: hovered && control.enabled ? 1 : 0,
-              transition: "opacity 0.14s ease",
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "100%",
-              height: "100%",
-              lineHeight: 1,
-              textAlign: "center",
-            }}
-          >
+          <span style={{ opacity: hovered && control.enabled ? 1 : 0, transition: "opacity 0.14s ease" }}>
             {control.symbol}
           </span>
         </button>
@@ -1036,6 +1065,11 @@ function ChartWorkspaceCard({
   const borderColor = card.badge === "PINNED" ? LW.green : UI.border;
   const cardHeight = minimized ? 58 : layout.height;
   const cardWidth = getCardPixelWidth(layout.span, workspaceWidth);
+  const [renamingCard, setRenamingCard] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const renameInputRef = useRef(null);
+  const startRename = (e) => { e.stopPropagation(); if (!card.onRename) return; setRenameDraft(card.title); setRenamingCard(true); setTimeout(() => renameInputRef.current?.select(), 30); };
+  const commitRename = () => { const t = renameDraft.trim(); if (t && t !== card.title) card.onRename(t); setRenamingCard(false); };
 
   return (
     <div
@@ -1093,11 +1127,34 @@ function ChartWorkspaceCard({
               onToggleFullscreen={onToggleFullscreen}
             />
             <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: UI.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {card.title}
-                </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                {renamingCard ? (
+                  <input
+                    ref={renameInputRef}
+                    value={renameDraft}
+                    onChange={e => setRenameDraft(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingCard(false); }}
+                    onPointerDown={e => e.stopPropagation()}
+                    style={{ fontSize: 13, fontWeight: 800, color: UI.text, background: "transparent", border: "none", borderBottom: `2px solid ${LW.green}`, outline: "none", padding: "0 2px", width: 200, fontFamily: "inherit" }}
+                  />
+                ) : (
+                  <div style={{ fontSize: 14, fontWeight: 800, color: UI.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {card.title}
+                  </div>
+                )}
                 {card.badge && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 100, fontWeight: 700, letterSpacing: "0.08em", background: card.badge === "PINNED" ? LW.green : card.badge === "CUSTOM" ? "#fff3dc" : LW.green, color: card.badge === "CUSTOM" ? "#c17110" : "#fff", flexShrink: 0 }}>{card.badge}</span>}
+                {card.onRename && !renamingCard && (
+                  <button
+                    onPointerDown={startRename}
+                    title="Rename chart"
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 3px", borderRadius: 5, color: "#9cafa4", fontSize: 13, lineHeight: 1, display: "flex", alignItems: "center", opacity: 0.7, flexShrink: 0 }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                )}
               </div>
               {card.subtitle && <div style={{ fontSize: 11, color: "#9cafa4", marginTop: 2 }}>{card.subtitle}</div>}
             </div>
@@ -1211,7 +1268,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const { user } = useAuth();
   const { pinnedIds, customCharts: savedCustomCharts, filteredTables, loading: pinsLoading,
           togglePin, isPinned, addCustomChart, addAndPinChart, removeCustomChart, clearAllCustomCharts, renameCustomChart,
-          addFilteredTable, removeFilteredTable, renameFilteredTable, addAndPinTable, clearAllFilteredTables } = usePins(user?.uid, fileId||"default");
+          addFilteredTable, removeFilteredTable, updateFilteredTable, renameFilteredTable, addAndPinTable, clearAllFilteredTables } = usePins(user?.uid, fileId||"default");
 
   // customCharts from usePins is already seeded from localStorage on first render
   // and synced from Firestore in background — use directly
@@ -1381,12 +1438,12 @@ export default function Dashboard({ data, blueprint, fileId }) {
     if (spec.type === "bar" || spec.type === "hbar") {
       return { id, type: spec.type, title: spec.title || "Chart", xCol, spec,
         config: { x: xCol, y: yCol },
-        chartData: groupForBar(data, xCol, yCol, limit || 20) };
+        chartData: groupForBar(data, xCol, yCol, limit || 20, spec?.aggregation || "sum") };
     }
     if (spec.type === "donut") {
       return { id, type: "donut", title: spec.title || "Chart", xCol, spec,
         config: { x: xCol, y: yCol, topN: limit || 10 },
-        chartData: groupForBar(data, xCol, yCol, limit || 10) };
+        chartData: groupForBar(data, xCol, yCol, limit || 10, spec?.aggregation || "sum") };
     }
     if (spec.type === "line") {
       return { id, type: "line", title: spec.title || "Chart", spec, config: { x: xCol, y: yCol } };
@@ -1395,18 +1452,6 @@ export default function Dashboard({ data, blueprint, fileId }) {
   };
 
   const handleChatResult = ({ chartSpec, filterSpec, action, targetId, updateChartId, deleteSpec, pinSpec, newChartSpecs, renameSpec, tab, modifyChartSpec, tableActionSpec }) => {
-    if (action === "delete_table" && deleteTableSpec) {
-      if (deleteTableSpec.deleteAll) {
-        clearAllFilteredTables();
-      } else {
-        const match = filteredTables.find(t =>
-          t.title?.toLowerCase() === deleteTableSpec.targetTitle?.toLowerCase()
-        );
-        if (match) removeFilteredTable(match.id);
-      }
-      return;
-    }
-
     if (action === "rename" && renameSpec) {
       const match = allCustomCharts.find(c =>
         c.title?.toLowerCase() === renameSpec.targetTitle?.toLowerCase()
@@ -1436,22 +1481,52 @@ export default function Dashboard({ data, blueprint, fileId }) {
     }
 
     if (action === "table_action" && tableActionSpec) {
-      const { action: act, targetTitle, newTitle } = tableActionSpec;
+      const { action: act, targetTitle, newTitle, sort_col, sort_dir, limit, filter: addFilter, filter_column } = tableActionSpec;
+      const findTable = (title) => filteredTables.find(t => t.title?.toLowerCase() === title?.toLowerCase());
+
       if (act === "deleteAll") {
         clearAllFilteredTables();
       } else if (act === "delete") {
-        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        const match = findTable(targetTitle);
         if (match) removeFilteredTable(match.id);
       } else if (act === "pinAll") {
-        filteredTables.forEach(t => {
-          if (!isPinned(String(t.id))) addAndPinTable(t);
-        });
+        filteredTables.forEach(t => { if (!isPinned(String(t.id))) addAndPinTable(t); });
+      } else if (act === "unpinAll") {
+        filteredTables.forEach(t => { if (isPinned(String(t.id))) togglePin(String(t.id)); });
       } else if (act === "pin") {
-        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        const match = findTable(targetTitle);
         if (match && !isPinned(String(match.id))) addAndPinTable(match);
       } else if (act === "rename") {
-        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        const match = findTable(targetTitle);
         if (match) renameFilteredTable(match.id, newTitle);
+      } else if (act === "sort") {
+        // Update table's sort_col + sort_dir in filteredTables state
+        const match = findTable(targetTitle);
+        if (match) {
+          const updated = { ...match, sort_col, sort_dir: sort_dir || "asc" };
+          updateFilteredTable(updated);
+        }
+      } else if (act === "limit") {
+        const match = findTable(targetTitle);
+        if (match) {
+          const updated = { ...match, limit };
+          updateFilteredTable(updated);
+        }
+      } else if (act === "add_filter") {
+        const match = findTable(targetTitle);
+        if (match && addFilter?.column) {
+          const existingFilters = match.filters || [];
+          // Replace filter for same column, or append
+          const newFilters = [...existingFilters.filter(f => f.column !== addFilter.column), addFilter];
+          const updated = { ...match, filters: newFilters };
+          updateFilteredTable(updated);
+        }
+      } else if (act === "remove_filter") {
+        const match = findTable(targetTitle);
+        if (match && filter_column) {
+          const updated = { ...match, filters: (match.filters || []).filter(f => f.column !== filter_column) };
+          updateFilteredTable(updated);
+        }
       }
       return;
     }
@@ -1592,7 +1667,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
       id: `custom-${chart.id}`,
       kind: chart.type === "pivot" ? "pivot" : chart.type,
       title: chart.title,
-      badge: isPinned(String(chart.id)) ? "PINNED" : "CUSTOM",
+      badge: isPinned(String(chart.id)) ? "PINNED" : null,
       pinned: isPinned(String(chart.id)),
       onPin: () => {
         if (isPinned(String(chart.id))) togglePin(String(chart.id));
@@ -1603,6 +1678,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
       onHide: () => setChartHidden(`custom-${chart.id}`, true),
       isFullscreen: fullscreenChartId === `custom-${chart.id}`,
       render: <RenderChart chart={chart} filteredData={filteredData} />,
+      chart: chart,
     })),
     ...(isWide && isPinned("wide_line") && periodData.length > 1 ? [{
       id: "auto-wide-line",
@@ -1889,7 +1965,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
   };
 
   return (
-    <div style={{ padding: "48px 32px 80px", maxWidth: 1280, width: "100%", margin: "0 auto", fontFamily: "'Manrope',sans-serif" }}>
+    <div style={{ padding: "48px 40px 80px", width: "100%", fontFamily: "'Manrope',sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
 
       {aiGenerated&&datasetSummary&&<AIBanner summary={datasetSummary}/>}
@@ -1966,16 +2042,30 @@ export default function Dashboard({ data, blueprint, fileId }) {
               );
             };
             const displayCols = (table.columns||[]).filter(c => headers.includes(c));
-            const matchedRows = applyTableFilter();
-            const displayRows = matchedRows.map(row => displayCols.map(col => row[col] === undefined ? null : row[col]));
+            let matchedRows = applyTableFilter();
+            // Sort if table has sort config
+            if (table.sort_col && displayCols.includes(table.sort_col)) {
+              const col = table.sort_col;
+              const dir = table.sort_dir === "asc" ? 1 : -1;
+              matchedRows = [...matchedRows].sort((a, b) => {
+                const av = a[col], bv = b[col];
+                const an = parseFloat(String(av).replace(/,/g, "")), bn = parseFloat(String(bv).replace(/,/g, ""));
+                if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir;
+                return String(av||"").localeCompare(String(bv||"")) * dir;
+              });
+            }
+            // Limit rows if set
+            const limitedRows = table.limit ? matchedRows.slice(0, table.limit) : matchedRows;
+            const displayRows = limitedRows.map(row => displayCols.map(col => row[col] === undefined ? null : row[col]));
             return (
               <Section key={table.id}>
                 <SectionHeader
                   title={table.title}
-                  subtitle={`${matchedRows.length} row${matchedRows.length !== 1 ? "s" : ""} · AI filtered`}
+                  subtitle={`${limitedRows.length}${table.limit && matchedRows.length > table.limit ? ` of ${matchedRows.length}` : ""} row${limitedRows.length !== 1 ? "s" : ""}${table.sort_col ? ` · sorted by ${table.sort_col} ${table.sort_dir||"desc"}` : ""} · AI filtered`}
                   badge="AI FILTER"
                   onPin={() => togglePin(String(table.id))}
                   pinned={isPinned(String(table.id))}
+                  onRename={newTitle => renameFilteredTable(table.id, newTitle)}
                   onRemove={() => removeFilteredTable(table.id)}
                 />
                 <DataTable headers={displayCols} rows={displayRows}/>
@@ -2032,8 +2122,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
               const id=Date.now(); let result;
               const spec=config; // save full config as spec for Firestore rebuild
               if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
-              else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
-              else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
+              else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN,config.aggregation)};
+              else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN,config.aggregation)};
               else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
               else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
               if(result) {
@@ -2049,15 +2139,31 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 Hidden Charts
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {hiddenChartCards.map(card => (
-                  <button
-                    key={card.id}
-                    onClick={() => setChartHidden(card.id, false)}
-                    style={{ padding: "8px 12px", borderRadius: 999, border: `1px solid ${UI.border}`, background: UI.surface, color: UI.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                  >
-                    Show {card.title}
-                  </button>
-                ))}
+                {hiddenChartCards.map(card => {
+                  const pinned = card.pinned;
+                  return (
+                    <div key={card.id} style={{ display: "flex", alignItems: "center", borderRadius: 999, border: `1px solid ${UI.border}`, background: UI.surface, overflow: "hidden" }}>
+                      <button
+                        onClick={() => setChartHidden(card.id, false)}
+                        style={{ padding: "8px 12px", background: "none", border: "none", color: UI.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        Show {card.title}
+                      </button>
+                      {card.onPin && (
+                        <>
+                          <div style={{ width: 1, height: 20, background: UI.border }} />
+                          <button
+                            onClick={card.onPin}
+                            title={pinned ? "Unpin" : "Pin chart"}
+                            style={{ padding: "8px 10px", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: pinned ? LW.green : "#9cafa4", display: "flex", alignItems: "center" }}
+                          >
+                            {pinned ? "📌" : "📍"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2115,9 +2221,10 @@ export default function Dashboard({ data, blueprint, fileId }) {
             const fullscreenCard = chartCards.find(card => card.id === fullscreenChartId);
             if (!fullscreenCard) return null;
             return (
-              <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(6, 16, 12, 0.64)", backdropFilter: "blur(8px)", padding: 24, display: "flex", alignItems: "stretch", justifyContent: "center" }}>
-                <div style={{ width: "min(1400px, 100%)", height: "100%", background: UI.surfaceElevated, borderRadius: 20, border: `1px solid ${UI.border}`, boxShadow: "0 24px 60px rgba(0,0,0,0.24)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "16px 20px", borderBottom: `1px solid ${UI.border}`, background: "linear-gradient(180deg, rgba(19,48,32,0.04), rgba(19,48,32,0))" }}>
+              <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(6, 16, 12, 0.72)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                <div style={{ width: "min(1800px, 96%)", height: "calc(100vh - 48px)", background: UI.surfaceElevated, borderRadius: 20, border: `1px solid ${UI.border}`, boxShadow: "0 24px 60px rgba(0,0,0,0.32)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${UI.border}`, flexShrink: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ width: 10, height: 10, borderRadius: 999, background: "#ef4444" }} />
@@ -2128,12 +2235,15 @@ export default function Dashboard({ data, blueprint, fileId }) {
                         {fullscreenCard.title}
                       </div>
                     </div>
-                    <button onClick={() => setFullscreenChartId(null)} style={{ background: "none", border: `1px solid ${UI.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: UI.text }}>
+                    <button onClick={() => setFullscreenChartId(null)} style={{ background: "none", border: `1px solid ${UI.border}`, borderRadius: 10, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: UI.text }}>
                       Close fullscreen
                     </button>
                   </div>
-                  <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 20 }}>
-                    {fullscreenCard.render}
+                  {/* Chart — fills remaining height */}
+                  <div style={{ flex: 1, minHeight: 0, padding: "24px 32px", display: "flex", flexDirection: "column" }}>
+                    <div style={{ flex: 1, minHeight: 0 }}>
+                      <FullscreenChartWrapper card={fullscreenCard} />
+                    </div>
                   </div>
                 </div>
               </div>
