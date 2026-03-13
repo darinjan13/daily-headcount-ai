@@ -964,7 +964,7 @@ function MacWindowControls({
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{ display: "flex", alignItems: "center", gap: 7, flexShrink: 0 }}
+      style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}
     >
       {controls.map(control => (
         <button
@@ -976,8 +976,8 @@ function MacWindowControls({
           onMouseDown={e=>e.stopPropagation()}
           onPointerDown={e=>e.stopPropagation()}
           style={{
-            width: 12,
-            height: 12,
+            width: 15,
+            height: 15,
             borderRadius: 999,
             border: "1px solid rgba(0,0,0,0.14)",
             background: control.enabled ? control.bg : "rgba(156, 175, 164, 0.45)",
@@ -991,12 +991,24 @@ function MacWindowControls({
             transform: hovered && control.enabled ? "translateY(-1px)" : "translateY(0)",
             transition: "transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease",
             filter: control.enabled ? "saturate(1)" : "saturate(0.6)",
-            fontSize: 8,
+            fontSize: 11,
             fontWeight: 800,
             lineHeight: 1,
           }}
         >
-          <span style={{ opacity: hovered && control.enabled ? 1 : 0, transition: "opacity 0.14s ease" }}>
+          <span
+            style={{
+              opacity: hovered && control.enabled ? 1 : 0,
+              transition: "opacity 0.14s ease",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+              height: "100%",
+              lineHeight: 1,
+              textAlign: "center",
+            }}
+          >
             {control.symbol}
           </span>
         </button>
@@ -2134,4 +2146,3 @@ export default function Dashboard({ data, blueprint, fileId }) {
     </div>
   );
 }
-
