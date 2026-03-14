@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import ThemeToggle from "./ThemeToggle";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 import UserAvatar from "./UserAvatar";
@@ -130,14 +129,6 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
               className="absolute bottom-[calc(100%+8px)] left-0 w-full rounded-xl border shadow-md space-y-3"
               style={{ backgroundColor: "var(--color-surface-elevated)", borderColor: "var(--color-border)", zIndex: 20, padding: "12px" }}
             >
-              <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border" style={{ borderColor: "var(--color-border)", backgroundColor: "var(--color-surface)" }}>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>Theme</p>
-                  <p className="text-xs" style={{ color: "var(--color-text-light)" }}>Switch between light and dark</p>
-                </div>
-                <ThemeToggle />
-              </div>
-
               <button
                 onClick={() => {
                   setIsProfileMenuOpen(false);

@@ -1,45 +1,79 @@
+import { useId } from "react";
 import { useTheme } from "../context/ThemeContext";
 
 export default function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
+  const inputId = useId();
 
   return (
-    <button
-      type="button"
-      onClick={toggleTheme}
-      className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
-      style={{
-        backgroundColor: "var(--color-surface-elevated)",
-        border: "1px solid var(--color-border)",
-        color: "var(--color-text)",
-        boxShadow: "var(--color-shadow-soft)",
-        padding: 0,
-      }}
+    <label
+      className="theme-switch"
+      htmlFor={inputId}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
     >
-      {isDark ? (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 3V5M12 19V21M4.93 4.93L6.34 6.34M17.66 17.66L19.07 19.07M3 12H5M19 12H21M4.93 19.07L6.34 17.66M17.66 6.34L19.07 4.93M12 17a5 5 0 100-10 5 5 0 000 10z"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      ) : (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )}
-    </button>
+      <input
+        id={inputId}
+        className="theme-switch-input"
+        type="checkbox"
+        checked={isDark}
+        onChange={toggleTheme}
+      />
+      <span className="theme-switch-slider theme-switch-round">
+        <span className="theme-switch-sun-moon">
+          <svg id="theme-moon-dot-1" className="theme-moon-dot" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-moon-dot-2" className="theme-moon-dot" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-moon-dot-3" className="theme-moon-dot" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-light-ray-1" className="theme-light-ray" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-light-ray-2" className="theme-light-ray" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-light-ray-3" className="theme-light-ray" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-cloud-1" className="theme-cloud-dark" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-cloud-2" className="theme-cloud-dark" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-cloud-3" className="theme-cloud-dark" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-cloud-4" className="theme-cloud-light" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-cloud-5" className="theme-cloud-light" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+          <svg id="theme-cloud-6" className="theme-cloud-light" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="50" r="50" />
+          </svg>
+        </span>
+        <span className="theme-stars">
+          <svg id="theme-star-1" className="theme-star" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
+          </svg>
+          <svg id="theme-star-2" className="theme-star" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
+          </svg>
+          <svg id="theme-star-3" className="theme-star" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
+          </svg>
+          <svg id="theme-star-4" className="theme-star" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M 0 10 C 10 10,10 10 ,0 10 C 10 10 , 10 10 , 10 20 C 10 10 , 10 10 , 20 10 C 10 10 , 10 10 , 10 0 C 10 10,10 10 ,0 10 Z" />
+          </svg>
+        </span>
+      </span>
+    </label>
   );
 }

@@ -255,6 +255,247 @@ button:disabled {
   transform: none;
 }
 
+.theme-switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+  flex-shrink: 0;
+}
+
+.theme-switch-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.theme-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #7cc7ff;
+  transition: 0.4s;
+  z-index: 0;
+  overflow: hidden;
+  border: 1px solid rgba(19, 48, 32, 0.14);
+  box-shadow: var(--color-shadow-soft);
+}
+
+.theme-switch-sun-moon {
+  position: absolute;
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 3px;
+  background-color: #ffd84d;
+  transition: 0.4s;
+}
+
+.theme-switch-input:checked + .theme-switch-slider {
+  background-color: #0b1511;
+}
+
+.theme-switch-input:focus-visible + .theme-switch-slider {
+  outline: 2px solid var(--color-saffron);
+  outline-offset: 2px;
+}
+
+.theme-switch-input:checked + .theme-switch-slider .theme-switch-sun-moon {
+  transform: translateX(26px);
+  background-color: #fff;
+  animation: theme-rotate-center 0.6s ease-in-out both;
+}
+
+.theme-moon-dot {
+  opacity: 0;
+  transition: 0.4s;
+  fill: #9ca3af;
+}
+
+.theme-switch-input:checked + .theme-switch-slider .theme-moon-dot {
+  opacity: 1;
+}
+
+.theme-switch-round {
+  border-radius: 999px;
+}
+
+.theme-switch-round .theme-switch-sun-moon {
+  border-radius: 999px;
+}
+
+#theme-moon-dot-1 {
+  left: 10px;
+  top: 3px;
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  z-index: 4;
+}
+
+#theme-moon-dot-2 {
+  left: 2px;
+  top: 10px;
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  z-index: 4;
+}
+
+#theme-moon-dot-3 {
+  left: 16px;
+  top: 18px;
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  z-index: 4;
+}
+
+#theme-light-ray-1 {
+  left: -8px;
+  top: -8px;
+  position: absolute;
+  width: 43px;
+  height: 43px;
+  z-index: -1;
+  fill: #fff;
+  opacity: 0.1;
+}
+
+#theme-light-ray-2 {
+  left: -50%;
+  top: -50%;
+  position: absolute;
+  width: 55px;
+  height: 55px;
+  z-index: -1;
+  fill: #fff;
+  opacity: 0.1;
+}
+
+#theme-light-ray-3 {
+  left: -18px;
+  top: -18px;
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  z-index: -1;
+  fill: #fff;
+  opacity: 0.1;
+}
+
+.theme-cloud-light {
+  position: absolute;
+  fill: #f3f4f6;
+  animation: theme-cloud-move 6s infinite;
+}
+
+.theme-cloud-dark {
+  position: absolute;
+  fill: #d1d5db;
+  animation: theme-cloud-move 6s infinite 1s;
+}
+
+#theme-cloud-1 {
+  left: 30px;
+  top: 15px;
+  width: 40px;
+}
+
+#theme-cloud-2 {
+  left: 44px;
+  top: 10px;
+  width: 20px;
+}
+
+#theme-cloud-3 {
+  left: 18px;
+  top: 24px;
+  width: 30px;
+}
+
+#theme-cloud-4 {
+  left: 36px;
+  top: 18px;
+  width: 40px;
+}
+
+#theme-cloud-5 {
+  left: 48px;
+  top: 14px;
+  width: 20px;
+}
+
+#theme-cloud-6 {
+  left: 22px;
+  top: 26px;
+  width: 30px;
+}
+
+.theme-stars {
+  transform: translateY(-32px);
+  opacity: 0;
+  transition: 0.4s;
+}
+
+.theme-star {
+  fill: #fff;
+  position: absolute;
+  transition: 0.4s;
+  animation: theme-star-twinkle 2s infinite;
+}
+
+.theme-switch-input:checked + .theme-switch-slider .theme-stars {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+#theme-star-1 {
+  width: 20px;
+  top: 2px;
+  left: 3px;
+  animation-delay: 0.3s;
+}
+
+#theme-star-2 {
+  width: 6px;
+  top: 16px;
+  left: 3px;
+}
+
+#theme-star-3 {
+  width: 12px;
+  top: 20px;
+  left: 10px;
+  animation-delay: 0.6s;
+}
+
+#theme-star-4 {
+  width: 18px;
+  top: 0;
+  left: 18px;
+  animation-delay: 1.3s;
+}
+
+@keyframes theme-cloud-move {
+  0% { transform: translateX(0); }
+  40% { transform: translateX(4px); }
+  80% { transform: translateX(-4px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes theme-star-twinkle {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.2); }
+  80% { transform: scale(0.8); }
+  100% { transform: scale(1); }
+}
+
+@keyframes theme-rotate-center {
+  0% { transform: translateX(26px) rotate(0deg); }
+  100% { transform: translateX(26px) rotate(180deg); }
+}
+
 /* Auto-hide sidebar: keeps a small "peek" handle and expands on hover/focus */
 .ui-auto-hide-sidebar {
   transform: translateX(calc(var(--sidebar-peek) - var(--sidebar-width)));

@@ -225,6 +225,14 @@ export function usePins(userId, fileId) {
     });
   }, [save]);
 
+  const updateFilteredTable = useCallback((table) => {
+    setFilteredTables((prev) => {
+      const next = prev.map(t => String(t.id) === String(table.id) ? table : t);
+      save(pinnedRef.current, customRef.current, next);
+      return next;
+    });
+  }, [save]);
+
   const clearAllFilteredTables = useCallback(() => {
     setFilteredTables([]);
     setPinnedIds((prevPins) => {
@@ -249,6 +257,7 @@ export function usePins(userId, fileId) {
     renameCustomChart,
     addFilteredTable,
     removeFilteredTable,
+    updateFilteredTable,
     renameFilteredTable,
     addAndPinTable,
     clearAllFilteredTables,
