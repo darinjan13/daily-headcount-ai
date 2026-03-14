@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { ChevronLeft, ChevronRight, ClipboardList, Sigma, Tags, X } from "lucide-react";
 
 function parseDate(val) {
   if (!val) return null;
@@ -69,23 +70,24 @@ function detectNumericCols(headers, rows, dateCol) {
 
 function buildDayStats(dayRows, dateCol, categoryCols, numericCols) {
   const stats = [];
-  stats.push({ id: "__total", label: "Total Entries", value: dayRows.length, type: "count", icon: "📋" });
+  stats.push({ id: "__total", label: "Total Entries", value: dayRows.length, type: "count", icon: ClipboardList });
   categoryCols.slice(0, 4).forEach(col => {
     const vals = dayRows.map(r => r[col]).filter(v => v != null && String(v).trim() !== "");
     if (vals.length === 0) return;
     const grouped = {};
     vals.forEach(v => { const k = String(v).trim(); grouped[k] = (grouped[k] || 0) + 1; });
-    stats.push({ id: col, label: col, value: Object.entries(grouped).sort((a, b) => b[1] - a[1]), type: "breakdown", icon: "🏷️" });
+    stats.push({ id: col, label: col, value: Object.entries(grouped).sort((a, b) => b[1] - a[1]), type: "breakdown", icon: Tags });
   });
   numericCols.slice(0, 3).forEach(col => {
     const vals = dayRows.map(r => r[col]).filter(v => v != null && !isNaN(Number(v))).map(Number);
     if (vals.length === 0) return;
-    stats.push({ id: col + "_sum", label: `Total ${col}`, value: vals.reduce((a, b) => a + b, 0), type: "sum", icon: "🔢" });
+    stats.push({ id: col + "_sum", label: `Total ${col}`, value: vals.reduce((a, b) => a + b, 0), type: "sum", icon: Sigma });
   });
   return stats;
 }
 
 function StatCard({ stat }) {
+  const Icon = stat.icon;
   const fmt = (n) => {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
@@ -97,7 +99,7 @@ function StatCard({ stat }) {
     return (
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 min-w-0">
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-base">{stat.icon}</span>
+          <Icon className="h-4 w-4 text-emerald-700" aria-hidden="true" />
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wide truncate">{stat.label}</span>
         </div>
         <div className="space-y-2">
@@ -122,7 +124,7 @@ function StatCard({ stat }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col justify-between min-w-0">
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-base">{stat.icon}</span>
+        <Icon className="h-4 w-4 text-emerald-700" aria-hidden="true" />
         <span className="text-xs font-bold text-gray-400 uppercase tracking-wide truncate">{stat.label}</span>
       </div>
       <div className="text-3xl font-extrabold text-emerald-700 tracking-tight leading-none">{fmt(stat.value)}</div>
@@ -142,9 +144,13 @@ function MiniCalendar({ year, month, availableDates, selectedDate, onSelect, onM
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 select-none w-64 shrink-0">
       <div className="flex items-center justify-between mb-3">
-        <button onClick={() => onMonthChange(-1)} className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 cursor-pointer bg-transparent border-none text-sm font-bold">‹</button>
+        <button onClick={() => onMonthChange(-1)} className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 cursor-pointer bg-transparent border-none text-sm font-bold">
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </button>
         <span className="text-sm font-bold text-gray-700">{monthLabel}</span>
-        <button onClick={() => onMonthChange(1)} className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 cursor-pointer bg-transparent border-none text-sm font-bold">›</button>
+        <button onClick={() => onMonthChange(1)} className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-gray-500 cursor-pointer bg-transparent border-none text-sm font-bold">
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
       <div className="grid grid-cols-7 mb-1">
         {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
@@ -245,8 +251,9 @@ export default function DateNavigator({ headers, rows }) {
         </div>
         {selectedDate && (
           <button onClick={() => setSelectedDate(null)}
-            className="ml-auto text-xs text-gray-400 hover:text-gray-600 bg-transparent border-none cursor-pointer">
-            ✕ Clear
+            className="ml-auto text-xs text-gray-400 hover:text-gray-600 bg-transparent border-none cursor-pointer inline-flex items-center gap-1.5">
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            Clear
           </button>
         )}
       </div>

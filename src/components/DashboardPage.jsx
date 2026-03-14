@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import Dashboard from "./Dashboard";
 import Sidebar from "./Sidebar";
+import { ChevronUp, LoaderCircle } from "lucide-react";
 import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
 
 const HOST = "https://daily-headcount-ai-backend.onrender.com";
@@ -210,16 +211,13 @@ export default function DashboardPage() {
                     color: "var(--color-text)",
                     backgroundColor: "var(--color-surface-elevated)",
                   }}
-                >
+                  >
                   {allSheets.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
                 {switching && (
-                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-castleton-green)" }}>
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                  </svg>
+                  <LoaderCircle className="h-4 w-4 animate-spin" style={{ color: "var(--color-castleton-green)" }} aria-hidden="true" />
                 )}
                 {switchError && <span className="text-xs" style={{ color: "var(--color-saffron)" }}>{switchError}</span>}
               </div>
@@ -245,10 +243,7 @@ export default function DashboardPage() {
               WebkitBackdropFilter: "blur(4px)",
             }}>
               <div className="flex flex-col items-center gap-3">
-                <svg className="animate-spin w-8 h-8" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-castleton-green)" }}>
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-                </svg>
+                <LoaderCircle className="h-8 w-8 animate-spin" style={{ color: "var(--color-castleton-green)" }} aria-hidden="true" />
                 <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "0.05em", margin: 0 }}>
                   Refreshing data…
                 </p>
@@ -268,7 +263,7 @@ export default function DashboardPage() {
             }}
             title="Back to top"
           >
-            ^
+            <ChevronUp className="h-5 w-5" aria-hidden="true" />
           </button>
         )}
       </div>

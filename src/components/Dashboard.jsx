@@ -9,6 +9,7 @@ import DataTable from "./DataTable";
 import DataChatbot from "./DataChatBot";
 import { useAuth } from "../context/AuthContext";
 import { usePins } from "../hooks/usePins";
+import { Grip, PencilLine, Sparkles } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ResponsiveContainer, Cell, AreaChart, Area,
@@ -281,7 +282,7 @@ function AIBanner({ summary }) {
   if(!summary)return null;
   return (
     <div style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"16px 20px", marginBottom:20, background:LW.dark, borderRadius:14, fontFamily:"'Manrope',sans-serif" }}>
-      <span style={{ fontSize:20, flexShrink:0 }}>✨</span>
+      <Sparkles style={{ width: 20, height: 20, flexShrink: 0, color: LW.saffron }} aria-hidden="true" />
       <div style={{ flex:1 }}>
         <div style={{ fontSize:10, fontWeight:700, color:LW.saffron, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:5 }}>AI Analysis</div>
         <p style={{ fontSize:13, color:"rgba(255,255,255,0.85)", margin:0, lineHeight:1.6 }}>{summary}</p>
@@ -1152,7 +1153,7 @@ function ChartWorkspaceCard({
                     onMouseEnter={e => e.currentTarget.style.opacity = 1}
                     onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
                   >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <PencilLine className="h-[13px] w-[13px]" aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -1227,11 +1228,7 @@ function ChartWorkspaceCard({
               padding: 0,
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <path d="M6 12L12 6" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
-              <path d="M9 14L14 9" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
-              <path d="M12 16L16 12" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
+            <Grip className="h-[18px] w-[18px]" style={{ color: "#9cafa4" }} aria-hidden="true" />
           </button>
         )}
       </div>
