@@ -574,6 +574,72 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
   }, [headers, rows]);
 
   // Active chart state pill — shows what chart is being "tracked" for follow-ups
+
+  const ChartSelector = () => {
+    if (customCharts.length === 0) return null;
+    const activeId = activeChartState?.chartId ? String(activeChartState.chartId) : "";
+    const typeIcon = (type) => ({ bar:"📊", hbar:"📊", line:"📈", donut:"🍩", pivot:"🗂️" }[type] || "📊");
+
+    const handleSelect = (e) => {
+      const val = e.target.value;
+      if (!val) { setActiveChartState(null); return; }
+      const chart = customCharts.find(c => String(c.id) === val);
+      if (!chart) return;
+      setActiveChartState({
+        chartId: chart.id,
+        chartType: chart.type,
+        chartSpec: chart.spec || chart,
+        topN: chart.spec?.limit || null,
+        sort: chart.spec?.sort || null,
+        aggregation: chart.spec?.aggregation || null,
+      });
+    };
+
+    return (
+      <div style={{
+        margin: "0 4px 8px",
+        padding: "7px 10px",
+        borderRadius: 8,
+        background: "rgba(4,98,65,0.07)",
+        border: `1px solid ${activeId ? "rgba(4,98,65,0.35)" : "rgba(4,98,65,0.15)"}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}>
+        <span style={{ fontSize: 12, flexShrink: 0 }}>✏️</span>
+        <select
+          value={activeId}
+          onChange={handleSelect}
+          style={{
+            flex: 1,
+            fontSize: 11,
+            fontWeight: 600,
+            color: activeId ? "var(--color-castleton-green)" : "var(--color-text-light)",
+            backgroundColor: BRAND.white,
+            border: "none",
+            outline: "none",
+            cursor: "pointer",
+            minWidth: 0,
+            colorScheme: "dark",
+          }}
+        >
+          <option value="" style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>Select a chart to edit…</option>
+          {customCharts.map(c => (
+            <option key={c.id} value={String(c.id)} style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>
+              {typeIcon(c.type)} {c.title}
+            </option>
+          ))}
+        </select>
+        {activeId && (
+          <button
+            onClick={() => setActiveChartState(null)}
+            style={{ width: 24, height: 24, borderRadius: 8, background: BRAND.white, border: `1px solid ${BRAND.border}`, cursor: "pointer", fontSize: 14, color: BRAND.dark, padding: 0, lineHeight: 1, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+            title="Stop editing"
+          >×</button>
+        )}
+      </div>
+    );
+  };
   return (
     <>
       {/* Floating Button */}
@@ -684,6 +750,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
 
           {/* Input */}
           <div className="shrink-0" style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.white }}>
+            <ChartSelector />
             <div className="px-3 pb-3 pt-2 flex gap-2 items-end">
               <textarea
                 ref={inputRef}
@@ -698,13 +765,11 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
               {loading ? (
                 <button
                   onClick={stop}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 border-none cursor-pointer"
-                  style={{ backgroundColor: "#e53e3e" }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 border-none cursor-pointer text-white"
+                  style={{ backgroundColor: "#e53e3e", fontSize: 13 }}
                   title="Stop generating"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white">
-                    <rect x="4" y="4" width="16" height="16" rx="3"/>
-                  </svg>
+                  ⏹
                 </button>
               ) : (
                 <button

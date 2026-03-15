@@ -8,6 +8,15 @@ import Sidebar from "./Sidebar";
 import Grainient from "./Grainient";
 import UserAvatar from "./UserAvatar";
 import ThemeToggle from "./ThemeToggle";
+import {
+  MoveRight,
+  CalendarDays,
+  ChevronDown,
+  FileX,
+  FolderSearch,
+  LoaderCircle,
+  TriangleAlert,
+} from "lucide-react";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
@@ -75,17 +84,12 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
         backgroundColor: "var(--color-surface-elevated)",
         borderColor: "var(--color-border)",
         backdropFilter: "blur(10px)",
-      }}
-    >
-      {/* Icon and Header */}
+        }}
+      >
+        {/* Icon and Header */}
       <div className="flex min-h-[86px] items-start gap-4" style={{ marginBottom: "10px" }}>
         <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
-          <img
-            src={excelFileIcon}
-            alt="Excel file"
-            className="w-11 h-11"
-            style={{ objectFit: "contain" }}
-          />
+          <img src={excelFileIcon} alt="Excel file" className="w-11 h-11" style={{ objectFit: "contain" }} />
         </div>
         <div className="min-w-0 flex-1">
           <h4
@@ -119,10 +123,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
               gap: "6px",
             }}
           >
-            <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
+            <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />
             Loading Sheets
           </span>
         ) : (
@@ -147,14 +148,7 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
 
       {/* Metadata */}
       <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-meta-text)", marginBottom: "16px" }}>
-        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
+        <CalendarDays className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
         <span>Modified {formatDate(file.modifiedTime)}</span>
       </div>
 
@@ -171,18 +165,13 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
       >
         {loading ? (
           <>
-            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
+            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
             Opening analysis
           </>
         ) : (
           <>
             <span>Open analysis</span>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
+            <MoveRight className="h-4 w-4" aria-hidden="true" />
           </>
         )}
       </button>
@@ -215,12 +204,7 @@ function FileTable({ files, fileTagsById, onOpen, openingFile }) {
                 <tr key={file.id} className="border-t" style={{ borderColor: "var(--color-border)" }}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={excelFileIcon}
-                        alt="Excel file"
-                        className="w-8 h-8 flex-shrink-0"
-                        style={{ objectFit: "contain" }}
-                      />
+                      <img src={excelFileIcon} alt="Excel file" className="w-8 h-8 flex-shrink-0" style={{ objectFit: "contain" }} />
                       <div className="min-w-0">
                         <p className="font-semibold truncate" style={{ color: "var(--color-text)" }} title={file.name}>
                           {file.name}
@@ -247,10 +231,7 @@ function FileTable({ files, fileTagsById, onOpen, openingFile }) {
                             padding: "3px 9px",
                           }}
                         >
-                          <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                        </svg>
+                          <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />
                           Loading
                         </span>
                       ) : (
@@ -283,13 +264,10 @@ function FileTable({ files, fileTagsById, onOpen, openingFile }) {
                         color: "#FFFFFF",
                         border: "none",
                       }}
-                    >
-                      {openingFile === file.id ? (
-                        <>
-                          <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                          </svg>
+                      >
+                        {openingFile === file.id ? (
+                          <>
+                          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
                           Opening
                         </>
                       ) : (
@@ -323,20 +301,7 @@ function EmptyState({ folderName, onChangeFolder }) {
           backgroundColor: "var(--color-surface-soft)",
         }}
       >
-        <svg
-          className="w-8 h-8"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          style={{ color: "var(--color-text)" }}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
+        <FileX className="h-8 w-8" style={{ color: "var(--color-text)" }} aria-hidden="true" />
       </div>
       <h3
         style={{
@@ -566,10 +531,7 @@ export default function HomePage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--color-bg)" }}>
         <div className="flex flex-col items-center gap-4">
-          <svg className="animate-spin w-10 h-10" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-text)" }}>
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-          </svg>
+          <LoaderCircle className="h-10 w-10 animate-spin" style={{ color: "var(--color-text)" }} aria-hidden="true" />
           <p style={{ color: "var(--color-text-light)" }}>Loading DataViz</p>
         </div>
       </div>
@@ -763,20 +725,7 @@ export default function HomePage() {
                 borderLeft: `4px solid var(--color-saffron)`,
               }}
             >
-              <svg
-                className="w-5 h-5 flex-shrink-0 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                style={{ color: "var(--color-text)" }}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <TriangleAlert className="mt-0.5 h-5 w-5 flex-shrink-0" style={{ color: "var(--color-text)" }} aria-hidden="true" />
               <div className="text-sm" style={{ color: "var(--color-text)" }}>
                 {error || openError}
               </div>
@@ -786,10 +735,7 @@ export default function HomePage() {
           {/* Loading State */}
           {filesLoading && (
             <div className="flex flex-col items-center justify-center py-24">
-              <svg className="animate-spin w-10 h-10 mb-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-text)" }}>
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
+              <LoaderCircle className="mb-4 h-10 w-10 animate-spin" style={{ color: "var(--color-text)" }} aria-hidden="true" />
               <p style={{ color: "var(--color-text-light)" }}>Loading files from Google Drive</p>
             </div>
           )}
@@ -801,20 +747,7 @@ export default function HomePage() {
                 className="w-24 h-24 rounded-2xl flex items-center justify-center mb-8"
                 style={{ backgroundColor: "var(--color-surface-soft)" }}
               >
-                <svg
-                  className="w-12 h-12"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  style={{ color: "var(--color-text)" }}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                  />
-                </svg>
+                <FolderSearch className="h-12 w-12" style={{ color: "var(--color-text)" }} aria-hidden="true" />
               </div>
               <h2 className="text-xl font-bold mb-4 text-center" style={{ color: "var(--color-text)" }}>
                 Select a folder to get started
@@ -831,9 +764,7 @@ export default function HomePage() {
                   border: "none",
                 }}
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
+                <FolderSearch className="h-5 w-5" aria-hidden="true" />
                 Select Google Drive Folder
               </button>
             </div>
@@ -874,9 +805,7 @@ export default function HomePage() {
                         <span>
                           {selectedType === "all" ? "All types" : selectedType === "xlsx" ? ".xlsx" : ".xls"}
                         </span>
-                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
-                        </svg>
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </summary>
 
                       <div
@@ -928,9 +857,7 @@ export default function HomePage() {
                         aria-label="Page size"
                       >
                         <span>Show {pageSize}</span>
-                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
-                        </svg>
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </summary>
 
                       <div
@@ -966,9 +893,7 @@ export default function HomePage() {
                         aria-label="View"
                       >
                         <span>View</span>
-                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
-                        </svg>
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </summary>
 
                       <div

@@ -4,6 +4,7 @@ import { useTheme } from "../context/ThemeContext";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 import UserAvatar from "./UserAvatar";
+import { ArrowLeft, ChevronDown, LoaderCircle, LogOut } from "lucide-react";
 
 export default function Sidebar({ folder, files, filesLoading, onSelectFolder, onRefresh, onBack }) {
   const { user, logout } = useAuth();
@@ -52,14 +53,15 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
         {onBack && (
           <button
             onClick={onBack}
-            className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all"
+            className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
             style={{
               backgroundColor: "var(--color-surface-soft)",
               color: "var(--color-text)",
               border: "1.5px solid var(--color-border)",
             }}
           >
-            ← Go Back
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Go Back
           </button>
         )}
 
@@ -90,10 +92,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
             }}
           >
             {filesLoading && (
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
             )}
             Refresh
           </button>
@@ -119,9 +118,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
               <p className="font-semibold text-sm truncate" style={{ color: "var(--color-text)" }}>{user.displayName}</p>
               <p className="text-xs truncate" style={{ color: "var(--color-text-light)" }}>{user.email}</p>
             </div>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
           </button>
 
           {isProfileMenuOpen && (
@@ -141,9 +138,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
                   border: "1px solid var(--color-border)",
                 }}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
-                </svg>
+                <LogOut className="h-4 w-4" aria-hidden="true" />
                 Sign Out
               </button>
             </div>

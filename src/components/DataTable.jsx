@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { X } from "lucide-react";
 
 const BRAND = {
   dark: "var(--color-text)",
@@ -150,7 +151,9 @@ export default function DataTable({ headers = [], rows = [] }) {
               <button onClick={() => { setSearch(""); setPage(0); }} style={{
                 position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
                 background: "none", border: "none", color: BRAND.muted, cursor: "pointer", fontSize: 13, padding: 0,
-              }}>✕</button>
+              }} aria-label="Clear search">
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
             )}
           </div>
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: BRAND.muted, fontWeight: 600 }}>
