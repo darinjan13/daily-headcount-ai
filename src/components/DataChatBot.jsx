@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { ArrowLeft, ArrowRight, ArrowUp, Bot, ClipboardList, CornerDownLeft, Square } from "lucide-react";
 
 const WELCOME = "Hi! I have access to your full dataset and can answer precise questions — totals, rankings, breakdowns, anything. What would you like to know?";
 
@@ -117,18 +116,15 @@ function applyFilter(headers, rows, filterSpec) {
 
 function FilterTable({ filterSpec, headers, rows }) {
   const [page, setPage] = useState(0);
-      const PAGE_SIZE = 10;
-      const { displayCols, displayRows } = applyFilter(headers, rows, filterSpec);
+  const PAGE_SIZE = 10;
+  const { displayCols, displayRows } = applyFilter(headers, rows, filterSpec);
   const totalPages = Math.ceil(displayRows.length / PAGE_SIZE);
   const pageRows = displayRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   if (displayRows.length === 0) return <div style={{ marginTop: 10, padding: "10px 14px", borderRadius: 10, background: "rgba(4,98,65,0.06)", border: "1px solid rgba(4,98,65,0.15)", fontSize: 12, color: "var(--color-dark-serpent)" }}>No rows matched the filter.</div>;
-      return (
-        <div style={{ marginTop: 10, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(4,98,65,0.2)" }}>
-          <div style={{ background: "var(--color-castleton-green)", padding: "7px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
-          {filterSpec.title}
-        </span>
+  return (
+    <div style={{ marginTop: 10, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(4,98,65,0.2)" }}>
+      <div style={{ background: "var(--color-castleton-green)", padding: "7px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: 12 }}>📋 {filterSpec.title}</span>
         <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 11 }}>{displayRows.length} row{displayRows.length !== 1 ? "s" : ""}</span>
       </div>
       <div style={{ overflowX: "auto", background: "#fff" }}>
@@ -139,19 +135,9 @@ function FilterTable({ filterSpec, headers, rows }) {
       </div>
       {totalPages > 1 && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", background: "rgba(4,98,65,0.04)", borderTop: "1px solid rgba(4,98,65,0.1)" }}>
-          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(4,98,65,0.25)", background: page === 0 ? "transparent" : "#fff", color: "var(--color-castleton-green)", cursor: page === 0 ? "default" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <ArrowLeft className="h-3 w-3" aria-hidden="true" />
-              Prev
-            </span>
-          </button>
+          <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(4,98,65,0.25)", background: page === 0 ? "transparent" : "#fff", color: "var(--color-castleton-green)", cursor: page === 0 ? "default" : "pointer", opacity: page === 0 ? 0.4 : 1 }}>← Prev</button>
           <span style={{ fontSize: 11, color: "var(--color-text-light)" }}>Page {page + 1} of {totalPages}</span>
-          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(4,98,65,0.25)", background: page === totalPages - 1 ? "transparent" : "#fff", color: "var(--color-castleton-green)", cursor: page === totalPages - 1 ? "default" : "pointer", opacity: page === totalPages - 1 ? 0.4 : 1 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              Next
-              <ArrowRight className="h-3 w-3" aria-hidden="true" />
-            </span>
-          </button>
+          <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page === totalPages - 1} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid rgba(4,98,65,0.25)", background: page === totalPages - 1 ? "transparent" : "#fff", color: "var(--color-castleton-green)", cursor: page === totalPages - 1 ? "default" : "pointer", opacity: page === totalPages - 1 ? 0.4 : 1 }}>Next →</button>
         </div>
       )}
     </div>
@@ -357,38 +343,38 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
         } else if (step.type === "pin") {
           // Pass newly created charts so Dashboard can pin them even before state settles
           onResult({ action: "pin", pinSpec: step, newChartSpecs });
-          if (step.pinAll) statusLines.push("All charts pinned.");
-          else if (step.unpinAll) statusLines.push("All charts unpinned.");
-          else statusLines.push(`"${step.targetTitle}" ${step.pinned ? "pinned" : "unpinned"}.`);
+          if (step.pinAll) statusLines.push("📌 All charts pinned.");
+          else if (step.unpinAll) statusLines.push("📌 All charts unpinned.");
+          else statusLines.push(`📌 "${step.targetTitle}" ${step.pinned ? "pinned" : "unpinned"}.`);
 
         } else if (step.type === "table_action") {
           onResult({ action: "table_action", tableActionSpec: step });
           const act = step.action;
-          if (act === "deleteAll") statusLines.push("All filtered tables deleted.");
-          else if (act === "delete") statusLines.push(`Table "${step.targetTitle}" deleted.`);
-          else if (act === "pinAll") statusLines.push("All filtered tables pinned.");
-          else if (act === "unpinAll") statusLines.push("All filtered tables unpinned.");
-          else if (act === "pin") statusLines.push(`"${step.targetTitle}" pinned.`);
-          else if (act === "rename") statusLines.push(`Table renamed to "${step.newTitle}".`);
-          else if (act === "sort") statusLines.push(`"${step.targetTitle}" sorted by ${step.sort_col} (${step.sort_dir || "asc"}).`);
-          else if (act === "limit") statusLines.push(`"${step.targetTitle}" limited to ${step.limit} rows.`);
-          else if (act === "add_filter") statusLines.push(`Filter added to "${step.targetTitle}".`);
-          else if (act === "remove_filter") statusLines.push(`Filter removed from "${step.targetTitle}".`);
+          if (act === "deleteAll") statusLines.push("🗑️ All filtered tables deleted.");
+          else if (act === "delete") statusLines.push(`🗑️ Table "${step.targetTitle}" deleted.`);
+          else if (act === "pinAll") statusLines.push("📌 All filtered tables pinned.");
+          else if (act === "unpinAll") statusLines.push("📌 All filtered tables unpinned.");
+          else if (act === "pin") statusLines.push(`📌 "${step.targetTitle}" pinned.`);
+          else if (act === "rename") statusLines.push(`✏️ Table renamed to "${step.newTitle}".`);
+          else if (act === "sort") statusLines.push(`🔃 "${step.targetTitle}" sorted by ${step.sort_col} (${step.sort_dir || "asc"}).`);
+          else if (act === "limit") statusLines.push(`✂️ "${step.targetTitle}" limited to ${step.limit} rows.`);
+          else if (act === "add_filter") statusLines.push(`🔍 Filter added to "${step.targetTitle}".`);
+          else if (act === "remove_filter") statusLines.push(`🔍 Filter removed from "${step.targetTitle}".`);
 
         } else if (step.type === "rename") {
           onResult({ action: "rename", renameSpec: step });
-          statusLines.push(`Renamed to "${step.newTitle}".`);
+          statusLines.push(`✏️ Renamed to "${step.newTitle}".`);
 
         } else if (step.type === "navigate") {
           onResult({ action: "navigate", tab: step.tab });
 
         } else if (step.type === "modify_chart") {
           onResult({ action: "modify_chart", modifyChartSpec: step });
-          statusLines.push(`"${step.targetTitle}" updated.`);
+          statusLines.push(`📊 "${step.targetTitle}" updated.`);
 
         } else if (step.type === "filter") {
           onResult({ action: "filter", filterSpec: step });
-          statusLines.push("Table added to Summary tab.");
+          statusLines.push("📋 Table added to Summary tab.");
 
         } else if (step.type === "chart") {
           const spec = { ...step, type: step.chartType || "bar" };
@@ -398,13 +384,13 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
             const resolvedSpec = applyChartState(spec, updatedState || {});
             setActiveChartState(prev => ({ ...prev, chartSpec: resolvedSpec }));
             onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
-            statusLines.push("Chart updated.");
+            statusLines.push("✏️ Chart updated.");
           } else {
             const chartId = Date.now() + Math.random(); // unique id stamped before dispatch
             const specWithId = { ...spec, _chatId: chartId };
             onResult({ chartSpec: specWithId, action: "new" });
             newChartSpecs.push(specWithId);
-            statusLines.push("Chart added to Charts tab.");
+            statusLines.push("📊 Chart added to Charts tab.");
           }
         }
       }
@@ -588,6 +574,72 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
   }, [headers, rows]);
 
   // Active chart state pill — shows what chart is being "tracked" for follow-ups
+
+  const ChartSelector = () => {
+    if (customCharts.length === 0) return null;
+    const activeId = activeChartState?.chartId ? String(activeChartState.chartId) : "";
+    const typeIcon = (type) => ({ bar:"📊", hbar:"📊", line:"📈", donut:"🍩", pivot:"🗂️" }[type] || "📊");
+
+    const handleSelect = (e) => {
+      const val = e.target.value;
+      if (!val) { setActiveChartState(null); return; }
+      const chart = customCharts.find(c => String(c.id) === val);
+      if (!chart) return;
+      setActiveChartState({
+        chartId: chart.id,
+        chartType: chart.type,
+        chartSpec: chart.spec || chart,
+        topN: chart.spec?.limit || null,
+        sort: chart.spec?.sort || null,
+        aggregation: chart.spec?.aggregation || null,
+      });
+    };
+
+    return (
+      <div style={{
+        margin: "0 4px 8px",
+        padding: "7px 10px",
+        borderRadius: 8,
+        background: "rgba(4,98,65,0.07)",
+        border: `1px solid ${activeId ? "rgba(4,98,65,0.35)" : "rgba(4,98,65,0.15)"}`,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+      }}>
+        <span style={{ fontSize: 12, flexShrink: 0 }}>✏️</span>
+        <select
+          value={activeId}
+          onChange={handleSelect}
+          style={{
+            flex: 1,
+            fontSize: 11,
+            fontWeight: 600,
+            color: activeId ? "var(--color-castleton-green)" : "var(--color-text-light)",
+            backgroundColor: BRAND.white,
+            border: "none",
+            outline: "none",
+            cursor: "pointer",
+            minWidth: 0,
+            colorScheme: "dark",
+          }}
+        >
+          <option value="" style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>Select a chart to edit…</option>
+          {customCharts.map(c => (
+            <option key={c.id} value={String(c.id)} style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>
+              {typeIcon(c.type)} {c.title}
+            </option>
+          ))}
+        </select>
+        {activeId && (
+          <button
+            onClick={() => setActiveChartState(null)}
+            style={{ width: 24, height: 24, borderRadius: 8, background: BRAND.white, border: `1px solid ${BRAND.border}`, cursor: "pointer", fontSize: 14, color: BRAND.dark, padding: 0, lineHeight: 1, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+            title="Stop editing"
+          >×</button>
+        )}
+      </div>
+    );
+  };
   return (
     <>
       {/* Floating Button */}
@@ -614,9 +666,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
         >
           {/* Header */}
           <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: BRAND.header }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: BRAND.green }}>
-              <Bot className="h-4 w-4 text-white" aria-hidden="true" />
-            </div>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-base" style={{ backgroundColor: BRAND.green }}>🤖</div>
             <div>
               <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>Data Assistant</div>
               <div className="text-xs" style={{ color: "rgba(255, 255, 255, 0.75)" }}>Full dataset access · {rows.length.toLocaleString()} rows</div>
@@ -633,9 +683,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
               <div key={i} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
                 <div className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} w-full`}>
                   {msg.role === "assistant" && (
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5 shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.12)" }}>
-                      <Bot className="h-3.5 w-3.5" style={{ color: BRAND.green }} aria-hidden="true" />
-                    </div>
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.12)" }}>🤖</div>
                   )}
                   <div
                     className="max-w-[88%] px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed"
@@ -665,10 +713,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
                         onMouseEnter={e => e.currentTarget.style.opacity = "1"}
                         onMouseLeave={e => e.currentTarget.style.opacity = "0.82"}
                       >
-                        <span className="inline-flex items-center gap-1.5">
-                          <CornerDownLeft className="h-3 w-3" aria-hidden="true" />
-                          {q}
-                        </span>
+                        ↩ {q}
                       </button>
                     ))}
                   </div>
@@ -692,9 +737,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
 
             {loading && (
               <div className="flex justify-start">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center mr-2 mt-0.5 shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.12)" }}>
-                  <Bot className="h-3.5 w-3.5" style={{ color: BRAND.green }} aria-hidden="true" />
-                </div>
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2 mt-0.5 shrink-0" style={{ backgroundColor: "rgba(4, 98, 65, 0.12)" }}>🤖</div>
                 <div className="px-4 py-3 rounded-2xl rounded-bl-sm flex items-center gap-1.5" style={{ backgroundColor: BRAND.white, border: `1px solid ${BRAND.border}` }}>
                   <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: BRAND.saffron, animationDelay: "0ms" }} />
                   <span className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ backgroundColor: BRAND.saffron, animationDelay: "150ms" }} />
@@ -707,6 +750,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
 
           {/* Input */}
           <div className="shrink-0" style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.white }}>
+            <ChartSelector />
             <div className="px-3 pb-3 pt-2 flex gap-2 items-end">
               <textarea
                 ref={inputRef}
@@ -721,11 +765,11 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
               {loading ? (
                 <button
                   onClick={stop}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 border-none cursor-pointer"
-                  style={{ backgroundColor: "#e53e3e" }}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 border-none cursor-pointer text-white"
+                  style={{ backgroundColor: "#e53e3e", fontSize: 13 }}
                   title="Stop generating"
                 >
-                  <Square className="h-3.5 w-3.5 fill-white text-white" aria-hidden="true" />
+                  ⏹
                 </button>
               ) : (
                 <button
@@ -734,7 +778,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
                   className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-base transition-all shrink-0 border-none cursor-pointer"
                   style={{ backgroundColor: input.trim() ? BRAND.green : "rgba(19, 48, 32, 0.25)" }}
                 >
-                  <ArrowUp className="h-4 w-4" aria-hidden="true" />
+                  ↑
                 </button>
               )}
             </div>
