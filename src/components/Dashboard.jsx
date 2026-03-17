@@ -174,13 +174,16 @@ function getMonthRange(dateKey) {
 
 // ── UI primitives ──────────────────────────────────────────────────────────────
 
-function Section({ children, accent, pinned }) {
+function Section({ children, accent, pinned, ...rest }) {
   return (
-    <div style={{ background:UI.surfaceElevated, borderRadius:16, padding:24, marginBottom:20,
+    <div
+      {...rest}
+      style={{ background:UI.surfaceElevated, borderRadius:16, padding:24, marginBottom:20,
       boxShadow: pinned?"0 2px 16px rgba(4,98,65,0.18)":"var(--color-shadow-soft)",
       border: pinned?`1.5px solid ${LW.green}`:`1px solid ${UI.border}`,
       borderLeft: accent?`4px solid ${accent}`:pinned?`4px solid ${LW.green}`:`1px solid ${UI.border}`,
-      fontFamily:"'Manrope',sans-serif" }}>
+      fontFamily:"'Manrope',sans-serif" }}
+    >
       {children}
     </div>
   );
@@ -271,7 +274,13 @@ function ChartWidget({ item, locked, minimized, onToggleMinimize, onMaximize, on
   const handleHeaderClick = () => {};
 
   return (
-    <div className={`chart-widget ${minimized ? "is-minimized" : ""}`}>
+    <div
+      className={`chart-widget ${minimized ? "is-minimized" : ""}`}
+      data-report-chart="widget"
+      data-report-pinned={pinned ? "true" : "false"}
+      data-report-title={title || "Chart"}
+      data-report-source={item.source || "auto"}
+    >
       <div className={`chart-widget__header ${locked ? "is-locked" : ""}`} onClick={handleHeaderClick}>
         <div className="chart-widget__title">
           {onPin && (
@@ -351,7 +360,17 @@ function DashboardNav({ activeView, setActiveView, pinnedCount, filteredTableCou
     <div style={{ display:"flex", gap:8, marginBottom:18 }}>
       {[{id:"home",label:`Home${filteredTableCount>0?` · ${filteredTableCount} filtered`:""}`},{id:"charts",label:`Charts${pinnedCount>0?` · ${pinnedCount} pinned`:""}`}].map(tab=>{
         const active=activeView===tab.id;
-        return <button key={tab.id} onClick={()=>setActiveView(tab.id)} style={{ padding:"8px 14px", borderRadius:10, border:`1px solid ${active?LW.green:UI.border}`, background:active?LW.green:UI.surface, color:active?"#fff":UI.text, fontSize:12, fontWeight:700, cursor:"pointer", boxShadow:"var(--color-shadow-soft)" }}>{tab.label}</button>;
+        return (
+          <button
+            key={tab.id}
+            onClick={()=>setActiveView(tab.id)}
+            data-report-tab={tab.id}
+            data-report-active={active ? "true" : "false"}
+            style={{ padding:"8px 14px", borderRadius:10, border:`1px solid ${active?LW.green:UI.border}`, background:active?LW.green:UI.surface, color:active?"#fff":UI.text, fontSize:12, fontWeight:700, cursor:"pointer", boxShadow:"var(--color-shadow-soft)" }}
+          >
+            {tab.label}
+          </button>
+        );
       })}
     </div>
   );
@@ -440,6 +459,7 @@ function WideFilterBar({ wideDateCols, objectData, wideFilters, setWideFilters, 
           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
             <span style={{ fontSize:11, fontWeight:700, color:"#9cafa4" }}>📅</span>
             <select
+              data-report-date-from="true"
               value={wideFilters.dateFrom}
               onChange={e => {
                 const val = e.target.value;
@@ -458,6 +478,7 @@ function WideFilterBar({ wideDateCols, objectData, wideFilters, setWideFilters, 
             </select>
             <span style={{ fontSize:11, color:"#9cafa4", fontWeight:700 }}>→</span>
             <select
+              data-report-date-to="true"
               value={wideFilters.dateTo}
               onChange={e => {
                 const val = e.target.value;
@@ -532,7 +553,10 @@ function GlobalFilterBar({ dateCol, dateOptions, filters, setFilters, categoryCo
         {dateCol && dateOptionsAsc.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
             <span style={{ fontSize:11, fontWeight:700, color:"#9cafa4" }}>📅</span>
-            <select value={filters.dateFrom} onChange={e=>{
+            <select
+              data-report-date-from="true"
+              value={filters.dateFrom}
+              onChange={e=>{
               const val=e.target.value;
               setFilters(f=>{
                 if(val==="all") return{...f,dateFrom:"all",dateTo:"all"};
@@ -547,7 +571,10 @@ function GlobalFilterBar({ dateCol, dateOptions, filters, setFilters, categoryCo
               {dateOptionsAsc.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
             </select>
             <span style={{ fontSize:11, color:"#9cafa4", fontWeight:700 }}>→</span>
-            <select value={filters.dateTo} onChange={e=>{
+            <select
+              data-report-date-to="true"
+              value={filters.dateTo}
+              onChange={e=>{
               const val=e.target.value;
               setFilters(f=>{
                 const fromIdx=dateOptionsAsc.indexOf(f.dateFrom);
@@ -639,20 +666,39 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
       <SectionHeader title="Compare Periods" subtitle="Select two periods to compare KPIs side by side" badge="AUTO" />
       <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginBottom:20 }}>
         {["day","week","month"].map(m=>(
-          <button key={m} onClick={()=>setMode(m)} style={{ padding:"5px 12px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`1px solid ${mode===m?LW.green:UI.border}`, background:mode===m?LW.green:UI.surface, color:mode===m?"#fff":UI.text }}>{m.charAt(0).toUpperCase()+m.slice(1)}</button>
+          <button
+            key={m}
+            data-report-compare-mode-button="true"
+            data-report-compare-mode={m}
+            data-report-active={mode===m ? "true" : "false"}
+            onClick={()=>setMode(m)}
+            style={{ padding:"5px 12px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", border:`1px solid ${mode===m?LW.green:UI.border}`, background:mode===m?LW.green:UI.surface, color:mode===m?"#fff":UI.text }}
+          >
+            {m.charAt(0).toUpperCase()+m.slice(1)}
+          </button>
         ))}
         <div style={{ display:"flex", gap:8, alignItems:"center", marginLeft:8 }}>
           <span style={{ width:10,height:10,borderRadius:2,background:CMP.a,display:"inline-block" }}/>
-          <select value={dateA} onChange={e=>setDateA(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}>
+          <select
+            data-report-compare-date="A"
+            value={dateA}
+            onChange={e=>setDateA(e.target.value)}
+            style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}
+          >
             {dateOptions.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
           </select>
           <span style={{ fontSize:12, color:"#9cafa4", fontWeight:700 }}>vs</span>
           <span style={{ width:10,height:10,borderRadius:2,background:CMP.b,display:"inline-block" }}/>
-          <select value={dateB} onChange={e=>setDateB(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}>
+          <select
+            data-report-compare-date="B"
+            value={dateB}
+            onChange={e=>setDateB(e.target.value)}
+            style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}
+          >
             {dateOptions.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
           </select>
         </div>
-        <span style={{ fontSize:11, color:UI.textLight }}>{dataA.length} vs {dataB.length} rows</span>
+        <span data-report-compare-rows="true" style={{ fontSize:11, color:UI.textLight }}>{dataA.length} vs {dataB.length} rows</span>
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
         {displayCards.map((card,idx)=>{
@@ -661,8 +707,17 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
           const pct = vB?((vA-vB)/Math.abs(vB)*100).toFixed(1):null;
           const positive = vA >= vB;
           const hint = card.formatHint||"number";
+          const deltaText = pct!==null ? `${positive?"▲":"▼"} ${Math.abs(pct)}% vs period B` : "";
           return (
-            <div key={card.id||idx} style={{ background:UI.surfaceElevated, borderRadius:14, padding:"18px 20px", border:`1px solid ${UI.border}` }}>
+            <div
+              key={card.id||idx}
+              data-report-compare-card="true"
+              data-report-compare-label={card.label}
+              data-report-compare-a={formatNum(vA,hint)}
+              data-report-compare-b={formatNum(vB,hint)}
+              data-report-compare-delta={deltaText}
+              style={{ background:UI.surfaceElevated, borderRadius:14, padding:"18px 20px", border:`1px solid ${UI.border}` }}
+            >
               <div style={{ fontSize:10, fontWeight:700, color:UI.textLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>{card.label}</div>
               <div style={{ display:"flex", gap:12, alignItems:"flex-end", marginBottom:8, flexWrap:"wrap" }}>
                 <div>
@@ -686,6 +741,9 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
 // ── Clickable charts ───────────────────────────────────────────────────────────
 
 function ClickableBarChart({ data, config, onDrilldown, labels }) {
+  if (!Array.isArray(data) || data.length === 0) {
+    return <p style={{color:"#9cafa4",fontSize:13}}>No data.</p>;
+  }
   const xKey=config?.x||"name", yKey=config?.y||"value";
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
@@ -705,6 +763,9 @@ function ClickableBarChart({ data, config, onDrilldown, labels }) {
 }
 
 function HorizontalBarChart({ data, config, onDrilldown, labels }) {
+  if (!Array.isArray(data) || data.length === 0) {
+    return <p style={{color:"#9cafa4",fontSize:13}}>No data.</p>;
+  }
   const xKey=config?.x||"name", yKey=config?.y||"value";
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
@@ -975,8 +1036,13 @@ export default function Dashboard({ data, blueprint, fileId }) {
       window.requestAnimationFrame(() => {
         if (customBuilderWrapRef.current) {
           const rect = customBuilderWrapRef.current.getBoundingClientRect();
-          setCustomBuilderRect(prev => (prev.left === rect.left && prev.width === rect.width ? prev : { left: rect.left, width: rect.width }));
-          setCustomBuilderStuck(prev => (prev === (rect.top <= 56) ? prev : rect.top <= 56));
+          const shouldStick = rect.top <= 56;
+          setCustomBuilderStuck(prev => (prev === shouldStick ? prev : shouldStick));
+          if (shouldStick) {
+            const left = Math.round(rect.left);
+            const width = Math.round(rect.width);
+            setCustomBuilderRect(prev => (prev.left === left && prev.width === width ? prev : { left, width }));
+          }
         }
         ticking = false;
       });
@@ -1152,6 +1218,7 @@ const chartWidgets = useMemo(() => {
         title: chart.title || "Chart",
         badge: pinned ? "PINNED" : "CUSTOM",
         pinned,
+        source: "custom",
         onPin: () => pinCustomChart(String(chart.id)),
         onClose: () => removeCustom(chart.id),
         onRename: (t) => renameChart(chart.id, t),
@@ -1171,6 +1238,7 @@ const chartWidgets = useMemo(() => {
           title: `${valueCol} over Time`,
           badge: "PINNED",
           pinned: true,
+          source: "auto",
           onPin: () => togglePin("wide_line"),
           onClose: () => togglePin("wide_line"),
           defaultW: size.w,
@@ -1187,6 +1255,7 @@ const chartWidgets = useMemo(() => {
           title: `${valueCol} by ${primaryCol}`,
           badge: "PINNED",
           pinned: true,
+          source: "auto",
           onPin: () => togglePin("wide_primary"),
           onClose: () => togglePin("wide_primary"),
           defaultW: size.w,
@@ -1203,6 +1272,7 @@ const chartWidgets = useMemo(() => {
           title: `${valueCol} by Section`,
           badge: "PINNED",
           pinned: true,
+          source: "auto",
           onPin: () => togglePin("wide_section"),
           onClose: () => togglePin("wide_section"),
           defaultW: size.w,
@@ -1220,6 +1290,7 @@ const chartWidgets = useMemo(() => {
           title: chart.title,
           badge: "PINNED",
           pinned: true,
+          source: "auto",
           onPin: () => togglePin(chart.id),
           onClose: () => togglePin(chart.id),
           defaultW: size.w,
@@ -1242,6 +1313,7 @@ const chartWidgets = useMemo(() => {
           title: pivot.title,
           badge: "PINNED",
           pinned: true,
+          source: "auto",
           onPin: () => togglePin(pivot.id),
           onClose: () => togglePin(pivot.id),
           defaultW: size.w,
@@ -1621,7 +1693,7 @@ const chartWidgets = useMemo(() => {
         .section-collapse { width:28px; height:28px; border-radius:999px; border:1px solid #f0b34a; background:#ffd896; color:#6b4b00; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow: 0 4px 10px rgba(240,179,74,0.25); background-repeat:no-repeat; background-position:center; background-size:14px 14px; }
         .custom-builder-wrap { position: relative; }
         .custom-builder-spacer { height: 0; }
-        .custom-builder-sticky { position: sticky; top: 56px; z-index: 40; }
+        .custom-builder-sticky { position: relative; }
         .react-grid-item.react-draggable-dragging .chart-widget { box-shadow: 0 16px 30px rgba(0,0,0,0.2); }
         .chart-empty { border:1px dashed #d7e2dc; border-radius:16px; padding:28px; background: var(--color-surface-elevated); text-align:center; color:#6b7a71; }
         .chart-empty h2 { margin:0 0 8px; font-size:18px; color: var(--color-text); }
@@ -1635,7 +1707,11 @@ const chartWidgets = useMemo(() => {
         @keyframes chart-modal-zoom { from { transform: scale(0.96); opacity:0; } to { transform: scale(1); opacity:1; } }
       `}</style>
 
-      {aiGenerated&&datasetSummary&&<AIBanner summary={datasetSummary}/>}
+      {aiGenerated && datasetSummary && (
+        <div data-report-section="ai-summary">
+          <AIBanner summary={datasetSummary}/>
+        </div>
+      )}
       <DashboardNav activeView={activeView} setActiveView={setActiveView} pinnedCount={validPinnedIds.length} filteredTableCount={filteredTables.length}/>
 
       {/* ── HOME TAB ─────────────────────────────────────── */}
@@ -1662,28 +1738,42 @@ const chartWidgets = useMemo(() => {
               />
           }
 
-          {isWide&&blueprint.cards?.length>0&&<StaticSummaryCards
-            cards={blueprint.cards}
-            analytics={analytics}
-            filteredData={wideFilteredData}
-            primaryCol={dataPrimaryCol}
-            sectionCol={dataSectionCol}
-            valueCol={effectiveValueCol}
-            activeDateRange={activeDateRange}
-            isFiltered={wideFilters.section!=="all"||wideFilters.name!=="all"||isDateFiltered}
-          />}
-          {!isWide&&<SummaryCards data={filteredData} cards={blueprint.cards}/>}
+          {isWide&&blueprint.cards?.length>0&&(
+            <div data-report-section="summary-cards">
+              <StaticSummaryCards
+                cards={blueprint.cards}
+                analytics={analytics}
+                filteredData={wideFilteredData}
+                primaryCol={dataPrimaryCol}
+                sectionCol={dataSectionCol}
+                valueCol={effectiveValueCol}
+                activeDateRange={activeDateRange}
+                isFiltered={wideFilters.section!=="all"||wideFilters.name!=="all"||isDateFiltered}
+              />
+            </div>
+          )}
+          {!isWide&&(
+            <div data-report-section="summary-cards">
+              <SummaryCards data={filteredData} cards={blueprint.cards}/>
+            </div>
+          )}
 
           {!isWide&&dateCol&&dateOptions.length>=2&&(
             <div style={{marginBottom:20}}>
-              <button onClick={()=>setShowCompare(v=>!v)} style={{padding:"8px 16px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",border:`1px solid ${showCompare?LW.green:UI.border}`,background:showCompare?LW.green:UI.surface,color:showCompare?"#fff":UI.text,boxShadow:"var(--color-shadow-soft)"}}>
+              <button
+                data-report-toggle="compare-periods"
+                onClick={()=>setShowCompare(v=>!v)}
+                style={{padding:"8px 16px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",border:`1px solid ${showCompare?LW.green:UI.border}`,background:showCompare?LW.green:UI.surface,color:showCompare?"#fff":UI.text,boxShadow:"var(--color-shadow-soft)"}}
+              >
                 {showCompare?"▲ Hide Comparison":"⚖️ Compare Periods"}
               </button>
             </div>
           )}
 
           {showCompare&&dateCol&&dateOptions.length>=2&&(
-            <CompareCards blueprint={blueprint} objectData={objectData} dateCol={dateCol} dateOptions={dateOptions} isWide={isWide}/>
+            <div data-report-section="compare-cards">
+              <CompareCards blueprint={blueprint} objectData={objectData} dateCol={dateCol} dateOptions={dateOptions} isWide={isWide}/>
+            </div>
           )}
 
           {/* AI filtered tables from chatbot — bottom of summary */}
@@ -1712,7 +1802,7 @@ const chartWidgets = useMemo(() => {
             const matchedRows = applyTableFilter();
             const displayRows = matchedRows.map(row => displayCols.map(col => row[col] === undefined ? null : row[col]));
             return (
-              <Section key={table.id}>
+              <Section key={table.id} data-report-section="filtered-table">
                 <SectionHeader
                   title={table.title}
                   subtitle={`${matchedRows.length} row${matchedRows.length !== 1 ? "s" : ""} · AI filtered`}
@@ -1725,8 +1815,7 @@ const chartWidgets = useMemo(() => {
               </Section>
             );
           })}
-
-          <Section>
+          <Section data-report-section="data-table">
             <SectionHeader
               title="Data Table"
               subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
