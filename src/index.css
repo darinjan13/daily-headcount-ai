@@ -290,7 +290,9 @@ button:disabled {
   left: 4px;
   bottom: 3px;
   background-color: #ffd84d;
-  transition: 0.4s;
+  transform: translateX(0) rotate(0deg);
+  transform-origin: center;
+  transition: transform 0.6s ease-in-out, background-color 0.4s ease;
 }
 
 .theme-switch-input:checked + .theme-switch-slider {
@@ -303,9 +305,8 @@ button:disabled {
 }
 
 .theme-switch-input:checked + .theme-switch-slider .theme-switch-sun-moon {
-  transform: translateX(26px);
+  transform: translateX(26px) rotate(180deg);
   background-color: #fff;
-  animation: theme-rotate-center 0.6s ease-in-out both;
 }
 
 .theme-moon-dot {
