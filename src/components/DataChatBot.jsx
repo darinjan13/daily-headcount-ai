@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 
 const WELCOME = "Hi! I have access to your full dataset and can answer precise questions — totals, rankings, breakdowns, anything. What would you like to know?";
 
-const HOST = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
 
 const BRAND = {
   dark: "var(--color-text)",
@@ -642,10 +642,26 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
   };
   return (
     <>
+      <style>{`
+        @media (max-width: 640px) {
+          .data-chatbot-toggle {
+            right: 16px !important;
+            bottom: 16px !important;
+          }
+          .data-chatbot-panel {
+            right: 8px !important;
+            left: 8px !important;
+            bottom: 84px !important;
+            width: auto !important;
+            max-width: none !important;
+            height: min(72vh, 620px) !important;
+          }
+        }
+      `}</style>
       {/* Floating Button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl transition-all duration-200 cursor-pointer border-none"
+        className="data-chatbot-toggle fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl transition-all duration-200 cursor-pointer border-none"
         style={{
           color: open ? BRAND.dark : BRAND.white,
           backgroundColor: open ? BRAND.white : BRAND.green,
@@ -661,14 +677,14 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
       {/* Chat Panel */}
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-50 w-[460px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          className="data-chatbot-panel fixed bottom-24 right-6 z-50 w-[460px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           style={{ height: "600px", backgroundColor: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.dark }}
         >
           {/* Header */}
           <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: BRAND.header }}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-base" style={{ backgroundColor: BRAND.green }}>🤖</div>
             <div>
-              <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>Data Assistant</div>
+              <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>Data LifeSights Assistant</div>
               <div className="text-xs" style={{ color: "rgba(255, 255, 255, 0.75)" }}>Full dataset access · {rows.length.toLocaleString()} rows</div>
             </div>
             <div className="ml-auto flex items-center gap-1.5">

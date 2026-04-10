@@ -7,7 +7,7 @@ import UserAvatar from "./UserAvatar";
 import { ArrowLeft, ChevronDown, LoaderCircle, LogOut } from "lucide-react";
 
 export default function Sidebar({ folder, files, filesLoading, onSelectFolder, onRefresh, onBack }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const { theme } = useTheme();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef(null);
@@ -115,7 +115,17 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
               borderColor="var(--color-saffron)"
             />
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm truncate" style={{ color: "var(--color-text)" }}>{user.displayName}</p>
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: "var(--color-text)" }}>{user.displayName}</p>
+                {isAdmin && (
+                  <span
+                    className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: "var(--color-saffron)", color: "#000" }}
+                  >
+                    Admin
+                  </span>
+                )}
+              </div>
               <p className="text-xs truncate" style={{ color: "var(--color-text-light)" }}>{user.email}</p>
             </div>
             <ChevronDown className="h-4 w-4" aria-hidden="true" />

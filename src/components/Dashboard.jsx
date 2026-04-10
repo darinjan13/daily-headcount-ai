@@ -39,6 +39,7 @@ const CMP = { a:"#046241", b:"#FFB347" };
 function parseDateValue(v) { if(!v)return null; const d=new Date(v); return isNaN(d.getTime())?null:d; }
 function toDateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function formatDateLabel(k) { const d=new Date(`${k}T00:00:00`); return isNaN(d.getTime())?k:d.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); }
+function formatMonthLabel(k) { const d=new Date(`${k}T00:00:00`); return isNaN(d.getTime())?k:d.toLocaleDateString("en-US",{year:"numeric",month:"long"}); }
 
 function detectDateColumn(headers, rows, isWide, dateCols) {
   // Wide format files use dates as column headers — no row-level date filter applies
@@ -166,6 +167,27 @@ function getMonthRange(dateKey) {
   const start=`${y}-${String(m).padStart(2,"0")}-01`;
   const lastDay=new Date(y,m,0).getDate();
   return{start,end:`${y}-${String(m).padStart(2,"0")}-${lastDay}`};
+}
+function getMonthStart(dateKey) {
+  const [y,m]=dateKey.split("-").map(Number);
+  return `${y}-${String(m).padStart(2,"0")}-01`;
+}
+function formatWeekLabel(dateKey) {
+  const { start, end } = getWeekRange(dateKey);
+  return `${formatDateLabel(start)} - ${formatDateLabel(end)}`;
+}
+function getComparePeriodOptions(dateOptions, mode) {
+  const seen = new Set();
+  return dateOptions.reduce((acc, dateKey) => {
+    const value = mode === "week" ? getWeekRange(dateKey).start : mode === "month" ? getMonthStart(dateKey) : dateKey;
+    if (seen.has(value)) return acc;
+    seen.add(value);
+    acc.push({
+      value,
+      label: mode === "week" ? formatWeekLabel(value) : mode === "month" ? formatMonthLabel(value) : formatDateLabel(value),
+    });
+    return acc;
+  }, []);
 }
 
 // ── UI primitives ──────────────────────────────────────────────────────────────
@@ -529,6 +551,20 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
   const [mode, setMode] = useState("day");
   const [dateA, setDateA] = useState(dateOptions[0]||"");
   const [dateB, setDateB] = useState(dateOptions[1]||"");
+  const periodOptions = useMemo(() => getComparePeriodOptions(dateOptions, mode), [dateOptions, mode]);
+
+  useEffect(() => {
+    if (!periodOptions.length) {
+      setDateA("");
+      setDateB("");
+      return;
+    }
+    setDateA((current) => periodOptions.some((option) => option.value === current) ? current : periodOptions[0].value);
+    setDateB((current) => {
+      if (periodOptions.some((option) => option.value === current)) return current;
+      return (periodOptions[1] || periodOptions[0]).value;
+    });
+  }, [periodOptions]);
 
   const filterByRange = (range) => {
     if (!dateCol) return objectData;
@@ -565,12 +601,12 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
         <div style={{ display:"flex", gap:8, alignItems:"center", marginLeft:8 }}>
           <span style={{ width:10,height:10,borderRadius:2,background:CMP.a,display:"inline-block" }}/>
           <select value={dateA} onChange={e=>setDateA(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}>
-            {dateOptions.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
+            {periodOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <span style={{ fontSize:12, color:"#9cafa4", fontWeight:700 }}>vs</span>
           <span style={{ width:10,height:10,borderRadius:2,background:CMP.b,display:"inline-block" }}/>
           <select value={dateB} onChange={e=>setDateB(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}>
-            {dateOptions.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
+            {periodOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>
         <span style={{ fontSize:11, color:UI.textLight }}>{dataA.length} vs {dataB.length} rows</span>

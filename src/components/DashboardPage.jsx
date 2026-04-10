@@ -7,7 +7,7 @@ import Sidebar from "./Sidebar";
 import { ChevronUp, LoaderCircle } from "lucide-react";
 import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
 
-const HOST = "https://daily-headcount-ai-backend.onrender.com";
+const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
 
 export default function DashboardPage() {
   const location = useLocation();
@@ -155,6 +155,60 @@ export default function DashboardPage() {
         flex-direction: column;
         overflow-x: hidden;
       }
+      @media (max-width: 900px) {
+        .dashboard-sidebar {
+          position: static;
+          width: 100%;
+          height: auto;
+          transform: none;
+          border-right: none;
+          border-bottom: 1px solid var(--color-border);
+        }
+        .dashboard-main {
+          margin-left: 0;
+          width: 100%;
+        }
+        .dashboard-topbar-inner {
+          padding: 12px 16px !important;
+          flex-wrap: wrap;
+          justify-content: space-between !important;
+        }
+        .dashboard-topbar-actions {
+          position: static !important;
+          margin-left: auto;
+          width: auto;
+          justify-content: flex-end;
+          flex-wrap: nowrap;
+        }
+        .dashboard-sheet-switcher-row {
+          width: 100%;
+          display: flex;
+          justify-content: flex-end;
+        }
+        .dashboard-sheet-switcher {
+          margin-left: auto;
+        }
+      }
+      @media (max-width: 640px) {
+        .dashboard-topbar-inner {
+          gap: 10px !important;
+        }
+        .dashboard-topbar-actions {
+          flex: 0 0 auto;
+          gap: 0 !important;
+        }
+        .dashboard-sheet-switcher-row {
+          justify-content: stretch;
+        }
+        .dashboard-sheet-switcher {
+          width: 100%;
+          justify-content: space-between;
+          flex-wrap: wrap;
+        }
+        .dashboard-sheet-switcher select {
+          width: 100%;
+        }
+      }
     `}</style>
     <div className="min-h-screen w-screen" style={{ backgroundColor: "var(--color-bg)" }}>
       <aside className="dashboard-sidebar">
@@ -180,7 +234,7 @@ export default function DashboardPage() {
           }}
         >
           <div
-            className="flex items-center gap-4"
+            className="dashboard-topbar-inner flex items-center gap-4"
             style={{ width: "100%", padding: "12px 32px", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}
           >
             <div className="flex items-center gap-2 min-w-0">
@@ -190,11 +244,13 @@ export default function DashboardPage() {
               </span>
             </div>
 
-            {/* Right side: theme toggle + sheet switcher */}
-            <div className="flex items-center gap-3 shrink-0" style={{ position: "absolute", right: 32 }}>
+            <div className="dashboard-topbar-actions flex items-center gap-3 shrink-0" style={{ position: "absolute", right: 32 }}>
               <ThemeToggle />
-              {allSheets.length > 1 && (
-              <div className="flex items-center gap-2 shrink-0">
+            </div>
+
+            {allSheets.length > 1 && (
+              <div className="dashboard-sheet-switcher-row">
+                <div className="dashboard-sheet-switcher flex items-center gap-2 shrink-0">
                 <label
                   className="text-xs font-bold uppercase tracking-wide"
                   style={{ color: "var(--color-text)" }}
@@ -221,8 +277,8 @@ export default function DashboardPage() {
                 )}
                 {switchError && <span className="text-xs" style={{ color: "var(--color-saffron)" }}>{switchError}</span>}
               </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -234,7 +290,7 @@ export default function DashboardPage() {
             <div className="flex items-center justify-center" style={{
               position: "fixed",
               top: 0,
-              left: "16px",
+              left: window.innerWidth <= 900 ? 0 : "16px",
               right: 0,
               bottom: 0,
               zIndex: 40,
@@ -255,15 +311,22 @@ export default function DashboardPage() {
         {showBackToTop && (
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="fixed bottom-6 right-24 z-40 w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-xl transition-all duration-200 cursor-pointer border-none"
+            className="fixed z-40 flex items-center justify-center rounded-full transition-all duration-200 cursor-pointer border-none"
             style={{
               backgroundColor: "var(--color-castleton-green)",
               color: "#fff",
-              boxShadow: "0 10px 25px rgba(4, 98, 65, 0.25)",
+              boxShadow: "0 8px 18px rgba(4, 98, 65, 0.22)",
+              width: 40,
+              height: 40,
+              left: "50%",
+              transform: "translateX(-50%)",
+              bottom: window.innerWidth <= 640 ? 88 : 24,
+              padding: 0,
             }}
             title="Back to top"
+            aria-label="Back to top"
           >
-            <ChevronUp className="h-5 w-5" aria-hidden="true" />
+            <ChevronUp className="h-4 w-4" aria-hidden="true" />
           </button>
         )}
       </div>

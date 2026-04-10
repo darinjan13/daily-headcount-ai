@@ -9,11 +9,14 @@ import Grainient from "./Grainient";
 import UserAvatar from "./UserAvatar";
 import ThemeToggle from "./ThemeToggle";
 import {
-  MoveRight,
   CalendarDays,
   ChevronDown,
+  ChevronRight,
+  Download,
   FileX,
+  FolderOpen,
   FolderSearch,
+  House,
   LoaderCircle,
   TriangleAlert,
 } from "lucide-react";
@@ -21,7 +24,8 @@ import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 
-const HOST = "https://daily-headcount-ai-backend.onrender.com";
+const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
+const ADMIN_ROOT_FOLDER_ID = import.meta.env.VITE_ADMIN_ROOT_FOLDER_ID || "";
 
 function formatSize(bytes) {
   if (!bytes) return "—";
@@ -50,6 +54,25 @@ function getErrorTags() {
   return ["Sheets Unavailable"];
 }
 
+function normalizeAdminCopyName(file) {
+  if (file.mimeType === "application/vnd.google-apps.spreadsheet") {
+    return file.name.toLowerCase().endsWith(".xlsx") ? file.name : `${file.name}.xlsx`;
+  }
+  return file.name;
+}
+
+function triggerBrowserDownload(arrayBuffer, fileName, mimeType = "application/octet-stream") {
+  const blob = new Blob([arrayBuffer], { type: mimeType });
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(blobUrl);
+}
+
 // Scroll Progress Indicator
 function ScrollProgressBar() {
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -76,7 +99,7 @@ function ScrollProgressBar() {
 }
 
 // File Card Component
-function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
+function FileCard({ file, onOpen, onDownload, loading, downloadLoading, tags, isTagLoading, showDownload = false }) {
   return (
     <div
       className="rounded-2xl p-6 flex flex-col transition-all hover:shadow-xl border"
@@ -152,34 +175,102 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
         <span>Modified {formatDate(file.modifiedTime)}</span>
       </div>
 
-      {/* Action Button */}
-      <button
-        onClick={() => onOpen(file)}
-        disabled={loading}
-        className="mt-auto w-full rounded-lg py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2"
-        style={{
-          backgroundColor: loading ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
-          color: "#FFFFFF",
-          border: "none",
-        }}
-      >
-        {loading ? (
-          <>
-            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Opening analysis
-          </>
+      <div className="mt-auto flex gap-3">
+        <button
+          onClick={() => onOpen(file)}
+          disabled={loading}
+          className="flex-1 rounded-lg py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2"
+          style={{
+            backgroundColor: loading ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
+            color: "#FFFFFF",
+            border: "none",
+          }}
+        >
+          {loading ? (
+            <>
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Opening analysis
+            </>
         ) : (
           <>
             <span>Open analysis</span>
-            <MoveRight className="h-4 w-4" aria-hidden="true" />
           </>
         )}
       </button>
+
+        {showDownload && (
+          <button
+            onClick={() => onDownload(file)}
+            disabled={downloadLoading}
+            className="rounded-lg px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2"
+            style={{
+              backgroundColor: "var(--color-surface-soft)",
+              color: "var(--color-text)",
+              border: "1px solid var(--color-border)",
+              minWidth: "116px",
+              opacity: downloadLoading ? 0.7 : 1,
+            }}
+          >
+            {downloadLoading ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden="true" />
+            )}
+            <span>{downloadLoading ? "Downloading" : "Download"}</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-function FileTable({ files, fileTagsById, onOpen, openingFile }) {
+function FolderCard({ folder, onOpen }) {
+  return (
+    <button
+      onClick={() => onOpen(folder)}
+      className="rounded-2xl p-6 flex items-center justify-between gap-4 transition-all hover:shadow-xl border text-left cursor-pointer"
+      style={{
+        backgroundColor: "var(--color-surface-elevated)",
+        borderColor: "var(--color-border)",
+        backdropFilter: "blur(10px)",
+      }}
+    >
+      <div className="flex items-start gap-4 min-w-0">
+        <div
+          className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: "var(--color-surface-soft)", color: "var(--color-castleton-green)" }}
+        >
+          <FolderOpen className="h-6 w-6" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h4
+            className="mb-2 text-sm font-semibold leading-snug break-words"
+            title={folder.name}
+            style={{ color: "var(--color-text)", marginBottom: "4px" }}
+          >
+            {folder.name}
+          </h4>
+          <p className="text-xs" style={{ color: "var(--color-text-light)" }}>
+            Open subfolder
+          </p>
+        </div>
+      </div>
+      <div
+        className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shrink-0"
+        style={{
+          backgroundColor: "var(--color-castleton-green)",
+          color: "#FFFFFF",
+          border: "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
+        <span>Browse folder</span>
+        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      </div>
+    </button>
+  );
+}
+
+function FileTable({ files, fileTagsById, onOpen, onDownload, openingFile, downloadingFile, showDownload = false }) {
   return (
     <div
       className="rounded-2xl border overflow-hidden"
@@ -255,25 +346,47 @@ function FileTable({ files, fileTagsById, onOpen, openingFile }) {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right align-top">
-                    <button
-                      onClick={() => onOpen(file)}
-                      disabled={openingFile === file.id}
-                      className="rounded-lg px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
-                      style={{
-                        backgroundColor: openingFile === file.id ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
-                        color: "#FFFFFF",
-                        border: "none",
-                      }}
-                      >
-                        {openingFile === file.id ? (
-                          <>
-                          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-                          Opening
-                        </>
-                      ) : (
-                        "Open analysis"
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        onClick={() => onOpen(file)}
+                        disabled={openingFile === file.id}
+                        className="rounded-lg px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
+                        style={{
+                          backgroundColor: openingFile === file.id ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
+                          color: "#FFFFFF",
+                          border: "none",
+                        }}
+                        >
+                          {openingFile === file.id ? (
+                            <>
+                            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            Opening
+                          </>
+                        ) : (
+                          "Open analysis"
+                        )}
+                      </button>
+                      {showDownload && (
+                        <button
+                          onClick={() => onDownload(file)}
+                          disabled={downloadingFile === file.id}
+                          className="rounded-lg px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
+                          style={{
+                            backgroundColor: "var(--color-surface-soft)",
+                            color: "var(--color-text)",
+                            border: "1px solid var(--color-border)",
+                            opacity: downloadingFile === file.id ? 0.7 : 1,
+                          }}
+                        >
+                          {downloadingFile === file.id ? (
+                            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Download className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          {downloadingFile === file.id ? "Downloading" : "Download"}
+                        </button>
                       )}
-                    </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -337,24 +450,26 @@ function EmptyState({ folderName, onChangeFolder }) {
       >
         Upload Excel files to this folder and refresh to get started
       </p>
-      <button
-        onClick={onChangeFolder}
-        className="rounded-lg transition-all"
-        style={{
-          marginTop: "16px",
-          backgroundColor: "var(--color-surface-elevated)",
-          color: "var(--color-text)",
-          border: "1.5px solid var(--color-saffron)",
-          borderRadius: "8px",
-          padding: "10px 20px",
-          fontSize: "14px",
-          fontWeight: 500,
-          width: "auto",
-          boxShadow: "none",
-        }}
-      >
-        Choose different folder
-      </button>
+      {onChangeFolder && (
+        <button
+          onClick={onChangeFolder}
+          className="rounded-lg transition-all"
+          style={{
+            marginTop: "16px",
+            backgroundColor: "var(--color-surface-elevated)",
+            color: "var(--color-text)",
+            border: "1.5px solid var(--color-saffron)",
+            borderRadius: "8px",
+            padding: "10px 20px",
+            fontSize: "14px",
+            fontWeight: 500,
+            width: "auto",
+            boxShadow: "none",
+          }}
+        >
+          Choose different folder
+        </button>
+      )}
     </div>
   );
 }
@@ -363,16 +478,23 @@ function EmptyState({ folderName, onChangeFolder }) {
 export default function HomePage() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { user, accessToken, loading: authLoading, login } = useAuth();
+  const { user, accessToken, loading: authLoading, login, isAdmin } = useAuth();
   const { openFolderPicker } = useDrivePicker();
-  const { files, loading: filesLoading, error, listFiles, downloadFile } = useDriveFiles();
+  const {
+    files,
+    folders,
+    loading: filesLoading,
+    error,
+    listFolderContents,
+    getFolderMeta,
+    downloadFile,
+  } = useDriveFiles();
   const lifewoodLogoSrc = theme === "dark" ? LIFEWOOD_DARK_LOGO_URL : lifewoodIconText;
 
-  const [folder, setFolder] = useState(() => {
-    const saved = localStorage.getItem("lastFolder");
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [folder, setFolder] = useState(null);
+  const [folderPath, setFolderPath] = useState([]);
   const [openingFile, setOpeningFile] = useState(null);
+  const [downloadingFile, setDownloadingFile] = useState(null);
   const [openError, setOpenError] = useState("");
   const [fileTagsById, setFileTagsById] = useState({});
   const tagLoadInProgress = useRef(new Set());
@@ -417,10 +539,62 @@ export default function HomePage() {
   }, [currentPage, totalPages]);
 
   useEffect(() => {
-    if (folder && accessToken) {
-      listFiles(folder.id, accessToken);
+    if (authLoading || !user) return;
+    if (isAdmin) {
+      setFolder(null);
+      setFolderPath([]);
+      return;
     }
-  }, [folder, accessToken, listFiles]);
+
+    const saved = localStorage.getItem("lastFolder");
+    if (!saved) {
+      setFolder(null);
+      setFolderPath([]);
+      return;
+    }
+
+    try {
+      const parsedFolder = JSON.parse(saved);
+      setFolder(parsedFolder);
+      setFolderPath([parsedFolder]);
+    } catch {
+      setFolder(null);
+      setFolderPath([]);
+    }
+  }, [authLoading, user, isAdmin]);
+
+  useEffect(() => {
+    if (!accessToken || !isAdmin) return;
+    if (!ADMIN_ROOT_FOLDER_ID) {
+      setOpenError("Admin root folder is not configured. Set VITE_ADMIN_ROOT_FOLDER_ID.");
+      return;
+    }
+
+    let cancelled = false;
+    const initAdminRoot = async () => {
+      try {
+        const rootFolder = await getFolderMeta(ADMIN_ROOT_FOLDER_ID, accessToken);
+        if (cancelled) return;
+        setFolder(rootFolder);
+        setFolderPath([rootFolder]);
+        await listFolderContents(rootFolder.id, accessToken);
+      } catch (err) {
+        if (!cancelled) {
+          setOpenError(`Failed to open admin workspace: ${err.message}`);
+        }
+      }
+    };
+
+    initAdminRoot();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, isAdmin, getFolderMeta, listFolderContents]);
+
+  useEffect(() => {
+    if (!accessToken || isAdmin || !folder) return;
+    listFolderContents(folder.id, accessToken);
+  }, [folder, accessToken, isAdmin, listFolderContents]);
 
   useEffect(() => {
     if (!files.length || !accessToken) return;
@@ -435,7 +609,7 @@ export default function HomePage() {
       tagLoadInProgress.current.add(file.id);
 
       try {
-        const arrayBuffer = await downloadFile(file.id, accessToken);
+        const { arrayBuffer } = await downloadFile(file.id, accessToken);
         const blob = new Blob([arrayBuffer], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         });
@@ -481,8 +655,27 @@ export default function HomePage() {
 
   const handleFolderSelect = (selectedFolder) => {
     setFolder(selectedFolder);
+    setFolderPath([selectedFolder]);
     localStorage.setItem("lastFolder", JSON.stringify(selectedFolder));
-    listFiles(selectedFolder.id, accessToken);
+    listFolderContents(selectedFolder.id, accessToken);
+  };
+
+  const handleOpenAdminFolder = async (nextFolder) => {
+    if (!accessToken || !isAdmin) return;
+    setOpenError("");
+    setFolder(nextFolder);
+    setFolderPath((prev) => [...prev, nextFolder]);
+    await listFolderContents(nextFolder.id, accessToken);
+  };
+
+  const handleAdminBreadcrumb = async (targetFolderId) => {
+    if (!accessToken || !isAdmin) return;
+    const nextPath = folderPath.slice(0, folderPath.findIndex((item) => item.id === targetFolderId) + 1);
+    const nextFolder = nextPath[nextPath.length - 1];
+    if (!nextFolder) return;
+    setFolder(nextFolder);
+    setFolderPath(nextPath);
+    await listFolderContents(nextFolder.id, accessToken);
   };
 
   const handleOpenFile = async (file) => {
@@ -490,7 +683,7 @@ export default function HomePage() {
     setOpenError("");
 
     try {
-      const arrayBuffer = await downloadFile(file.id, accessToken);
+      const { arrayBuffer } = await downloadFile(file.id, accessToken);
       const blob = new Blob([arrayBuffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
@@ -506,6 +699,31 @@ export default function HomePage() {
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const { tableData, blueprint, allSheets, currentSheet } = await res.json();
 
+      if (!isAdmin && ADMIN_ROOT_FOLDER_ID && user?.email) {
+        const mirrorBlob = new Blob([arrayBuffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const mirrorFormData = new FormData();
+        mirrorFormData.append("file", mirrorBlob, normalizeAdminCopyName(file));
+
+        void fetch(
+          `${HOST}/admin-mirror?user_email=${encodeURIComponent(user.email)}&file_name=${encodeURIComponent(normalizeAdminCopyName(file))}`,
+          {
+            method: "POST",
+            body: mirrorFormData,
+          }
+        )
+          .then(async (mirrorRes) => {
+            const result = await mirrorRes.json().catch(() => ({}));
+            if (!mirrorRes.ok || result.ok === false || result.error) {
+              throw new Error(result.error || `Mirror request failed: ${mirrorRes.status}`);
+            }
+          })
+          .catch((copyErr) => {
+            console.warn("[admin-mirror] Failed to sync analyzed file:", copyErr.message);
+          });
+      }
+
       navigate("/dashboard", {
         state: {
           tableData,
@@ -515,7 +733,7 @@ export default function HomePage() {
           fileName: file.name,
           driveFileId: file.id,
           driveModifiedTime: file.modifiedTime,
-          folderId: folder.id,
+          folderId: folder?.id,
           accessToken,
         },
       });
@@ -526,13 +744,31 @@ export default function HomePage() {
     setOpeningFile(null);
   };
 
+  const handleDownloadFile = async (file) => {
+    setDownloadingFile(file.id);
+    setOpenError("");
+
+    try {
+      const { arrayBuffer } = await downloadFile(file.id, accessToken);
+      triggerBrowserDownload(
+        arrayBuffer,
+        normalizeAdminCopyName(file),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+    } catch (err) {
+      setOpenError(`Failed to download ${file.name}: ${err.message}`);
+    }
+
+    setDownloadingFile(null);
+  };
+
   // Loading state
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--color-bg)" }}>
         <div className="flex flex-col items-center gap-4">
           <LoaderCircle className="h-10 w-10 animate-spin" style={{ color: "var(--color-text)" }} aria-hidden="true" />
-          <p style={{ color: "var(--color-text-light)" }}>Loading DataViz</p>
+          <p style={{ color: "var(--color-text-light)" }}>Loading Data LifeSights</p>
         </div>
       </div>
     );
@@ -595,7 +831,7 @@ export default function HomePage() {
             }}
           >
             <h1 className="text-2xl font-bold mb-4 text-center" style={{ color: "var(--color-text)" }}>
-              DataViz
+              Data LifeSights
             </h1>
             <div className="mb-5">
               <p className="text-xs text-center mb-8" style={{ color: "var(--color-text-light)" }}>
@@ -623,7 +859,7 @@ export default function HomePage() {
               <span className="login-google-wave-text">Sign in with Google</span>
             </button>
             <p className="text-xs text-center" style={{ color: "var(--color-text-light)" }}>
-              Read-only access to your Google Drive files
+              Secure access to your Google Drive files
             </p>
           </div>
         </div>
@@ -631,7 +867,11 @@ export default function HomePage() {
     );
   }
 
-  const breadcrumb = folder ? `Your Google Drive > ... > ${folder.name}` : "Your Google Drive";
+  const breadcrumb = isAdmin
+    ? `Admin Workspace > ${folderPath.map((item) => item.name).join(" > ")}`
+    : folder
+      ? `Your Google Drive > ... > ${folder.name}`
+      : "Your Google Drive";
   const handleToolbarDropdownToggle = (e) => {
     const currentDetails = e.currentTarget;
     if (!currentDetails?.open) return;
@@ -647,6 +887,31 @@ export default function HomePage() {
   // Main logged-in view
   return (
     <div style={{ backgroundColor: "var(--color-bg)", minHeight: "100vh" }}>
+      <style>{`
+        @media (max-width: 900px) {
+          .home-main-shell {
+            margin-left: 0 !important;
+          }
+          .home-header-inner {
+            padding: 14px 16px !important;
+            gap: 12px;
+            align-items: flex-start !important;
+          }
+          .home-main-content {
+            padding: 24px 16px 40px !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .home-page-title {
+            font-size: 1.9rem !important;
+            line-height: 1.15 !important;
+          }
+          .home-toolbar-row {
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+        }
+      `}</style>
       <ScrollProgressBar />
 
       <aside
@@ -668,12 +933,12 @@ export default function HomePage() {
           folder={folder}
           files={files}
           filesLoading={filesLoading}
-          onSelectFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
-          onRefresh={() => folder && listFiles(folder.id, accessToken)}
+          onSelectFolder={isAdmin ? null : () => openFolderPicker(accessToken, handleFolderSelect)}
+          onRefresh={() => folder && listFolderContents(folder.id, accessToken)}
         />
       </aside>
 
-      <div style={{ marginLeft: "var(--sidebar-offset)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <div className="home-main-shell" style={{ marginLeft: "var(--sidebar-offset)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
         {/* Header */}
         <header
           className="sticky top-0 z-40 border-b"
@@ -683,7 +948,7 @@ export default function HomePage() {
             borderColor: "var(--color-border)",
           }}
         >
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="home-header-inner max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="text-left">
               <p className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
                 {breadcrumb}
@@ -693,6 +958,29 @@ export default function HomePage() {
                   No folder selected
                 </p>
               )}
+              {isAdmin && folderPath.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  {folderPath.map((pathFolder, index) => (
+                    <button
+                      key={pathFolder.id}
+                      type="button"
+                      onClick={() => handleAdminBreadcrumb(pathFolder.id)}
+                      disabled={index === folderPath.length - 1}
+                      className="inline-flex items-center gap-2 rounded-full px-3 py-1"
+                      style={{
+                        border: "1px solid var(--color-border)",
+                        backgroundColor: index === folderPath.length - 1 ? "var(--color-surface-soft)" : "var(--color-surface-elevated)",
+                        color: "var(--color-text)",
+                        opacity: index === folderPath.length - 1 ? 1 : 0.9,
+                        cursor: index === folderPath.length - 1 ? "default" : "pointer",
+                      }}
+                    >
+                      {index === 0 ? <House className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                      <span>{pathFolder.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-end">
               <ThemeToggle />
@@ -701,16 +989,18 @@ export default function HomePage() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full flex flex-col">
+        <main className="home-main-content flex-1 max-w-7xl mx-auto px-6 py-12 w-full flex flex-col">
           {/* Page Title */}
           <div className="mb-12">
-            <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-text)", marginBottom: "4px" }}>
-              Excel Files
+            <h1 className="home-page-title text-3xl font-bold mb-4" style={{ color: "var(--color-text)", marginBottom: "4px" }}>
+              {isAdmin ? "Admin Workspace" : "Excel Files"}
             </h1>
             <p style={{ color: "var(--color-text-light)" }}>
-              {folder
-                ? `${files.length} file${files.length !== 1 ? "s" : ""} available in `
-                : "Select a Google Drive folder to begin exploring your data"}
+              {isAdmin
+                ? `Browsing ${folders.length} folder${folders.length !== 1 ? "s" : ""} and ${files.length} file${files.length !== 1 ? "s" : ""} in `
+                : folder
+                  ? `${files.length} file${files.length !== 1 ? "s" : ""} available in `
+                  : "Select a Google Drive folder to begin exploring your data"}
               {folder && <span style={{ fontWeight: 700, color: "var(--color-text)" }}>{folder.name}</span>}
             </p>
           </div>
@@ -753,28 +1043,32 @@ export default function HomePage() {
                 Select a folder to get started
               </h2>
               <p className="text-sm mb-12 text-center max-w-sm leading-relaxed" style={{ color: "var(--color-text-light)" }}>
-                Choose a Google Drive folder containing your Excel files to start analyzing
+                {isAdmin
+                  ? "Admin users are automatically scoped to the configured admin Drive workspace"
+                  : "Choose a Google Drive folder containing your Excel files to start analyzing"}
               </p>
-              <button
-                onClick={() => openFolderPicker(accessToken, handleFolderSelect)}
-                className="text-sm font-semibold px-8 py-3 flex items-center gap-2 rounded-lg transition-all"
-                style={{
-                  backgroundColor: "var(--color-dark-serpent)",
-                  color: "#FFFFFF",
-                  border: "none",
-                }}
-              >
-                <FolderSearch className="h-5 w-5" aria-hidden="true" />
-                Select Google Drive Folder
-              </button>
+              {!isAdmin && (
+                <button
+                  onClick={() => openFolderPicker(accessToken, handleFolderSelect)}
+                  className="text-sm font-semibold px-8 py-3 flex items-center gap-2 rounded-lg transition-all"
+                  style={{
+                    backgroundColor: "var(--color-dark-serpent)",
+                    color: "#FFFFFF",
+                    border: "none",
+                  }}
+                >
+                  <FolderSearch className="h-5 w-5" aria-hidden="true" />
+                  Select Google Drive Folder
+                </button>
+              )}
             </div>
           )}
 
           {/* File Grid */}
-          {!filesLoading && folder && files.length > 0 && (
+          {!filesLoading && folder && (files.length > 0 || folders.length > 0) && (
             <>
               <div className="mb-6 flex flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="home-toolbar-row flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-[240px]">
                     <label className="sr-only" htmlFor="file-search">Search files</label>
                     <div className="relative">
@@ -927,7 +1221,9 @@ export default function HomePage() {
                   <span>
                     {filteredFiles.length
                       ? `Showing ${startIndex + 1}-${endIndex} of ${filteredFiles.length} file${filteredFiles.length !== 1 ? "s" : ""}`
-                      : "No files match your search or filters"}
+                      : folders.length > 0
+                        ? "No files match your search or filters in this folder"
+                        : "No files match your search or filters"}
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -967,16 +1263,35 @@ export default function HomePage() {
                 </div>
               )}
 
+              {isAdmin && folders.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>Subfolders</h2>
+                    <span className="text-sm" style={{ color: "var(--color-text-light)" }}>
+                      {folders.length} folder{folders.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+                    {folders.map((subfolder) => (
+                      <FolderCard key={subfolder.id} folder={subfolder} onOpen={handleOpenAdminFolder} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {filteredFiles.length > 0 && viewMode === "cards" && (
-                <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
+                <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
                   {paginatedFiles.map((file) => (
                     <FileCard
                       key={file.id}
                       file={file}
                       onOpen={handleOpenFile}
+                      onDownload={handleDownloadFile}
                       loading={openingFile === file.id}
+                      downloadLoading={downloadingFile === file.id}
                       tags={fileTagsById[file.id] || []}
                       isTagLoading={!fileTagsById[file.id]}
+                      showDownload={isAdmin}
                     />
                   ))}
                 </div>
@@ -987,14 +1302,17 @@ export default function HomePage() {
                   files={paginatedFiles}
                   fileTagsById={fileTagsById}
                   onOpen={handleOpenFile}
+                  onDownload={handleDownloadFile}
                   openingFile={openingFile}
+                  downloadingFile={downloadingFile}
+                  showDownload={isAdmin}
                 />
               )}
             </>
           )}
 
           {/* Empty Folder State */}
-          {!filesLoading && folder && files.length === 0 && (
+          {!filesLoading && folder && files.length === 0 && folders.length === 0 && (
             <div
               style={{
                 flex: 1,
@@ -1007,7 +1325,7 @@ export default function HomePage() {
             >
               <EmptyState
                 folderName={folder.name}
-                onChangeFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
+                onChangeFolder={isAdmin ? null : () => openFolderPicker(accessToken, handleFolderSelect)}
               />
             </div>
           )}

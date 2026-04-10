@@ -19,7 +19,7 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
   const [transformNote, setTransformNote] = useState(null);
   const fileInputRef = useRef(null);
 
-  const host = 'https://daily-headcount-ai-backend.onrender.com';
+  const host = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
   const handleFileUpload = async (uploadedFile) => {
     if (!uploadedFile) return;
     setFile(uploadedFile);
@@ -183,7 +183,7 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
             <LayoutDashboard className="h-12 w-12 text-emerald-700" aria-hidden="true" />
           </div>
           <h2 className="text-2xl font-extrabold text-emerald-800 m-0">
-            Excel Dashboard
+            Data LifeSights
           </h2>
           <p className="text-gray-400 text-sm mt-1">
             Upload a spreadsheet to auto-generate your dashboard
