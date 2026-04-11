@@ -37,7 +37,7 @@
   --color-pin-accent-bg: rgba(4, 98, 65, 0.1);
   --color-badge-custom-bg: rgba(255, 179, 71, 0.18);
   --color-badge-custom-text: #8A5A00;
-  --sidebar-width: 320px;
+  --sidebar-width: 360px;
   --sidebar-peek: 22px;
   --sidebar-offset: var(--sidebar-peek);
 

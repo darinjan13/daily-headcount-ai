@@ -87,6 +87,76 @@ function renderInline(text) {
   return parts.length === 1 && typeof parts[0] === "string" ? parts[0] : parts;
 }
 
+function ChartSelector({ customCharts, activeChartState, setActiveChartState }) {
+  if (customCharts.length === 0) return null;
+  const activeId = activeChartState?.chartId ? String(activeChartState.chartId) : "";
+  const typeIcon = (type) => ({ bar: "📊", hbar: "📊", line: "📈", donut: "🍩", pivot: "🗂️" }[type] || "📊");
+
+  const handleSelect = (e) => {
+    const val = e.target.value;
+    if (!val) {
+      setActiveChartState(null);
+      return;
+    }
+    const chart = customCharts.find((c) => String(c.id) === val);
+    if (!chart) return;
+    setActiveChartState({
+      chartId: chart.id,
+      chartType: chart.type,
+      chartSpec: chart.spec || chart,
+      topN: chart.spec?.limit || null,
+      sort: chart.spec?.sort || null,
+      aggregation: chart.spec?.aggregation || null,
+    });
+  };
+
+  return (
+    <div style={{
+      margin: "0 4px 8px",
+      padding: "7px 10px",
+      borderRadius: 8,
+      background: "rgba(4,98,65,0.07)",
+      border: `1px solid ${activeId ? "rgba(4,98,65,0.35)" : "rgba(4,98,65,0.15)"}`,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+    }}>
+      <span style={{ fontSize: 12, flexShrink: 0 }}>✏️</span>
+      <select
+        value={activeId}
+        onChange={handleSelect}
+        style={{
+          flex: 1,
+          fontSize: 11,
+          fontWeight: 600,
+          color: activeId ? "var(--color-castleton-green)" : "var(--color-text-light)",
+          backgroundColor: BRAND.white,
+          border: "none",
+          outline: "none",
+          cursor: "pointer",
+          minWidth: 0,
+          colorScheme: "dark",
+        }}
+      >
+        <option value="" style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>Select a chart to edit…</option>
+        {customCharts.map((chart) => (
+          <option key={chart.id} value={String(chart.id)} style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>
+            {typeIcon(chart.type)} {chart.title}
+          </option>
+        ))}
+      </select>
+      {activeId && (
+        <button
+          type="button"
+          onClick={() => setActiveChartState(null)}
+          style={{ width: 24, height: 24, borderRadius: 8, background: BRAND.white, border: `1px solid ${BRAND.border}`, cursor: "pointer", fontSize: 14, color: BRAND.dark, padding: 0, lineHeight: 1, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+          title="Stop editing"
+        >×</button>
+      )}
+    </div>
+  );
+}
+
 // ── FilterTable ───────────────────────────────────────────────────────────────
 
 function applyFilter(headers, rows, filterSpec) {
@@ -252,10 +322,13 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
+  const chartIdRef = useRef(0);
 
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 100); }, [open]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => {
+    // Reset chat state when a new dataset is loaded into the dashboard.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMessages([{ role: "assistant", content: WELCOME, chartSpec: null }]);
     setActiveChartState(null);
   }, [headers, rows]);
@@ -264,7 +337,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
 
   const sendText = async (text) => {
     if (!text || loading) return;
-    const { action, updatedState } = activeChartState
+    const { updatedState } = activeChartState
       ? { action: "update", updatedState: activeChartState }
       : classifyIntent(text, null);
 
@@ -386,7 +459,8 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
             onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
             statusLines.push("✏️ Chart updated.");
           } else {
-            const chartId = Date.now() + Math.random(); // unique id stamped before dispatch
+            chartIdRef.current += 1;
+            const chartId = `chat-chart-${chartIdRef.current}`;
             const specWithId = { ...spec, _chatId: chartId };
             onResult({ chartSpec: specWithId, action: "new" });
             newChartSpecs.push(specWithId);
@@ -575,7 +649,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
 
   // Active chart state pill — shows what chart is being "tracked" for follow-ups
 
-  const ChartSelector = () => {
+  const _ChartSelector = () => {
     if (customCharts.length === 0) return null;
     const activeId = activeChartState?.chartId ? String(activeChartState.chartId) : "";
     const typeIcon = (type) => ({ bar:"📊", hbar:"📊", line:"📈", donut:"🍩", pivot:"🗂️" }[type] || "📊");
@@ -684,7 +758,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
           <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: BRAND.header }}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-base" style={{ backgroundColor: BRAND.green }}>🤖</div>
             <div>
-              <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>Data LifeSights Assistant</div>
+              <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>LifeSights Assistant</div>
               <div className="text-xs" style={{ color: "rgba(255, 255, 255, 0.75)" }}>Full dataset access · {rows.length.toLocaleString()} rows</div>
             </div>
             <div className="ml-auto flex items-center gap-1.5">
@@ -766,7 +840,11 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
 
           {/* Input */}
           <div className="shrink-0" style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.white }}>
-            <ChartSelector />
+            <ChartSelector
+              customCharts={customCharts}
+              activeChartState={activeChartState}
+              setActiveChartState={setActiveChartState}
+            />
             <div className="px-3 pb-3 pt-2 flex gap-2 items-end">
               <textarea
                 ref={inputRef}
