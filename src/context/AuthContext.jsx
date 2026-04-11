@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { onAuthChange, signInWithGoogle, signOutUser } from "../firebase/firebaseConfig";
 import { db } from "../firebase/firebaseConfig";
@@ -51,6 +51,7 @@ export function AuthProvider({ children }) {
     () => sessionStorage.getItem("driveAccessToken") || null
   );
   const [isAdmin, setIsAdmin] = useState(false);
+  const loginInProgressRef = useRef(false);
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (firebaseUser) => {
@@ -67,6 +68,18 @@ export function AuthProvider({ children }) {
         return;
       }
 
+      const storedToken = sessionStorage.getItem("driveAccessToken");
+      if (!storedToken) {
+        if (loginInProgressRef.current) return;
+        console.warn("[auth] Missing Drive access token. Forcing re-login.");
+        await signOutUser();
+        setUser(null);
+        setAccessToken(null);
+        setIsAdmin(false);
+        setLoading(false);
+        return;
+      }
+
       setIsAdmin(await resolveAdminStatus(firebaseUser));
       setLoading(false);
     });
@@ -75,13 +88,16 @@ export function AuthProvider({ children }) {
 
   const login = async () => {
     try {
+      loginInProgressRef.current = true;
       setLoading(true);
       const { user, accessToken } = await signInWithGoogle();
       setUser(user);
       setAccessToken(accessToken);
       setIsAdmin(await resolveAdminStatus(user));
+      loginInProgressRef.current = false;
       setLoading(false);
     } catch (error) {
+      loginInProgressRef.current = false;
       setLoading(false);
       console.error("Login failed:", error.message);
       throw error;
@@ -106,6 +122,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used inside AuthProvider");

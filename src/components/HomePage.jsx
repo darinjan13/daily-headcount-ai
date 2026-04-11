@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useAnalysisTabs } from "../context/AnalysisTabsContext";
 import { useTheme } from "../context/ThemeContext";
 import { useDrivePicker } from "../hooks/useDrivePicker";
 import { useDriveFiles } from "../hooks/useDriveFiles";
@@ -26,6 +27,16 @@ import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 
 const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
 const ADMIN_ROOT_FOLDER_ID = import.meta.env.VITE_ADMIN_ROOT_FOLDER_ID || "";
+const PAGE_SIZE_OPTIONS = [3, 4, 6, 8, 12, 18];
+
+function getDefaultPageSize() {
+  if (typeof window === "undefined") return 6;
+  const width = window.innerWidth;
+  if (width >= 1440) return 8;
+  if (width >= 1024) return 6;
+  if (width >= 700) return 4;
+  return 3;
+}
 
 function formatSize(bytes) {
   if (!bytes) return "—";
@@ -52,6 +63,10 @@ function getSheetBasedTags(sheetNames) {
 
 function getErrorTags() {
   return ["Sheets Unavailable"];
+}
+
+function isOpenableSheetTag(tag) {
+  return tag && tag !== "No Sheets Found" && tag !== "Sheets Unavailable";
 }
 
 function normalizeAdminCopyName(file) {
@@ -99,7 +114,7 @@ function ScrollProgressBar() {
 }
 
 // File Card Component
-function FileCard({ file, onOpen, onDownload, loading, downloadLoading, tags, isTagLoading, showDownload = false }) {
+function FileCard({ file, onOpen, onDownload, loading, openDisabled = false, downloadLoading, tags, isTagLoading, showDownload = false }) {
   return (
     <div
       className="rounded-2xl p-6 flex flex-col transition-all hover:shadow-xl border"
@@ -150,9 +165,14 @@ function FileCard({ file, onOpen, onDownload, loading, downloadLoading, tags, is
             Loading Sheets
           </span>
         ) : (
-          tags.map((tag) => (
-            <span
+          tags.map((tag) => {
+            const canOpenSheet = isOpenableSheetTag(tag);
+            return (
+            <button
               key={`${file.id}-${tag}`}
+              type="button"
+              onClick={() => canOpenSheet && onOpen(file, tag)}
+              disabled={!canOpenSheet || openDisabled}
               style={{
                 borderRadius: "20px",
                 backgroundColor: "var(--color-chip-bg)",
@@ -161,11 +181,15 @@ function FileCard({ file, onOpen, onDownload, loading, downloadLoading, tags, is
                 fontSize: "11px",
                 fontWeight: 600,
                 padding: "3px 9px",
+                cursor: canOpenSheet && !openDisabled ? "pointer" : "default",
+                opacity: openDisabled ? 0.65 : 1,
               }}
+              title={canOpenSheet ? `Open ${tag}` : tag}
             >
               {tag}
-            </span>
-          ))
+            </button>
+            );
+          })
         )}
       </div>
 
@@ -178,7 +202,7 @@ function FileCard({ file, onOpen, onDownload, loading, downloadLoading, tags, is
       <div className="mt-auto flex gap-3">
         <button
           onClick={() => onOpen(file)}
-          disabled={loading}
+          disabled={openDisabled}
           className="flex-1 rounded-lg py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2"
           style={{
             backgroundColor: loading ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
@@ -326,9 +350,14 @@ function FileTable({ files, fileTagsById, onOpen, onDownload, openingFile, downl
                           Loading
                         </span>
                       ) : (
-                        (tags || []).map((tag) => (
-                          <span
+                        (tags || []).map((tag) => {
+                          const canOpenSheet = isOpenableSheetTag(tag);
+                          return (
+                          <button
                             key={`${file.id}-${tag}`}
+                            type="button"
+                            onClick={() => canOpenSheet && onOpen(file, tag)}
+                            disabled={!canOpenSheet || Boolean(openingFile)}
                             style={{
                               borderRadius: "20px",
                               backgroundColor: "var(--color-chip-bg)",
@@ -337,11 +366,15 @@ function FileTable({ files, fileTagsById, onOpen, onDownload, openingFile, downl
                               fontSize: "11px",
                               fontWeight: 600,
                               padding: "3px 9px",
+                              cursor: canOpenSheet && !openingFile ? "pointer" : "default",
+                              opacity: openingFile ? 0.65 : 1,
                             }}
+                            title={canOpenSheet ? `Open ${tag}` : tag}
                           >
                             {tag}
-                          </span>
-                        ))
+                          </button>
+                          );
+                        })
                       )}
                     </div>
                   </td>
@@ -349,7 +382,7 @@ function FileTable({ files, fileTagsById, onOpen, onDownload, openingFile, downl
                     <div className="inline-flex items-center gap-2">
                       <button
                         onClick={() => onOpen(file)}
-                        disabled={openingFile === file.id}
+                        disabled={Boolean(openingFile)}
                         className="rounded-lg px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
                         style={{
                           backgroundColor: openingFile === file.id ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
@@ -479,6 +512,17 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { theme } = useTheme();
   const { user, accessToken, loading: authLoading, login, isAdmin } = useAuth();
+  const {
+    tabs,
+    activeTabId,
+    setActiveTabId,
+    openAnalysisTab,
+    closeAnalysisTab,
+    touchAnalysisTab,
+    renameAnalysisTab,
+    togglePinAnalysisTab,
+    clearAnalysisTabs,
+  } = useAnalysisTabs();
   const { openFolderPicker } = useDrivePicker();
   const {
     files,
@@ -498,12 +542,51 @@ export default function HomePage() {
   const [openError, setOpenError] = useState("");
   const [fileTagsById, setFileTagsById] = useState({});
   const tagLoadInProgress = useRef(new Set());
+  const tagCacheRef = useRef({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [viewMode, setViewMode] = useState("cards");
-  const [pageSize, setPageSize] = useState(6);
+  const [pageSize, setPageSize] = useState(() => getDefaultPageSize());
+  const pageSizeTouchedRef = useRef(false);
   const [currentPage, setCurrentPage] = useState(1);
   const toolbarDropdownGroupRef = useRef(null);
+  const TAG_CACHE_KEY = "fileSheetTagsCache";
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!pageSizeTouchedRef.current) {
+        setPageSize(getDefaultPageSize());
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(TAG_CACHE_KEY) || "{}");
+      if (cached && typeof cached === "object") {
+        tagCacheRef.current = cached;
+      }
+    } catch {
+      tagCacheRef.current = {};
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!files.length) return;
+    const cachedTags = {};
+    files.forEach((file) => {
+      const cached = tagCacheRef.current?.[file.id];
+      if (cached && cached.modifiedTime === file.modifiedTime && Array.isArray(cached.tags)) {
+        cachedTags[file.id] = cached.tags;
+      }
+    });
+    if (Object.keys(cachedTags).length) {
+      setFileTagsById((prev) => ({ ...cachedTags, ...prev }));
+    }
+  }, [files]);
 
   const filteredFiles = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -531,6 +614,12 @@ export default function HomePage() {
   const startIndex = filteredFiles.length ? (safePage - 1) * pageSize : 0;
   const endIndex = filteredFiles.length ? Math.min(filteredFiles.length, safePage * pageSize) : 0;
   const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+  const hasActiveFileFilters = searchTerm.trim().length > 0 || selectedType !== "all";
+  const emptyFilesMessage = hasActiveFileFilters
+    ? "No files match your search or filters."
+    : folders.length > 0
+      ? "No spreadsheet files in this folder. Open a subfolder to continue."
+      : "No spreadsheet files in this folder.";
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -609,6 +698,13 @@ export default function HomePage() {
       tagLoadInProgress.current.add(file.id);
 
       try {
+        const cached = tagCacheRef.current?.[file.id];
+        if (cached && cached.modifiedTime === file.modifiedTime && Array.isArray(cached.tags)) {
+          if (!isCancelled) {
+            setFileTagsById((prev) => ({ ...prev, [file.id]: cached.tags }));
+          }
+          return;
+        }
         const { arrayBuffer } = await downloadFile(file.id, accessToken);
         const blob = new Blob([arrayBuffer], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -626,6 +722,19 @@ export default function HomePage() {
         const tags = getSheetBasedTags(data?.sheets || []);
         if (!isCancelled) {
           setFileTagsById((prev) => ({ ...prev, [file.id]: tags }));
+        }
+        tagCacheRef.current = {
+          ...tagCacheRef.current,
+          [file.id]: {
+            tags,
+            modifiedTime: file.modifiedTime || null,
+            updatedAt: Date.now(),
+          },
+        };
+        try {
+          localStorage.setItem(TAG_CACHE_KEY, JSON.stringify(tagCacheRef.current));
+        } catch {
+          // ignore storage quota errors
         }
       } catch {
         if (!isCancelled) {
@@ -678,7 +787,7 @@ export default function HomePage() {
     await listFolderContents(nextFolder.id, accessToken);
   };
 
-  const handleOpenFile = async (file) => {
+  const handleOpenFile = async (file, sheetName = "") => {
     setOpeningFile(file.id);
     setOpenError("");
 
@@ -691,7 +800,11 @@ export default function HomePage() {
       const formData = new FormData();
       formData.append("file", blob, file.name);
 
-      const res = await fetch(`${HOST}/analyze-bytes`, {
+      const analyzeUrl = sheetName
+        ? `${HOST}/analyze-bytes?sheet_name=${encodeURIComponent(sheetName)}`
+        : `${HOST}/analyze-bytes`;
+
+      const res = await fetch(analyzeUrl, {
         method: "POST",
         body: formData,
       });
@@ -724,19 +837,19 @@ export default function HomePage() {
           });
       }
 
-      navigate("/dashboard", {
-        state: {
-          tableData,
-          blueprint,
-          currentSheet,
-          allSheets,
-          fileName: file.name,
-          driveFileId: file.id,
-          driveModifiedTime: file.modifiedTime,
-          folderId: folder?.id,
-          accessToken,
-        },
+      const tabId = openAnalysisTab({
+        tableData,
+        blueprint,
+        currentSheet,
+        allSheets,
+        fileName: file.name,
+        driveFileId: file.id,
+        driveModifiedTime: file.modifiedTime,
+        folderId: folder?.id,
+        sourceUserEmail: isAdmin ? folder?.name : user?.email,
+        sourceFolderName: folder?.name,
       });
+      navigate("/dashboard", { state: { targetTabId: tabId } });
     } catch (err) {
       setOpenError(`Failed to open ${file.name}: ${err.message}`);
     }
@@ -762,20 +875,27 @@ export default function HomePage() {
     setDownloadingFile(null);
   };
 
+  const handleSelectAnalysisTab = (tabId) => {
+    if (!tabs.some((tab) => tab.id === tabId)) return;
+    touchAnalysisTab(tabId);
+    setActiveTabId(tabId);
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  };
+
   // Loading state
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--color-bg)" }}>
         <div className="flex flex-col items-center gap-4">
           <LoaderCircle className="h-10 w-10 animate-spin" style={{ color: "var(--color-text)" }} aria-hidden="true" />
-          <p style={{ color: "var(--color-text-light)" }}>Loading Data LifeSights</p>
+          <p style={{ color: "var(--color-text-light)" }}>Loading LifeSights</p>
         </div>
       </div>
     );
   }
 
   // Login state
-  if (!user) {
+  if (!user || !accessToken) {
     return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{ backgroundColor: "var(--color-bg)" }}>
         <ScrollProgressBar />
@@ -831,7 +951,7 @@ export default function HomePage() {
             }}
           >
             <h1 className="text-2xl font-bold mb-4 text-center" style={{ color: "var(--color-text)" }}>
-              Data LifeSights
+              LifeSights
             </h1>
             <div className="mb-5">
               <p className="text-xs text-center mb-8" style={{ color: "var(--color-text-light)" }}>
@@ -842,6 +962,11 @@ export default function HomePage() {
               <p className="text-sm text-center leading-relaxed" style={{ color: "var(--color-text-light)" }}>
                 Connect your Google Drive to visualize and analyze Excel files in real time
               </p>
+              {user && !accessToken && (
+                <p className="text-xs text-center mt-3" style={{ color: "var(--color-text-light)" }}>
+                  Session expired. Please sign in again to continue.
+                </p>
+              )}
             </div>
             <button
               onClick={login}
@@ -888,6 +1013,11 @@ export default function HomePage() {
   return (
     <div style={{ backgroundColor: "var(--color-bg)", minHeight: "100vh" }}>
       <style>{`
+        .home-page-title {
+          font-size: clamp(2rem, 4vw, 3rem) !important;
+          line-height: 1.05 !important;
+          letter-spacing: -0.045em;
+        }
         @media (max-width: 900px) {
           .home-main-shell {
             margin-left: 0 !important;
@@ -903,7 +1033,7 @@ export default function HomePage() {
         }
         @media (max-width: 640px) {
           .home-page-title {
-            font-size: 1.9rem !important;
+            font-size: 1.75rem !important;
             line-height: 1.15 !important;
           }
           .home-toolbar-row {
@@ -935,6 +1065,13 @@ export default function HomePage() {
           filesLoading={filesLoading}
           onSelectFolder={isAdmin ? null : () => openFolderPicker(accessToken, handleFolderSelect)}
           onRefresh={() => folder && listFolderContents(folder.id, accessToken)}
+          analysisTabs={tabs}
+          activeAnalysisTabId={activeTabId}
+          onSelectAnalysisTab={handleSelectAnalysisTab}
+          onCloseAnalysisTab={closeAnalysisTab}
+          onRenameAnalysisTab={renameAnalysisTab}
+          onTogglePinAnalysisTab={togglePinAnalysisTab}
+          onClearAnalysisTabs={clearAnalysisTabs}
         />
       </aside>
 
@@ -1160,11 +1297,12 @@ export default function HomePage() {
                         role="menu"
                         aria-label="Page size options"
                       >
-                        {[6, 12, 18].map((size) => (
+                        {PAGE_SIZE_OPTIONS.map((size) => (
                           <button
                             key={size}
                             type="button"
                             onClick={(e) => {
+                              pageSizeTouchedRef.current = true;
                               setPageSize(size);
                               e.currentTarget.closest("details")?.removeAttribute("open");
                             }}
@@ -1221,9 +1359,7 @@ export default function HomePage() {
                   <span>
                     {filteredFiles.length
                       ? `Showing ${startIndex + 1}-${endIndex} of ${filteredFiles.length} file${filteredFiles.length !== 1 ? "s" : ""}`
-                      : folders.length > 0
-                        ? "No files match your search or filters in this folder"
-                        : "No files match your search or filters"}
+                      : emptyFilesMessage}
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -1257,9 +1393,9 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {filteredFiles.length === 0 && (
+              {filteredFiles.length === 0 && (hasActiveFileFilters || folders.length === 0 || !isAdmin) && (
                 <div className="rounded-2xl border p-6 text-center" style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}>
-                  No files match your search or filters.
+                  {emptyFilesMessage}
                 </div>
               )}
 
@@ -1288,6 +1424,7 @@ export default function HomePage() {
                       onOpen={handleOpenFile}
                       onDownload={handleDownloadFile}
                       loading={openingFile === file.id}
+                      openDisabled={Boolean(openingFile)}
                       downloadLoading={downloadingFile === file.id}
                       tags={fileTagsById[file.id] || []}
                       isTagLoading={!fileTagsById[file.id]}

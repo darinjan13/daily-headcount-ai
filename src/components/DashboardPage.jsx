@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import ThemeToggle from "./ThemeToggle";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useAnalysisTabs } from "../context/AnalysisTabsContext";
 import Dashboard from "./Dashboard";
 import Sidebar from "./Sidebar";
 import { ChevronUp, LoaderCircle } from "lucide-react";
@@ -13,25 +14,71 @@ export default function DashboardPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, accessToken, loading: authLoading } = useAuth();
+  const {
+    tabs,
+    activeTab,
+    activeTabId,
+    setActiveTabId,
+    openAnalysisTab,
+    updateAnalysisTab,
+    closeAnalysisTab,
+    touchAnalysisTab,
+    renameAnalysisTab,
+    togglePinAnalysisTab,
+    clearAnalysisTabs,
+  } = useAnalysisTabs();
   const state = location.state;
   const [showBackToTop, setShowBackToTop] = useState(false);
 
-  const [data, setData] = useState(state?.tableData || null);
-  const [blueprint, setBlueprint] = useState(state?.blueprint || null);
-  const [currentSheet, setCurrentSheet] = useState(state?.currentSheet || "");
-  const [allSheets] = useState(state?.allSheets || []);
-  const [fileName] = useState(state?.fileName || "");
+  const [data, setData] = useState(activeTab?.tableData || null);
+  const [blueprint, setBlueprint] = useState(activeTab?.blueprint || null);
+  const [currentSheet, setCurrentSheet] = useState(activeTab?.currentSheet || "");
   const [switching, setSwitching] = useState(false);
+  const [tabSwitching, setTabSwitching] = useState(false);
+  const [hydratingTabId, setHydratingTabId] = useState(null);
   const [switchError, setSwitchError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Drive info for sheet switching
-  const driveFileId = state?.driveFileId || null;
+  const driveFileId = activeTab?.driveFileId || null;
+  const allSheets = activeTab?.allSheets || [];
+  const fileName = activeTab?.fileName || "";
   // accessToken comes from AuthContext (always fresh) — not from location.state (stale after 1hr)
 
   useEffect(() => {
-    if (!state?.tableData) navigate("/");
-  }, [state, navigate]);
+    if (!state?.tableData) return;
+    const tabId = openAnalysisTab({
+      tableData: state.tableData,
+      blueprint: state.blueprint,
+      currentSheet: state.currentSheet,
+      allSheets: state.allSheets,
+      fileName: state.fileName,
+      driveFileId: state.driveFileId,
+      driveModifiedTime: state.driveModifiedTime,
+      folderId: state.folderId,
+      sourceUserEmail: state.sourceUserEmail,
+      sourceFolderName: state.sourceFolderName,
+    });
+    navigate("/dashboard", { replace: true, state: { targetTabId: tabId } });
+  }, [state, openAnalysisTab, navigate]);
+
+  useEffect(() => {
+    const targetTabId = state?.targetTabId;
+    if (!targetTabId) return;
+    const targetExists = tabs.some((tab) => tab.id === targetTabId);
+    if (!targetExists) return;
+    if (activeTabId !== targetTabId) {
+      setTabSwitching(true);
+      setActiveTabId(targetTabId);
+    }
+    navigate("/dashboard", { replace: true });
+  }, [state, tabs, activeTabId, setActiveTabId, navigate]);
+
+  useEffect(() => {
+    if (!authLoading && !state?.tableData && !activeTab) {
+      navigate("/");
+    }
+  }, [authLoading, state, activeTab, navigate]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -40,15 +87,18 @@ export default function DashboardPage() {
   }, [authLoading, user, navigate]);
 
   useEffect(() => {
+    if (!authLoading && user && !accessToken) {
+      navigate("/");
+    }
+  }, [authLoading, user, accessToken, navigate]);
+
+  useEffect(() => {
     const onScroll = () => {
       setShowBackToTop(window.scrollY > 500);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
-
-  if (authLoading) return null;
-  if (!data || !blueprint || !user) return null;
 
   const fetchSheetData = async (sheet) => {
     setSwitching(true);
@@ -98,23 +148,100 @@ export default function DashboardPage() {
       if (result.error) {
         setSwitchError(result.error);
         setSwitching(false);
-        return;
+        throw new Error(result.error);
       }
 
       setData(result.tableData);
       setBlueprint(result.blueprint);
       setCurrentSheet(result.currentSheet);
+      updateAnalysisTab(activeTabId, {
+        tableData: result.tableData,
+        blueprint: result.blueprint,
+        currentSheet: result.currentSheet,
+        allSheets: result.allSheets || allSheets,
+        driveModifiedTime: meta.modifiedTime || activeTab?.driveModifiedTime || null,
+        latestDriveModifiedTime: meta.modifiedTime || activeTab?.latestDriveModifiedTime || null,
+        isStale: false,
+      });
       setRefreshKey(k => k + 1); // force Dashboard remount with fresh state
     } catch (err) {
       setSwitchError(`Refresh failed: ${err.message}`);
+      throw err;
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeTab) {
+      setTabSwitching(false);
+      setHydratingTabId(null);
+      return;
     }
 
-    setSwitching(false);
-  };
+    if (activeTab.tableData && activeTab.blueprint) {
+      setTabSwitching(true);
+      setHydratingTabId(null);
+      const timer = window.setTimeout(() => {
+        setData(activeTab.tableData || null);
+        setBlueprint(activeTab.blueprint || null);
+        setCurrentSheet(activeTab.currentSheet || "");
+        setSwitchError("");
+        setRefreshKey((key) => key + 1);
+        setTabSwitching(false);
+      }, 180);
+
+      return () => window.clearTimeout(timer);
+    }
+
+    if (!activeTab.driveFileId) {
+      setData(null);
+      setBlueprint(null);
+      setCurrentSheet(activeTab.currentSheet || "");
+      setSwitchError("This saved analysis no longer has a Drive file id.");
+      setTabSwitching(false);
+      setHydratingTabId(null);
+      return;
+    }
+
+    const targetSheet = activeTab.currentSheet || activeTab.allSheets?.[0] || "";
+    if (!targetSheet) {
+      setData(null);
+      setBlueprint(null);
+      setCurrentSheet("");
+      setSwitchError("This saved analysis no longer has a sheet name.");
+      setTabSwitching(false);
+      setHydratingTabId(null);
+      return;
+    }
+
+    let cancelled = false;
+    setData(null);
+    setBlueprint(null);
+    setCurrentSheet(targetSheet);
+    setHydratingTabId(activeTab.id);
+    setTabSwitching(false);
+
+    fetchSheetData(targetSheet)
+      .catch((error) => {
+        if (!cancelled) setSwitchError(`Failed to restore saved analysis: ${error.message}`);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHydratingTabId(null);
+          setTabSwitching(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTabId]);
 
   const switchSheet = async (sheet) => {
     if (switching) return;
-    await fetchSheetData(sheet);
+    await fetchSheetData(sheet).catch(() => {});
   };
 
   const refreshDashboard = async () => {
@@ -124,8 +251,21 @@ export default function DashboardPage() {
       return;
     }
     setSwitchError("");
-    await fetchSheetData(targetSheet);
+    await fetchSheetData(targetSheet).catch(() => {});
   };
+
+  const handleSelectAnalysisTab = (tabId) => {
+    if (!tabId || tabId === activeTabId || switching || tabSwitching || hydratingTabId) return;
+    setSwitchError("");
+    setTabSwitching(true);
+    touchAnalysisTab(tabId);
+    setActiveTabId(tabId);
+  };
+
+  const isDashboardBusy = switching || tabSwitching || Boolean(hydratingTabId);
+
+  if (authLoading) return null;
+  if (!user || !accessToken || !activeTab) return null;
 
   return (
     <>
@@ -133,14 +273,14 @@ export default function DashboardPage() {
       .dashboard-sidebar {
         position: fixed;
         top: 0; left: 0;
-        width: 280px;
+        width: 340px;
         height: 100vh;
         z-index: 100;
         background: var(--color-surface);
         backdrop-filter: blur(10px);
         border-right: 1px solid var(--color-border);
         overflow: hidden;
-        transform: translateX(calc(-280px + 16px));
+        transform: translateX(calc(-340px + 20px));
         transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
       }
       .dashboard-sidebar:hover,
@@ -148,8 +288,8 @@ export default function DashboardPage() {
         transform: translateX(0);
       }
       .dashboard-main {
-        margin-left: 16px;
-        width: calc(100% - 16px);
+        margin-left: 20px;
+        width: calc(100% - 20px);
         min-height: 100vh;
         display: flex;
         flex-direction: column;
@@ -215,10 +355,17 @@ export default function DashboardPage() {
         <Sidebar
           folder={{ name: fileName }}
           files={[]}
-          filesLoading={switching}
+          filesLoading={isDashboardBusy}
           onSelectFolder={null}
           onRefresh={refreshDashboard}
           onBack={() => navigate("/")}
+          analysisTabs={tabs}
+          activeAnalysisTabId={activeTabId}
+          onSelectAnalysisTab={handleSelectAnalysisTab}
+          onCloseAnalysisTab={closeAnalysisTab}
+          onRenameAnalysisTab={renameAnalysisTab}
+          onTogglePinAnalysisTab={togglePinAnalysisTab}
+          onClearAnalysisTabs={clearAnalysisTabs}
         />
       </aside>
 
@@ -260,7 +407,7 @@ export default function DashboardPage() {
                 <select
                   value={currentSheet}
                   onChange={(e) => switchSheet(e.target.value)}
-                  disabled={switching}
+                  disabled={isDashboardBusy}
                   className="px-3 py-1.5 rounded-lg text-sm focus:outline-none focus:ring-2 cursor-pointer disabled:opacity-60"
                   style={{
                     border: "1px solid var(--color-border)",
@@ -272,7 +419,7 @@ export default function DashboardPage() {
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
-                {switching && (
+                {isDashboardBusy && (
                   <LoaderCircle className="h-4 w-4 animate-spin" style={{ color: "var(--color-castleton-green)" }} aria-hidden="true" />
                 )}
                 {switchError && <span className="text-xs" style={{ color: "var(--color-saffron)" }}>{switchError}</span>}
@@ -284,13 +431,15 @@ export default function DashboardPage() {
 
         {/* Dashboard + loading overlay */}
         <div style={{ position: "relative", flex: 1 }}>
-          <Dashboard key={refreshKey} data={data} blueprint={blueprint} fileId={driveFileId} />
+          {data && blueprint && (
+            <Dashboard key={`${activeTabId}-${refreshKey}`} data={data} blueprint={blueprint} fileId={driveFileId} />
+          )}
 
-          {switching && (
+          {(isDashboardBusy || !data || !blueprint) && (
             <div className="flex items-center justify-center" style={{
               position: "fixed",
               top: 0,
-              left: window.innerWidth <= 900 ? 0 : "16px",
+              left: window.innerWidth <= 900 ? 0 : "20px",
               right: 0,
               bottom: 0,
               zIndex: 40,
@@ -299,10 +448,22 @@ export default function DashboardPage() {
               WebkitBackdropFilter: "blur(4px)",
             }}>
               <div className="flex flex-col items-center gap-3">
-                <LoaderCircle className="h-8 w-8 animate-spin" style={{ color: "var(--color-castleton-green)" }} aria-hidden="true" />
+                {!switchError && (
+                  <LoaderCircle className="h-8 w-8 animate-spin" style={{ color: "var(--color-castleton-green)" }} aria-hidden="true" />
+                )}
                 <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "0.05em", margin: 0 }}>
                   Refreshing data…
                 </p>
+                {hydratingTabId && (
+                  <p style={{ fontSize: 12, fontWeight: 700, color: "#fff", margin: 0 }}>
+                    Restoring saved analysis...
+                  </p>
+                )}
+                {switchError && (
+                  <p style={{ maxWidth: 360, textAlign: "center", fontSize: 12, fontWeight: 600, color: "#fff", margin: 0 }}>
+                    {switchError}
+                  </p>
+                )}
               </div>
             </div>
           )}
