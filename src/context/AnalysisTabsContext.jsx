@@ -8,6 +8,8 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig";
+import { clearAnalysisResultCache } from "../utils/analysisResultCache";
+import { clearCurrentWorkbookCache } from "../utils/workbookCache";
 import { useAuth } from "./AuthContext";
 
 const AnalysisTabsContext = createContext(null);
@@ -91,6 +93,8 @@ export function AnalysisTabsProvider({ children }) {
       setTabs([]);
       setActiveTabId(null);
       setTabsLoaded(false);
+      clearAnalysisResultCache();
+      clearCurrentWorkbookCache();
       return;
     }
 

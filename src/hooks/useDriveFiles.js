@@ -126,12 +126,13 @@ export function useDriveFiles() {
     return data;
   }, []);
 
-  const downloadFile = useCallback(async (fileId, accessToken) => {
+  const downloadFile = useCallback(async (fileId, accessToken, signal) => {
     if (!accessToken) throw new Error("No access token");
 
     const metaRes = await fetchJson(
-      `${DRIVE_API_ROOT}/${fileId}?fields=id,mimeType,name,modifiedTime&supportsAllDrives=true`,
-      accessToken
+      `${DRIVE_API_ROOT}/${fileId}?fields=id,mimeType,name,modifiedTime,version&supportsAllDrives=true`,
+      accessToken,
+      { signal }
     );
     if (metaRes.status === 401) throw new Error("Session expired - please sign back in");
     if (!metaRes.ok) throw new Error(`Failed to get file metadata: ${metaRes.status}`);
@@ -144,6 +145,7 @@ export function useDriveFiles() {
 
     const res = await fetch(downloadUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
+      signal,
     });
 
     if (res.status === 401) throw new Error("Session expired - please sign back in");

@@ -14,7 +14,61 @@ const BRAND = {
 
 const PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 25];
 
-export default function DataTable({ headers = [], rows = [] }) {
+function buildMergedHeaderGrid(rows) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+
+  const width = Math.max(...rows.map(row => row.length));
+  const normalizedRows = rows.map(row =>
+    Array.from({ length: width }, (_, index) => row?.[index] || "")
+  );
+  const covered = normalizedRows.map(() => Array(width).fill(false));
+
+  return normalizedRows.map((row, rowIndex) => {
+    const cells = [];
+
+    for (let colIndex = 0; colIndex < width; colIndex += 1) {
+      if (covered[rowIndex][colIndex]) continue;
+
+      const value = row[colIndex] || "";
+      let colSpan = 1;
+
+      while (
+        colIndex + colSpan < width &&
+        row[colIndex + colSpan] === value &&
+        !covered[rowIndex][colIndex + colSpan]
+      ) {
+        colSpan += 1;
+      }
+
+      let rowSpan = 1;
+      if (value) {
+        while (rowIndex + rowSpan < normalizedRows.length) {
+          let canSpanDown = true;
+          for (let i = colIndex; i < colIndex + colSpan; i += 1) {
+            if (normalizedRows[rowIndex + rowSpan][i] !== value) {
+              canSpanDown = false;
+              break;
+            }
+          }
+          if (!canSpanDown) break;
+          rowSpan += 1;
+        }
+      }
+
+      for (let r = rowIndex; r < rowIndex + rowSpan; r += 1) {
+        for (let c = colIndex; c < colIndex + colSpan; c += 1) {
+          if (r !== rowIndex || c !== colIndex) covered[r][c] = true;
+        }
+      }
+
+      cells.push({ value, colSpan, rowSpan, start: colIndex });
+    }
+
+    return cells;
+  });
+}
+
+export default function DataTable({ headers = [], rows = [], displayHeaderRows = null }) {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
@@ -86,6 +140,16 @@ export default function DataTable({ headers = [], rows = [] }) {
   }, [working, search, sortCol, sortDir, headers, columnFilters, hiddenRows]);
 
   const visibleHeaders = useMemo(() => headers.filter(h => visibleCols.includes(h)), [headers, visibleCols]);
+  const visibleHeaderIndices = useMemo(() => visibleHeaders.map(h => headers.indexOf(h)), [headers, visibleHeaders]);
+  const visibleDisplayHeaderRows = useMemo(() => {
+    if (!Array.isArray(displayHeaderRows) || displayHeaderRows.length <= 1) return null;
+    return displayHeaderRows.map(row => visibleHeaderIndices.map(idx => row?.[idx] || ""));
+  }, [displayHeaderRows, visibleHeaderIndices]);
+  const visibleLeafHeaderLabels = visibleDisplayHeaderRows?.[visibleDisplayHeaderRows.length - 1] || null;
+  const parentHeaderCells = useMemo(() => {
+    if (!visibleDisplayHeaderRows) return null;
+    return buildMergedHeaderGrid(visibleDisplayHeaderRows.slice(0, -1));
+  }, [visibleDisplayHeaderRows]);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const goTo = (p) => setPage(Math.max(0, Math.min(totalPages - 1, p)));
@@ -187,12 +251,59 @@ export default function DataTable({ headers = [], rows = [] }) {
       <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "var(--color-shadow-soft)", border: `1px solid ${BRAND.border}`, background: BRAND.elevated }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
+            {parentHeaderCells?.map((headerRow, rowIdx) => (
+              <tr key={`display-header-${rowIdx}`}>
+                {rowIdx === 0 && (
+                  <th
+                    rowSpan={parentHeaderCells.length + 1}
+                    style={{
+                      width: 36,
+                      background: BRAND.green,
+                      borderRight: "1px solid rgba(255,255,255,0.08)",
+                      borderBottom: "1px solid rgba(255,255,255,0.12)",
+                      verticalAlign: "middle",
+                    }}
+                  >
+                    <input type="checkbox" aria-label="Select page rows" checked={pageRows.length>0 && pageRows.every(({idx})=>selectedRows.has(idx))}
+                      onChange={e => selectPageRows(e.target.checked)} />
+                  </th>
+                )}
+                {headerRow.map(span => (
+                  <th
+                    key={`${rowIdx}-${span.start}-${span.value || "blank"}`}
+                    colSpan={span.colSpan}
+                    rowSpan={span.rowSpan}
+                    style={{
+                      background: span.value
+                        ? rowIdx === 0
+                          ? "var(--color-dark-serpent)"
+                          : "rgba(4, 98, 65, 0.88)"
+                        : BRAND.elevated,
+                      color: span.value ? "#FFFFFF" : BRAND.muted,
+                      padding: span.value ? "9px 14px" : "4px 8px",
+                      textAlign: "center",
+                      fontWeight: 800,
+                      fontSize: rowIdx === 0 ? 11 : 10,
+                      whiteSpace: "nowrap",
+                      letterSpacing: "0.04em",
+                      verticalAlign: "middle",
+                      borderRight: `1px solid ${span.value ? "rgba(255,255,255,0.08)" : BRAND.border}`,
+                      borderBottom: `1px solid ${span.value ? "rgba(255,255,255,0.12)" : BRAND.border}`,
+                    }}
+                  >
+                    {span.value}
+                  </th>
+                ))}
+              </tr>
+            ))}
             <tr>
+              {!parentHeaderCells && (
               <th style={{ width: 36, background: BRAND.green }}>
                 <input type="checkbox" aria-label="Select page rows" checked={pageRows.length>0 && pageRows.every(({idx})=>selectedRows.has(idx))}
                   onChange={e => selectPageRows(e.target.checked)} />
               </th>
-              {visibleHeaders.map(h => (
+              )}
+              {visibleHeaders.map((h, headerIdx) => (
                 <th key={h} onClick={() => handleSort(h)} style={{
                   background: BRAND.green, color: "#FFFFFF", padding: "11px 14px", textAlign: "left",
                   fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", cursor: "pointer",
@@ -202,7 +313,7 @@ export default function DataTable({ headers = [], rows = [] }) {
                   onMouseEnter={e => e.currentTarget.style.background = "var(--color-dark-serpent)"}
                   onMouseLeave={e => e.currentTarget.style.background = BRAND.green}
                 >
-                  {h}
+                  {visibleLeafHeaderLabels?.[headerIdx] || h}
                   <span style={{ marginLeft: 6, fontSize: 9, opacity: sortCol === h ? 1 : 0.3 }}>
                     {sortCol === h ? (sortDir === "asc" ? "▲" : "▼") : "▲"}
                   </span>

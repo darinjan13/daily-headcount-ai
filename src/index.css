@@ -177,7 +177,6 @@ button {
 button:hover {
   background-color: var(--color-saffron);
   color: var(--color-dark-serpent);
-  transform: translateY(-2px);
   box-shadow: 0 8px 16px rgba(255, 179, 71, 0.2);
 }
 
@@ -511,20 +510,73 @@ button:disabled {
   transform: translateX(0);
 }
 
+.ui-sidebar-toggle,
+.ui-sidebar-backdrop {
+  display: none;
+}
+
+.ui-sidebar-toggle {
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  box-shadow: var(--color-shadow-soft);
+  flex: 0 0 auto;
+}
+
+.ui-sidebar-toggle svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  color: inherit;
+  stroke: currentColor;
+  flex: 0 0 auto;
+}
+
+.ui-auto-hide-sidebar.is-open {
+  transform: translateX(0);
+}
+
 @media (max-width: 900px) {
   :root {
     --sidebar-offset: 0px;
   }
+  .ui-sidebar-toggle {
+    display: inline-flex;
+  }
+  .ui-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(6, 24, 17, 0.36);
+    backdrop-filter: blur(3px);
+  }
+  .ui-sidebar-backdrop.is-open {
+    display: block;
+  }
   .ui-auto-hide-sidebar {
-    transform: none;
-    position: static !important;
-    top: auto !important;
-    left: auto !important;
-    width: 100% !important;
-    height: auto !important;
-    border-right: none !important;
-    border-bottom: 1px solid var(--color-border);
-    overflow: visible !important;
+    transform: translateX(-105%) !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: min(88vw, 390px) !important;
+    height: 100vh !important;
+    z-index: 120 !important;
+    border-right: 1px solid var(--color-border) !important;
+    border-bottom: none !important;
+    overflow-y: auto !important;
+    box-shadow: 18px 0 48px rgba(6, 24, 17, 0.18);
+  }
+  .ui-auto-hide-sidebar:hover,
+  .ui-auto-hide-sidebar:focus-within {
+    transform: translateX(-105%) !important;
+  }
+  .ui-auto-hide-sidebar.is-open {
+    transform: translateX(0) !important;
   }
 }
 
@@ -566,7 +618,6 @@ button:disabled {
 }
 
 .login-google-wave-btn:hover {
-  transform: translateY(-1px);
   box-shadow: 0 18px 32px rgba(19, 48, 32, 0.32);
 }
 
@@ -704,5 +755,4 @@ img[alt*="icon"],
 .glass-card:hover {
   box-shadow: var(--color-shadow-strong);
   border: 1px solid rgba(255, 179, 71, 0.3);
-  transform: translateY(-2px);
 }

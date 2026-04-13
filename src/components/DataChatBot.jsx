@@ -309,7 +309,7 @@ function applyChartState(chartSpec, chartState) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DataChatbot({ headers, rows, blueprint, onResult, customCharts = [], filteredTables = [] }) {
+export default function DataChatbot({ headers, rows, columnContexts = {}, blueprint, onResult, customCharts = [], filteredTables = [] }) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME, chartSpec: null }]);
   const [input, setInput] = useState("");
@@ -359,6 +359,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
             .map(({ role, content }) => ({ role, content })),
           headers,
           rows,
+          columnContexts,
           datasetSummary: blueprint?.datasetSummary || null,
           currentChartState: activeChartState ? {
             id: activeChartState.chartId,
@@ -394,6 +395,10 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
       // Execute steps in order
       const statusLines = [];
       const newChartSpecs = []; // track charts created in this batch for pinAll
+      let requestedChartCount = 0;
+      let createdChartCount = 0;
+      let rejectedChartCount = 0;
+      let updatedChartCount = 0;
 
       for (const step of steps) {
         if (step.type === "delete") {
@@ -450,27 +455,51 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
           statusLines.push("📋 Table added to Summary tab.");
 
         } else if (step.type === "chart") {
+          requestedChartCount += 1;
           const spec = { ...step, type: step.chartType || "bar" };
           const isModify = step.action === "modify" && activeChartState?.chartId;
 
           if (isModify) {
             const resolvedSpec = applyChartState(spec, updatedState || {});
             setActiveChartState(prev => ({ ...prev, chartSpec: resolvedSpec }));
-            onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
-            statusLines.push("✏️ Chart updated.");
+            const chartAccepted = onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
+            if (chartAccepted === false) {
+              rejectedChartCount += 1;
+              continue;
+            }
+            updatedChartCount += 1;
           } else {
             chartIdRef.current += 1;
             const chartId = `chat-chart-${chartIdRef.current}`;
             const specWithId = { ...spec, _chatId: chartId };
-            onResult({ chartSpec: specWithId, action: "new" });
-            newChartSpecs.push(specWithId);
-            statusLines.push("📊 Chart added to Charts tab.");
+            const chartAccepted = onResult({ chartSpec: specWithId, action: "new" });
+            if (chartAccepted === false) {
+              rejectedChartCount += 1;
+              continue;
+            }
+            if (chartAccepted !== false) newChartSpecs.push(specWithId);
+            createdChartCount += 1;
           }
         }
       }
 
+      if (createdChartCount > 0) {
+        statusLines.push(`${createdChartCount} chart${createdChartCount === 1 ? "" : "s"} added to Charts tab.`);
+      }
+      if (updatedChartCount > 0) {
+        statusLines.push(`${updatedChartCount} chart${updatedChartCount === 1 ? "" : "s"} updated.`);
+      }
+      if (rejectedChartCount > 0) {
+        statusLines.push(
+          `${rejectedChartCount} of ${requestedChartCount} chart request${requestedChartCount === 1 ? "" : "s"} skipped because the selected columns did not form valid charts.`
+        );
+      }
+
       // Compose final message
-      const replyContent = [data.reply, ...statusLines].filter(Boolean).join("\n");
+      const safeReply = rejectedChartCount > 0
+        ? String(data.reply || "").replace(/\bhere\s+(?:are|is)\s+\d+\s+new\s+charts?\b/ig, `created ${createdChartCount} valid chart${createdChartCount === 1 ? "" : "s"}`)
+        : data.reply;
+      const replyContent = [safeReply, ...statusLines].filter(Boolean).join("\n");
       const finalReply = replyContent || "Done.";
       setMessages((prev) => [...prev, {
         role: "assistant",

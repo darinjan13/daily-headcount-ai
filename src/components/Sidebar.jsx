@@ -22,7 +22,7 @@ function getTabLabel(tab) {
 }
 
 function groupTabs(tabs, isAdmin) {
-  if (!isAdmin) return [{ key: "my-tabs", label: "My analyses", tabs }];
+  if (!isAdmin) return [{ key: "my-tabs", label: "My analysis", tabs }];
 
   const grouped = new Map();
   tabs.forEach((tab) => {
@@ -60,6 +60,8 @@ export default function Sidebar({
   const [editingLabel, setEditingLabel] = useState("");
   const profileMenuRef = useRef(null);
   const lifewoodLogoSrc = theme === "dark" ? LIFEWOOD_DARK_LOGO_URL : lifewoodIconText;
+  const visibleAnalysisTabs = analysisTabs.slice(0, 5);
+  const hasHiddenAnalysisTabs = analysisTabs.length > visibleAnalysisTabs.length;
 
   const startRenameTab = (tab, fallbackLabel) => {
     setOpenTabMenuId(null);
@@ -177,16 +179,13 @@ export default function Sidebar({
             <div className="flex items-end justify-between gap-3 mb-3">
               <div className="min-w-0">
                 <p className="text-[11px] font-bold tracking-wide uppercase" style={{ color: "var(--color-text)", margin: 0 }}>
-                  Recent analyses
+                  Recent analysis
                 </p>
                 <p className="text-[10px] truncate" style={{ color: "var(--color-text-light)", margin: 0 }}>
                   Restored from workspace
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] font-bold" style={{ backgroundColor: "var(--color-surface-soft)", color: "var(--color-text)" }}>
-                  {analysisTabs.length}
-                </span>
                 {analysisTabs.length > 0 && onClearAnalysisTabs && (
                   <button
                     type="button"
@@ -208,18 +207,24 @@ export default function Sidebar({
             </div>
 
             <div className="space-y-2 overflow-y-auto pr-1.5">
-              {groupTabs(analysisTabs, isAdmin).map((group) => (
+              {hasHiddenAnalysisTabs && (
+                <p className="px-1 text-[10px] font-semibold" style={{ color: "var(--color-text-light)", margin: 0 }}>
+                  Showing latest saved analyses.
+                </p>
+              )}
+              {groupTabs(visibleAnalysisTabs, isAdmin).map((group) => (
                 <div key={group.key} className="space-y-2">
-                  {isAdmin && analysisTabs.length > 1 && (
+                  {isAdmin && visibleAnalysisTabs.length > 1 && (
                     <p className="px-1 pt-1 text-[10px] font-bold uppercase tracking-wide truncate" style={{ color: "var(--color-text-light)", margin: 0 }}>
                       {group.label}
                     </p>
                   )}
-                  {group.tabs.map((tab) => {
+                  {group.tabs.map((tab, tabIndex) => {
                     const isActive = tab.id === activeAnalysisTabId;
                     const fullLabel = getTabLabel(tab);
                     const label = tab.customLabel?.trim() || tab.fileName || "Untitled workbook";
                     const openedLabel = `Last opened ${formatTabTime(tab.lastOpenedAtMs)}`;
+                    const shouldOpenMenuUp = group.tabs.length - tabIndex <= 2;
                     return (
                       <div
                         key={tab.id}
@@ -360,7 +365,7 @@ export default function Sidebar({
 
                             {openTabMenuId === tab.id && (
                               <div
-                                className="absolute right-0 top-9 z-30 w-40 overflow-hidden rounded-xl border py-1 shadow-lg"
+                                className={`absolute right-0 z-30 w-40 overflow-hidden rounded-xl border py-1 shadow-lg ${shouldOpenMenuUp ? "bottom-9" : "top-9"}`}
                                 style={{
                                   backgroundColor: "var(--color-surface-elevated)",
                                   borderColor: "var(--color-border)",
