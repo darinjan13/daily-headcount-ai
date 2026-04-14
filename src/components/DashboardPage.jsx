@@ -137,6 +137,8 @@ export default function DashboardPage() {
       tabToLoad = activeTab,
       targetTabId = activeTabId,
       autoActivate = true,
+      forceRemount = autoActivate,
+      ignoreAnalysisCache = false,
     } = options;
 
     if (!tabToLoad?.driveFileId) {
@@ -170,7 +172,7 @@ export default function DashboardPage() {
       if (!metaRes.ok) throw new Error(`Drive metadata error: ${metaRes.status}`);
       const meta = await metaRes.json();
       const isGoogleSheet = meta.mimeType === "application/vnd.google-apps.spreadsheet";
-      const cachedAnalysis = getAnalysisResultCache({
+      const cachedAnalysis = ignoreAnalysisCache ? null : getAnalysisResultCache({
         driveFileId: tabToLoad.driveFileId,
         sheetName: sheet,
         modifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
@@ -186,6 +188,7 @@ export default function DashboardPage() {
           currentSheet: cachedAnalysis.currentSheet || sheet,
           allSheets: cachedAnalysis.allSheets || tabToLoad?.allSheets || [],
           driveModifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
+          analysisSession: cachedAnalysis.analysisSession || tabToLoad?.analysisSession || null,
           latestDriveModifiedTime: meta.modifiedTime || tabToLoad?.latestDriveModifiedTime || null,
           isStale: false,
         });
@@ -196,7 +199,9 @@ export default function DashboardPage() {
           if (targetTabId && targetTabId !== activeTabId) {
             setActiveTabId(targetTabId);
           }
-          setRefreshKey((k) => k + 1);
+          if (forceRemount) {
+            setRefreshKey((k) => k + 1);
+          }
         }
         completeJob(jobId, {
           ...cachedAnalysis,
@@ -206,7 +211,7 @@ export default function DashboardPage() {
           folderId: tabToLoad?.folderId || cachedAnalysis.folderId || null,
           sourceUserEmail: tabToLoad?.sourceUserEmail || cachedAnalysis.sourceUserEmail || "",
           sourceFolderName: tabToLoad?.sourceFolderName || cachedAnalysis.sourceFolderName || "",
-        });
+        }, { suppressNotification: shouldActivate });
         return cachedAnalysis;
       }
 
@@ -262,8 +267,13 @@ export default function DashboardPage() {
       const formData = new FormData();
       formData.append("file", blob, tabToLoad.fileName || fileName);
 
+      const analyzeQuery = new URLSearchParams({
+        sheet_name: sheet,
+        drive_file_id: tabToLoad.driveFileId,
+        drive_modified_time: meta.modifiedTime || tabToLoad?.driveModifiedTime || "",
+      });
       const res = await fetch(
-        `${HOST}/analyze-bytes?sheet_name=${encodeURIComponent(sheet)}`,
+        `${HOST}/analyze-bytes?${analyzeQuery.toString()}`,
         { method: "POST", body: formData, signal: controller.signal }
       );
       const result = await res.json();
@@ -284,6 +294,7 @@ export default function DashboardPage() {
         fileName: tabToLoad.fileName || fileName,
         driveFileId: tabToLoad.driveFileId,
         driveModifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
+        analysisSession: result.analysisSession || null,
         folderId: tabToLoad?.folderId || null,
         sourceUserEmail: tabToLoad?.sourceUserEmail || "",
         sourceFolderName: tabToLoad?.sourceFolderName || "",
@@ -294,26 +305,32 @@ export default function DashboardPage() {
         modifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
       });
 
-      updateAnalysisTab(targetTabId, {
-        tableData: result.tableData,
-        blueprint: result.blueprint,
-        currentSheet: result.currentSheet,
-        allSheets: result.allSheets || tabToLoad?.allSheets || [],
-        driveModifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
-        latestDriveModifiedTime: meta.modifiedTime || tabToLoad?.latestDriveModifiedTime || null,
-        isStale: false,
+        updateAnalysisTab(targetTabId, {
+          tableData: result.tableData,
+          blueprint: result.blueprint,
+          currentSheet: result.currentSheet,
+          allSheets: result.allSheets || tabToLoad?.allSheets || [],
+          driveModifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
+          analysisSession: result.analysisSession || null,
+          latestDriveModifiedTime: meta.modifiedTime || tabToLoad?.latestDriveModifiedTime || null,
+          isStale: false,
+        });
+      completeJob(jobId, nextPayload, {
+        suppressNotification: autoActivate && !backgroundedJobIdsRef.current.has(jobId),
       });
-      completeJob(jobId, nextPayload);
-      if (autoActivate && !backgroundedJobIdsRef.current.has(jobId)) {
-        setData(result.tableData);
-        setBlueprint(result.blueprint);
-        setCurrentSheet(result.currentSheet);
-        if (targetTabId && targetTabId !== activeTabId) {
-          setActiveTabId(targetTabId);
+        if (autoActivate && !backgroundedJobIdsRef.current.has(jobId)) {
+          setData(result.tableData);
+          setBlueprint(result.blueprint);
+          setCurrentSheet(result.currentSheet);
+          if (targetTabId && targetTabId !== activeTabId) {
+            setActiveTabId(targetTabId);
+          }
+          if (forceRemount) {
+            setRefreshKey(k => k + 1); // force Dashboard remount with fresh state
+          }
         }
-        setRefreshKey(k => k + 1); // force Dashboard remount with fresh state
-      }
-    } catch (err) {
+        return nextPayload;
+      } catch (err) {
       if (err?.name === "AbortError") {
         return null;
       }
@@ -443,6 +460,19 @@ export default function DashboardPage() {
     }
     setSwitchError("");
     await fetchSheetData(targetSheet, { tabToLoad: activeTab, targetTabId: activeTabId, autoActivate: true }).catch(() => {});
+  };
+
+  const refreshActiveAnalysisSession = async () => {
+    const targetSheet = currentSheet || activeTab?.currentSheet || allSheets[0] || "";
+    if (!targetSheet || switching || !activeTab) return null;
+    const refreshed = await fetchSheetData(targetSheet, {
+      tabToLoad: activeTab,
+      targetTabId: activeTabId,
+      autoActivate: true,
+      forceRemount: false,
+      ignoreAnalysisCache: true,
+    }).catch(() => null);
+    return refreshed?.analysisSession || null;
   };
 
   const handleSelectAnalysisTab = (tabId) => {
@@ -708,7 +738,14 @@ export default function DashboardPage() {
         {/* Dashboard + loading overlay */}
         <div style={{ position: "relative", flex: 1 }}>
           {data && blueprint && (
-            <Dashboard key={`${activeTabId}-${refreshKey}`} data={data} blueprint={blueprint} fileId={driveFileId} />
+            <Dashboard
+              key={`${activeTabId}-${refreshKey}`}
+              data={data}
+              blueprint={blueprint}
+              fileId={driveFileId}
+              analysisSession={activeTab?.analysisSession || null}
+              onAnalysisSessionExpired={refreshActiveAnalysisSession}
+            />
           )}
 
           {(isDashboardBusy || !data || !blueprint) && (

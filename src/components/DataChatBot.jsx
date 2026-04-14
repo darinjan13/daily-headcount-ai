@@ -309,7 +309,17 @@ function applyChartState(chartSpec, chartState) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DataChatbot({ headers, rows, columnContexts = {}, blueprint, onResult, customCharts = [], filteredTables = [] }) {
+export default function DataChatbot({
+  headers,
+  rows,
+  columnContexts = {},
+  blueprint,
+  analysisSession = null,
+  onAnalysisSessionExpired = null,
+  onResult,
+  customCharts = [],
+  filteredTables = [],
+}) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME, chartSpec: null }]);
   const [input, setInput] = useState("");
@@ -349,47 +359,65 @@ export default function DataChatbot({ headers, rows, columnContexts = {}, bluepr
     abortRef.current = new AbortController();
 
     try {
-      const response = await fetch(`${HOST}/chat`, {
-        signal: abortRef.current.signal,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages
-            .filter((m) => m.content !== WELCOME)
-            .map(({ role, content }) => ({ role, content })),
-          headers,
-          rows,
-          columnContexts,
-          datasetSummary: blueprint?.datasetSummary || null,
-          currentChartState: activeChartState ? {
-            id: activeChartState.chartId,
-            type: activeChartState.chartType,
-            title: activeChartState.chartSpec?.title,
-            x: activeChartState.chartSpec?.x,
-            y: activeChartState.chartSpec?.y,
-            rowDim: activeChartState.chartSpec?.rowDim,
-            colDim: activeChartState.chartSpec?.colDim,
-            measure: activeChartState.chartSpec?.measure,
-            aggregation: activeChartState.chartSpec?.aggregation,
-            limit: activeChartState.topN,
-            sort: activeChartState.sort,
-            filters: activeChartState.chartSpec?.filters || [],
-          } : null,
-          existingCharts: customCharts.map(c => ({
-            id: c.id,
-            title: c.title,
-            type: c.type,
-            pinned: c.pinned || false,
-          })),
-          existingTables: (filteredTables || []).map(t => ({
-            id: t.id,
-            title: t.title,
-            pinned: t.pinned || false,
-            filters: t.filters || [],
-          })),
-        }),
+      const buildChatPayload = (analysisSessionId = analysisSession?.sessionId || null) => ({
+        messages: newMessages
+          .filter((m) => m.content !== WELCOME)
+          .map(({ role, content }) => ({ role, content })),
+        headers,
+        rows,
+        analysisSessionId,
+        columnContexts,
+        datasetSummary: blueprint?.datasetSummary || null,
+        currentChartState: activeChartState ? {
+          id: activeChartState.chartId,
+          type: activeChartState.chartType,
+          title: activeChartState.chartSpec?.title,
+          x: activeChartState.chartSpec?.x,
+          y: activeChartState.chartSpec?.y,
+          rowDim: activeChartState.chartSpec?.rowDim,
+          colDim: activeChartState.chartSpec?.colDim,
+          measure: activeChartState.chartSpec?.measure,
+          aggregation: activeChartState.chartSpec?.aggregation,
+          limit: activeChartState.topN,
+          sort: activeChartState.sort,
+          filters: activeChartState.chartSpec?.filters || [],
+        } : null,
+        existingCharts: customCharts.map(c => ({
+          id: c.id,
+          title: c.title,
+          type: c.type,
+          pinned: c.pinned || false,
+        })),
+        existingTables: (filteredTables || []).map(t => ({
+          id: t.id,
+          title: t.title,
+          pinned: t.pinned || false,
+          filters: t.filters || [],
+        })),
       });
-      const data = await response.json();
+
+      const fetchChatResponse = async (analysisSessionId = analysisSession?.sessionId || null) => {
+        const response = await fetch(`${HOST}/chat`, {
+          signal: abortRef.current.signal,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildChatPayload(analysisSessionId)),
+        });
+        return response.json();
+      };
+
+      let data = await fetchChatResponse();
+      if (data?.cacheExpired && onAnalysisSessionExpired) {
+        const refreshedSession = await onAnalysisSessionExpired();
+        if (refreshedSession?.sessionId) {
+          data = await fetchChatResponse(refreshedSession.sessionId);
+        }
+      }
+
+      if (data?.cacheExpired) {
+        throw new Error("The active workbook cache expired. Please refresh this sheet and try again.");
+      }
+
       const steps = data.steps || [];
 
       // Execute steps in order
@@ -511,7 +539,7 @@ export default function DataChatbot({ headers, rows, columnContexts = {}, bluepr
       if (err?.name !== "AbortError") {
         setMessages((prev) => [...prev, {
           role: "assistant",
-          content: "Couldn't reach the server. Is the backend running?",
+          content: err?.message || "Couldn't reach the server. Is the backend running?",
           chartSpec: null,
         }]);
       }

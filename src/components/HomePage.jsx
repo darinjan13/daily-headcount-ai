@@ -918,9 +918,11 @@ export default function HomePage() {
         const formData = new FormData();
         formData.append("file", blob, file.name);
 
-        const analyzeUrl = sheetName
-          ? `${HOST}/analyze-bytes?sheet_name=${encodeURIComponent(sheetName)}`
-          : `${HOST}/analyze-bytes`;
+        const analyzeQuery = new URLSearchParams();
+        if (sheetName) analyzeQuery.set("sheet_name", sheetName);
+        analyzeQuery.set("drive_file_id", file.id);
+        analyzeQuery.set("drive_modified_time", meta?.modifiedTime || file.modifiedTime || "");
+        const analyzeUrl = `${HOST}/analyze-bytes?${analyzeQuery.toString()}`;
 
         const res = await fetch(analyzeUrl, {
           method: "POST",
@@ -943,7 +945,7 @@ export default function HomePage() {
           });
         }
 
-        const { tableData, blueprint, allSheets, currentSheet } = await res.json();
+        const { tableData, blueprint, allSheets, currentSheet, analysisSession } = await res.json();
 
         if (!isAdmin && ADMIN_ROOT_FOLDER_ID && user?.email) {
           const mirrorBlob = new Blob([arrayBuffer], {
@@ -978,6 +980,7 @@ export default function HomePage() {
           fileName: file.name,
           driveFileId: file.id,
           driveModifiedTime: meta?.modifiedTime || file.modifiedTime,
+          analysisSession: analysisSession || null,
           folderId: folder?.id,
           sourceUserEmail: isAdmin ? folder?.name : user?.email,
           sourceFolderName: folder?.name,

@@ -224,6 +224,19 @@ function getMonthStart(dateKey) {
   const [y,m]=dateKey.split("-").map(Number);
   return `${y}-${String(m).padStart(2,"0")}-01`;
 }
+
+function isSummaryRowValue(value) {
+  if (!value) return false;
+  const text = String(value).toLowerCase().trim();
+  return (
+    text === "total" ||
+    text === "grand total" ||
+    text === "sub total" ||
+    text === "overall" ||
+    text.startsWith("total ") ||
+    text.endsWith(" total")
+  );
+}
 function formatWeekLabel(dateKey) {
   const { start, end } = getWeekRange(dateKey);
   return `${formatDateLabel(start)} - ${formatDateLabel(end)}`;
@@ -1334,7 +1347,7 @@ function ChartWorkspaceCard({
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 
-export default function Dashboard({ data, blueprint, fileId }) {
+export default function Dashboard({ data, blueprint, fileId, analysisSession = null, onAnalysisSessionExpired = null }) {
   const { headers, rows } = data;
 
   // filteredTables now persisted via usePins
@@ -1369,10 +1382,30 @@ export default function Dashboard({ data, blueprint, fileId }) {
 
 
   // Object data
-  const objectData = useMemo(()=>
-    rows.map(row=>Object.fromEntries(headers.map((h,i)=>[h,row[i]]))).filter(row=>
-      !Object.values(row).some(v=>{ if(!v)return false; const s=String(v).toLowerCase().trim(); return s==="total"||s==="grand total"||s==="sub total"||s==="overall"||s.startsWith("total ")||s.endsWith(" total"); })
-    ), [headers,rows]);
+  const objectData = useMemo(() => {
+    if (!rows?.length || !headers?.length) return [];
+
+    const output = [];
+    for (const row of rows) {
+      const record = {};
+      let isSummaryRow = false;
+
+      for (let index = 0; index < headers.length; index += 1) {
+        const header = headers[index];
+        const value = row?.[index];
+        record[header] = value;
+        if (!isSummaryRow && isSummaryRowValue(value)) {
+          isSummaryRow = true;
+        }
+      }
+
+      if (!isSummaryRow) {
+        output.push(record);
+      }
+    }
+
+    return output;
+  }, [headers, rows]);
 
   const dateCol = useMemo(()=>detectDateColumn(headers,objectData,isWide,data.dateCols),[headers,objectData,isWide,data.dateCols]);
   const categoryColumns = useMemo(()=>detectCategoryColumns(headers,objectData,dateCol),[headers,objectData,dateCol]);
@@ -1391,10 +1424,12 @@ export default function Dashboard({ data, blueprint, fileId }) {
     return result;
   },[objectData,filters,dateCol]);
 
-  const filteredRows = useMemo(()=>filteredData.map(row=>headers.map(h=>row[h]===undefined?null:row[h])),[filteredData,headers]);
   // Rebuild saved charts from Firestore — recompute chartData/pivotData from their spec
   // Must be after filteredData is defined
   const rebuiltSavedCharts = useMemo(() => {
+    if (activeView !== "charts") {
+      return savedCustomCharts;
+    }
     return savedCustomCharts.map(c => {
       if (c.type === "pivot" && c.xCol && !c.pivotData) {
         return { ...c, pivotData: generatePivot(filteredData, c.xCol, null, null, "sum") };
@@ -1404,7 +1439,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
       }
       return c;
     });
-  }, [savedCustomCharts, filteredData]);
+  }, [activeView, savedCustomCharts, filteredData]);
 
   // Merge session charts with rebuilt Firestore charts
   const allCustomCharts = [
@@ -2190,10 +2225,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
             <DataTable
               headers={isWide ? wideVisibleHeaders : headers}
               displayHeaderRows={isWide ? null : data.displayHeaderRows}
-              rows={isWide
-                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
-                : filteredRows
-              }
+              rows={isWide ? wideFilteredData : filteredData}
             />
           </Section>
 
@@ -2357,7 +2389,17 @@ export default function Dashboard({ data, blueprint, fileId }) {
         </>
       )}
 
-      <DataChatbot headers={headers} rows={filteredRows} columnContexts={data.columnContexts || {}} blueprint={blueprint} onResult={handleChatResult} customCharts={allCustomCharts.map(c=>({...c, pinned: isPinned(String(c.id))}))} filteredTables={filteredTables.map(t=>({...t, pinned: isPinned(String(t.id))}))}/>
+      <DataChatbot
+        headers={headers}
+        rows={analysisSession?.sessionId ? [] : rows}
+        columnContexts={data.columnContexts || {}}
+        blueprint={blueprint}
+        analysisSession={analysisSession}
+        onAnalysisSessionExpired={onAnalysisSessionExpired}
+        onResult={handleChatResult}
+        customCharts={allCustomCharts.map(c=>({...c, pinned: isPinned(String(c.id))}))}
+        filteredTables={filteredTables.map(t=>({...t, pinned: isPinned(String(t.id))}))}
+      />
     </div>
   );
 }

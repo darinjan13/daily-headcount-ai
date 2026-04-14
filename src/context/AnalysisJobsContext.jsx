@@ -56,10 +56,11 @@ export function AnalysisJobsProvider({ children }) {
     ));
   }, []);
 
-  const completeJob = useCallback((jobId, resultPayload) => {
+  const completeJob = useCallback((jobId, resultPayload, options = {}) => {
     if (!jobId) return;
     detachJobController(jobId);
     let completedJob = null;
+    const suppressNotification = Boolean(options?.suppressNotification);
 
     setJobs((currentJobs) => currentJobs.map((job) => {
       if (job.id !== jobId) return job;
@@ -75,19 +76,23 @@ export function AnalysisJobsProvider({ children }) {
       return completedJob;
     }));
 
-    setNotifications((currentNotifications) => {
-      const nextNotifications = currentNotifications.filter((notification) => notification.jobId !== jobId);
-      return [{
-        id: `${jobId}-done`,
-        jobId,
-        status: "completed",
-        title: completedJob?.fileName || "Analysis ready",
-        message: completedJob?.sheetName
-          ? `${completedJob.sheetName} is ready to open.`
-          : "Workbook analysis is ready to open.",
-      }, ...nextNotifications].slice(0, 4);
-    });
-  }, [detachJobController]);
+    if (!suppressNotification) {
+      setNotifications((currentNotifications) => {
+        const nextNotifications = currentNotifications.filter((notification) => notification.jobId !== jobId);
+        return [{
+          id: `${jobId}-done`,
+          jobId,
+          status: "completed",
+          title: completedJob?.fileName || "Analysis ready",
+          message: completedJob?.sheetName
+            ? `${completedJob.sheetName} is ready to open.`
+            : "Workbook analysis is ready to open.",
+        }, ...nextNotifications].slice(0, 4);
+      });
+    } else {
+      dismissNotification(jobId);
+    }
+  }, [detachJobController, dismissNotification]);
 
   const failJob = useCallback((jobId, message) => {
     if (!jobId) return;
