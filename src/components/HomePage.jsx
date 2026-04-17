@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
+import lifeSightsLogo from "../assets/LifeSights_LOGO.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 import { getAnalysisResultCache, setAnalysisResultCache } from "../utils/analysisResultCache";
@@ -260,14 +261,14 @@ function FolderCard({ folder, onOpen }) {
   return (
     <button
       onClick={() => onOpen(folder)}
-      className="rounded-2xl p-6 flex items-center justify-between gap-4 transition-all hover:shadow-xl border text-left cursor-pointer"
+      className="w-full min-w-0 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:shadow-xl border text-left cursor-pointer"
       style={{
         backgroundColor: "var(--color-surface-elevated)",
         borderColor: "var(--color-border)",
         backdropFilter: "blur(10px)",
       }}
     >
-      <div className="flex items-start gap-4 min-w-0">
+      <div className="flex items-start gap-4 min-w-0 flex-1">
         <div
           className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
           style={{ backgroundColor: "var(--color-surface-soft)", color: "var(--color-castleton-green)" }}
@@ -276,9 +277,9 @@ function FolderCard({ folder, onOpen }) {
         </div>
         <div className="min-w-0 flex-1">
           <h4
-            className="mb-2 text-sm font-semibold leading-snug break-words"
+            className="mb-2 text-sm font-semibold leading-snug truncate"
             title={folder.name}
-            style={{ color: "var(--color-text)", marginBottom: "4px" }}
+            style={{ color: "var(--color-text)", marginBottom: "4px", maxWidth: "100%" }}
           >
             {folder.name}
           </h4>
@@ -288,15 +289,16 @@ function FolderCard({ folder, onOpen }) {
         </div>
       </div>
       <div
-        className="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shrink-0"
+        className="inline-flex items-center justify-center rounded-xl w-11 h-11 shrink-0"
         style={{
           backgroundColor: "var(--color-castleton-green)",
           color: "#FFFFFF",
           border: "1px solid rgba(255,255,255,0.08)",
         }}
+        title={`Open ${folder.name}`}
+        aria-label={`Open ${folder.name}`}
       >
-        <span>Browse folder</span>
-        <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        <ChevronRight className="h-5 w-5" aria-hidden="true" />
       </div>
     </button>
   );
@@ -682,6 +684,12 @@ export default function HomePage() {
     });
   }, [files, fileTagsById, searchTerm, selectedType]);
 
+  const filteredFolders = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return folders;
+    return folders.filter((subfolder) => subfolder.name.toLowerCase().includes(term));
+  }, [folders, searchTerm]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedType, pageSize, files.length]);
@@ -693,7 +701,7 @@ export default function HomePage() {
   const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
   const hasActiveFileFilters = searchTerm.trim().length > 0 || selectedType !== "all";
   const emptyFilesMessage = hasActiveFileFilters
-    ? "No files match your search or filters."
+    ? "No spreadsheet files match your search or filters."
     : folders.length > 0
       ? "No spreadsheet files in this folder. Open a subfolder to continue."
       : "No spreadsheet files in this folder.";
@@ -1259,20 +1267,22 @@ export default function HomePage() {
               padding: "48px 48px",
             }}
           >
-            <h1 className="text-2xl font-bold mb-4 text-center" style={{ color: "var(--color-text)" }}>
-              LifeSights
-            </h1>
-            <div className="mb-5">
-              <p className="text-xs text-center mb-8" style={{ color: "var(--color-text-light)" }}>
-                Powered by Lifewood PH
-              </p>
+            <div className="mb-8 flex justify-center">
+              <img
+                src={lifeSightsLogo}
+                alt="LifeSights powered by Lifewood"
+                className="h-auto w-full max-w-[260px]"
+                style={{
+                  objectFit: "contain",
+                }}
+              />
             </div>
             <div className="mb-5">
-              <p className="text-sm text-center leading-relaxed" style={{ color: "var(--color-text-light)" }}>
+              <p className="text-sm text-center leading-relaxed" style={{ color: "var(--color-dark-serpent)", opacity: 0.82 }}>
                 Connect your Google Drive to visualize and analyze Excel files in real time
               </p>
               {user && !accessToken && (
-                <p className="text-xs text-center mt-3" style={{ color: "var(--color-text-light)" }}>
+                <p className="text-xs text-center mt-3" style={{ color: "var(--color-dark-serpent)", opacity: 0.78 }}>
                   Session expired. Please sign in again to continue.
                 </p>
               )}
@@ -1292,7 +1302,7 @@ export default function HomePage() {
               </svg>
               <span className="login-google-wave-text">Sign in with Google</span>
             </button>
-            <p className="text-xs text-center" style={{ color: "var(--color-text-light)" }}>
+            <p className="text-xs text-center" style={{ color: "var(--color-dark-serpent)", opacity: 0.72 }}>
               Secure access to your Google Drive files
             </p>
           </div>
@@ -1810,19 +1820,25 @@ export default function HomePage() {
                 </div>
               )}
 
-              {isAdmin && folders.length > 0 && (
+              {isAdmin && filteredFolders.length > 0 && (
                 <div className="mb-8">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>Subfolders</h2>
                     <span className="text-sm" style={{ color: "var(--color-text-light)" }}>
-                      {folders.length} folder{folders.length !== 1 ? "s" : ""}
+                      {filteredFolders.length} folder{filteredFolders.length !== 1 ? "s" : ""}
                     </span>
                   </div>
                   <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
-                    {folders.map((subfolder) => (
+                    {filteredFolders.map((subfolder) => (
                       <FolderCard key={subfolder.id} folder={subfolder} onOpen={handleOpenAdminFolder} />
                     ))}
                   </div>
+                </div>
+              )}
+
+              {isAdmin && folders.length > 0 && filteredFolders.length === 0 && searchTerm.trim() && (
+                <div className="rounded-2xl border p-6 text-center mb-8" style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}>
+                  No subfolders match your search.
                 </div>
               )}
 
