@@ -2,6 +2,19 @@
 
 LifeSights is a React + Vite dashboard app for opening Excel and Google Sheets files from Google Drive, analyzing workbook data through the backend, and visualizing the results in an interactive dashboard.
 
+Current app version: `1.1.0`
+
+## Version 1.1 Highlights
+
+- Admin workspace mode with a locked Google Drive admin root.
+- Backend-powered admin mirroring for analyzed workbooks.
+- Persistent recent analysis tabs using Firestore metadata.
+- Background workbook analysis with cancel, progress, elapsed time, and ready-to-open notifications.
+- Multi-level spreadsheet header support with AI-safe flattened headers.
+- Backend active-sheet cache/session support for large-file chatbot accuracy.
+- Environment-aware backend concurrency: safer production defaults, faster local development.
+- Optimized raw data table rendering for large datasets.
+
 ## What The Frontend Does
 
 - Signs users in with Google through Firebase Auth.
@@ -11,8 +24,10 @@ LifeSights is a React + Vite dashboard app for opening Excel and Google Sheets f
 - Opens analyzed workbooks as sidebar tabs.
 - Persists lightweight tab metadata to Firestore, not full analyzed data.
 - Restores saved tabs after login and re-analyzes the Drive file only when the user opens a restored tab.
+- Runs workbook analysis in the foreground or background with visible progress.
 - Mirrors regular-user analyzed workbooks to the backend admin Drive mirror endpoint.
 - Provides dashboard charts, filters, raw table viewing, pinned charts, and a chatbot.
+- Sends backend analysis session ids to the chatbot when available, so large active datasets can use the backend cache instead of relying only on frontend-held rows.
 
 ## Local Setup
 
@@ -120,13 +135,51 @@ Saved metadata includes file id, file name, sheet name, available sheets, folder
 
 After refresh, tabs reappear in the sidebar. Opening a restored tab downloads and re-analyzes the file again using the current Google Drive token.
 
+## Background Analysis
+
+Workbook analysis can continue in the background after the user starts opening a file or switching sheets. The floating background analysis dock shows running jobs, progress, elapsed time, cancellation, and completion notifications.
+
+When a background job finishes, the user can open the completed analysis from the notification. If the user is already waiting for the same sheet in the foreground, the app suppresses the redundant "ready to open" notification.
+
+## Multi-Level Headers
+
+LifeSights supports practical multi-row and merged spreadsheet headers by separating display headers from analysis headers:
+
+- `displayHeaderRows` preserve visual grouped headers for the data table.
+- `headers` are flattened unique column names used by filters, charts, blueprints, and chatbot actions.
+- `columnContexts` preserve parent header meaning for AI understanding.
+
+This lets the table show grouped headers like `Production Key > Actual`, while the chatbot and chart logic still use stable flat names such as `Actual Hours` or `Accumulative Actual Hours`.
+
+## Large Workbook Behavior
+
+Large workbook handling is improved in v1.1, but it is not full backend row paging yet.
+
+What works now:
+
+- Analysis can continue in the background so the UI is not trapped on one modal.
+- The backend can run multiple analyses locally, while production can stay conservative for limited hosting.
+- The frontend table avoids unnecessary full-table conversion when only a page of rows is visible.
+- The chatbot can use the backend active analysis session for large active datasets.
+
+What is still future work:
+
+- True backend row paging, where the browser receives only the visible rows.
+- Server-side search, sorting, and filtering for massive datasets.
+- Optional browser workbook caching using Drive file id and modified time.
+- Progressive background row hydration instead of returning every row in one response.
+
 ## Current Limitations
 
 - Restored tabs require the user to still have Drive access to the original file.
 - Full analyzed data is not persisted, so restored tabs need a backend re-analysis.
 - Google Drive OAuth tokens are stored in `sessionStorage`; if the token is missing, the app forces re-login.
 - Admin users can browse only the configured admin root in the app UI, but Google Drive permissions still matter.
-- Very large workbooks can be slow because bytes are downloaded in the browser and uploaded to the backend for analysis.
+- Very large workbooks can still be slow on first analysis because bytes are downloaded in the browser, uploaded to the backend, parsed, and returned as table data.
+- Frontend table rendering is optimized, but true backend row paging is not implemented yet.
+- Browser refresh clears in-memory analyzed data; restored tabs keep metadata only and re-analyze when opened.
+- Only the active backend analysis session is cached server-side. Opening another sheet or workbook may replace that backend cache.
+- Multi-level header support is practical and heuristic, not a full Excel layout engine.
 - The production build currently emits a Vite chunk-size warning. It does not block deployment, but future code splitting would improve load performance.
 
 ## Useful Commands

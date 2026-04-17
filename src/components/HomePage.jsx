@@ -2,9 +2,12 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAnalysisTabs } from "../context/AnalysisTabsContext";
+import { useAnalysisJobs } from "../context/AnalysisJobsContext";
 import { useTheme } from "../context/ThemeContext";
 import { useDrivePicker } from "../hooks/useDrivePicker";
 import { useDriveFiles } from "../hooks/useDriveFiles";
+import BackgroundAnalysisDock from "./BackgroundAnalysisDock";
+import BackgroundAnalysisToasts from "./BackgroundAnalysisToasts";
 import Sidebar from "./Sidebar";
 import Grainient from "./Grainient";
 import UserAvatar from "./UserAvatar";
@@ -19,11 +22,16 @@ import {
   FolderSearch,
   House,
   LoaderCircle,
+  Menu,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
+import { getAnalysisResultCache, setAnalysisResultCache } from "../utils/analysisResultCache";
+import { makeAnalysisRequestKey } from "../utils/analysisRequestKey";
+import { getCurrentWorkbookCache, setCurrentWorkbookCache } from "../utils/workbookCache";
 
 const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
 const ADMIN_ROOT_FOLDER_ID = import.meta.env.VITE_ADMIN_ROOT_FOLDER_ID || "";
@@ -523,6 +531,20 @@ export default function HomePage() {
     togglePinAnalysisTab,
     clearAnalysisTabs,
   } = useAnalysisTabs();
+  const {
+    createJob,
+    updateJob,
+    completeJob,
+    failJob,
+    abortJob,
+    removeJob,
+    getJob,
+    attachJobController,
+    detachJobController,
+    dismissNotification,
+    markJobBackground,
+    getJobByRequestKey,
+  } = useAnalysisJobs();
   const { openFolderPicker } = useDrivePicker();
   const {
     files,
@@ -538,6 +560,7 @@ export default function HomePage() {
   const [folder, setFolder] = useState(null);
   const [folderPath, setFolderPath] = useState([]);
   const [openingFile, setOpeningFile] = useState(null);
+  const [analysisProgress, setAnalysisProgress] = useState(null);
   const [downloadingFile, setDownloadingFile] = useState(null);
   const [openError, setOpenError] = useState("");
   const [fileTagsById, setFileTagsById] = useState({});
@@ -547,10 +570,16 @@ export default function HomePage() {
   const [selectedType, setSelectedType] = useState("all");
   const [viewMode, setViewMode] = useState("cards");
   const [pageSize, setPageSize] = useState(() => getDefaultPageSize());
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [foregroundJobId, setForegroundJobId] = useState(null);
   const pageSizeTouchedRef = useRef(false);
   const [currentPage, setCurrentPage] = useState(1);
   const toolbarDropdownGroupRef = useRef(null);
   const TAG_CACHE_KEY = "fileSheetTagsCache";
+  const isMountedRef = useRef(true);
+  const foregroundJobIdRef = useRef(null);
+  const backgroundedJobIdsRef = useRef(new Set());
+  const adoptedForegroundJobIdsRef = useRef(new Set());
 
   useEffect(() => {
     const handleResize = () => {
@@ -562,6 +591,54 @@ export default function HomePage() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      const currentForegroundJobId = foregroundJobIdRef.current;
+      if (currentForegroundJobId && !backgroundedJobIdsRef.current.has(currentForegroundJobId)) {
+        abortJob(currentForegroundJobId);
+      }
+    };
+  }, [abortJob]);
+
+  useEffect(() => {
+    foregroundJobIdRef.current = foregroundJobId;
+  }, [foregroundJobId]);
+
+  const foregroundJob = foregroundJobId ? getJob(foregroundJobId) : null;
+
+  useEffect(() => {
+    if (!foregroundJob || foregroundJob.status !== "running") return;
+    setAnalysisProgress({
+      fileName: foregroundJob.fileName,
+      sheetName: foregroundJob.sheetName,
+      label: foregroundJob.label,
+      percent: foregroundJob.percent,
+    });
+  }, [foregroundJob]);
+
+  useEffect(() => {
+    if (
+      !foregroundJob
+      || foregroundJob.status !== "completed"
+      || !foregroundJob.resultPayload
+      || !adoptedForegroundJobIdsRef.current.has(foregroundJob.id)
+    ) {
+      return;
+    }
+
+    adoptedForegroundJobIdsRef.current.delete(foregroundJob.id);
+    backgroundedJobIdsRef.current.delete(foregroundJob.id);
+    dismissNotification(foregroundJob.id);
+    removeJob(foregroundJob.id);
+    const tabId = openAnalysisTab(foregroundJob.resultPayload);
+    setForegroundJobId(null);
+    setOpeningFile(null);
+    setAnalysisProgress(null);
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  }, [foregroundJob, dismissNotification, removeJob, openAnalysisTab, navigate]);
 
   useEffect(() => {
     try {
@@ -787,61 +864,30 @@ export default function HomePage() {
     await listFolderContents(nextFolder.id, accessToken);
   };
 
-  const handleOpenFile = async (file, sheetName = "") => {
-    setOpeningFile(file.id);
-    setOpenError("");
+  const handleOpenBackgroundJob = (jobId) => {
+    const job = getJob(jobId);
+    if (!job?.resultPayload) return;
 
-    try {
-      const { arrayBuffer } = await downloadFile(file.id, accessToken);
-      const blob = new Blob([arrayBuffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
+    backgroundedJobIdsRef.current.delete(jobId);
+    dismissNotification(jobId);
+    removeJob(jobId);
+    const tabId = openAnalysisTab(job.resultPayload);
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  };
 
-      const formData = new FormData();
-      formData.append("file", blob, file.name);
+  const handleOpenFile = (file, sheetName = "") => {
+    const requestKey = makeAnalysisRequestKey({
+      driveFileId: file.id,
+      sheetName,
+      modifiedTime: file.modifiedTime,
+    });
+    const existingJob = getJobByRequestKey(requestKey);
 
-      const analyzeUrl = sheetName
-        ? `${HOST}/analyze-bytes?sheet_name=${encodeURIComponent(sheetName)}`
-        : `${HOST}/analyze-bytes`;
-
-      const res = await fetch(analyzeUrl, {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const { tableData, blueprint, allSheets, currentSheet } = await res.json();
-
-      if (!isAdmin && ADMIN_ROOT_FOLDER_ID && user?.email) {
-        const mirrorBlob = new Blob([arrayBuffer], {
-          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        });
-        const mirrorFormData = new FormData();
-        mirrorFormData.append("file", mirrorBlob, normalizeAdminCopyName(file));
-
-        void fetch(
-          `${HOST}/admin-mirror?user_email=${encodeURIComponent(user.email)}&file_name=${encodeURIComponent(normalizeAdminCopyName(file))}`,
-          {
-            method: "POST",
-            body: mirrorFormData,
-          }
-        )
-          .then(async (mirrorRes) => {
-            const result = await mirrorRes.json().catch(() => ({}));
-            if (!mirrorRes.ok || result.ok === false || result.error) {
-              throw new Error(result.error || `Mirror request failed: ${mirrorRes.status}`);
-            }
-          })
-          .catch((copyErr) => {
-            console.warn("[admin-mirror] Failed to sync analyzed file:", copyErr.message);
-          });
-      }
-
+    if (existingJob?.status === "completed" && existingJob.resultPayload) {
+      dismissNotification(existingJob.id);
+      removeJob(existingJob.id);
       const tabId = openAnalysisTab({
-        tableData,
-        blueprint,
-        currentSheet,
-        allSheets,
+        ...existingJob.resultPayload,
         fileName: file.name,
         driveFileId: file.id,
         driveModifiedTime: file.modifiedTime,
@@ -850,11 +896,274 @@ export default function HomePage() {
         sourceFolderName: folder?.name,
       });
       navigate("/dashboard", { state: { targetTabId: tabId } });
-    } catch (err) {
-      setOpenError(`Failed to open ${file.name}: ${err.message}`);
+      return;
     }
 
+    if (existingJob?.status === "running") {
+      backgroundedJobIdsRef.current.delete(existingJob.id);
+      adoptedForegroundJobIdsRef.current.add(existingJob.id);
+      setForegroundJobId(existingJob.id);
+      setOpeningFile(file.id);
+      setAnalysisProgress({
+        fileName: existingJob.fileName || file.name,
+        sheetName: existingJob.sheetName || sheetName,
+        label: existingJob.label || "Analyzing workbook",
+        percent: existingJob.percent ?? 45,
+      });
+      setOpenError("");
+      return;
+    }
+
+    const cachedAnalysis = getAnalysisResultCache({
+      driveFileId: file.id,
+      sheetName: sheetName || "",
+      modifiedTime: file.modifiedTime,
+      allowDefaultAlias: !sheetName,
+    });
+
+    if (cachedAnalysis) {
+      const tabId = openAnalysisTab({
+        ...cachedAnalysis,
+        fileName: file.name,
+        driveFileId: file.id,
+        driveModifiedTime: file.modifiedTime,
+        folderId: folder?.id,
+        sourceUserEmail: isAdmin ? folder?.name : user?.email,
+        sourceFolderName: folder?.name,
+      });
+      navigate("/dashboard", { state: { targetTabId: tabId } });
+      return;
+    }
+
+    const currentForegroundJobId = foregroundJobIdRef.current;
+    if (currentForegroundJobId && !backgroundedJobIdsRef.current.has(currentForegroundJobId)) {
+      abortJob(currentForegroundJobId);
+    }
+
+    const jobId = createJob({
+      fileId: file.id,
+      fileName: file.name,
+      sheetName,
+      label: "Downloading workbook from Drive",
+      percent: 20,
+      requestKey,
+    });
+    const controller = new AbortController();
+    attachJobController(jobId, controller);
+
+    setForegroundJobId(jobId);
+    setOpeningFile(file.id);
+    setAnalysisProgress({
+      fileName: file.name,
+      sheetName,
+      label: "Downloading workbook from Drive",
+      percent: 20,
+    });
+    setOpenError("");
+
+    void (async () => {
+      try {
+        const cachedWorkbook = getCurrentWorkbookCache({
+          driveFileId: file.id,
+          modifiedTime: file.modifiedTime,
+        });
+        let arrayBuffer = cachedWorkbook?.arrayBuffer || null;
+        let meta = cachedWorkbook
+          ? {
+            name: cachedWorkbook.fileName || file.name,
+            modifiedTime: cachedWorkbook.modifiedTime || file.modifiedTime,
+            version: cachedWorkbook.version,
+            mimeType: cachedWorkbook.mimeType || file.mimeType,
+          }
+          : null;
+
+        if (arrayBuffer) {
+          updateJob(jobId, {
+            label: "Using cached workbook",
+            percent: 35,
+          });
+          if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+            setAnalysisProgress({
+              fileName: file.name,
+              sheetName,
+              label: "Using cached workbook",
+              percent: 35,
+            });
+          }
+        } else {
+          const downloaded = await downloadFile(file.id, accessToken, controller.signal);
+          arrayBuffer = downloaded.arrayBuffer;
+          meta = downloaded.meta;
+          setCurrentWorkbookCache({
+            driveFileId: file.id,
+            fileName: file.name,
+            modifiedTime: meta?.modifiedTime || file.modifiedTime,
+            version: meta?.version,
+            mimeType: meta?.mimeType || file.mimeType,
+            arrayBuffer,
+          });
+        }
+
+        updateJob(jobId, {
+          label: "Reading workbook and detecting headers",
+          percent: 45,
+          requestKey: makeAnalysisRequestKey({
+            driveFileId: file.id,
+            sheetName,
+            modifiedTime: meta?.modifiedTime || file.modifiedTime,
+          }),
+        });
+        if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+          setAnalysisProgress({
+            fileName: file.name,
+            sheetName,
+            label: "Reading workbook and detecting headers",
+            percent: 45,
+          });
+        }
+
+        const blob = new Blob([arrayBuffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+
+        const formData = new FormData();
+        formData.append("file", blob, file.name);
+
+        const analyzeQuery = new URLSearchParams();
+        if (sheetName) analyzeQuery.set("sheet_name", sheetName);
+        analyzeQuery.set("drive_file_id", file.id);
+        analyzeQuery.set("drive_modified_time", meta?.modifiedTime || file.modifiedTime || "");
+        const analyzeUrl = `${HOST}/analyze-bytes?${analyzeQuery.toString()}`;
+
+        const res = await fetch(analyzeUrl, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+        updateJob(jobId, {
+          label: "Building dashboard and AI context",
+          percent: 80,
+        });
+        if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+          setAnalysisProgress({
+            fileName: file.name,
+            sheetName,
+            label: "Building dashboard and AI context",
+            percent: 80,
+          });
+        }
+
+        const { tableData, blueprint, allSheets, currentSheet, analysisSession } = await res.json();
+
+        if (!isAdmin && ADMIN_ROOT_FOLDER_ID && user?.email) {
+          const mirrorBlob = new Blob([arrayBuffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          });
+          const mirrorFormData = new FormData();
+          mirrorFormData.append("file", mirrorBlob, normalizeAdminCopyName(file));
+
+          void fetch(
+            `${HOST}/admin-mirror?user_email=${encodeURIComponent(user.email)}&file_name=${encodeURIComponent(normalizeAdminCopyName(file))}`,
+            {
+              method: "POST",
+              body: mirrorFormData,
+            }
+          )
+            .then(async (mirrorRes) => {
+              const result = await mirrorRes.json().catch(() => ({}));
+              if (!mirrorRes.ok || result.ok === false || result.error) {
+                throw new Error(result.error || `Mirror request failed: ${mirrorRes.status}`);
+              }
+            })
+            .catch((copyErr) => {
+              console.warn("[admin-mirror] Failed to sync analyzed file:", copyErr.message);
+            });
+        }
+
+        const payload = {
+          tableData,
+          blueprint,
+          currentSheet,
+          allSheets,
+          fileName: file.name,
+          driveFileId: file.id,
+          driveModifiedTime: meta?.modifiedTime || file.modifiedTime,
+          analysisSession: analysisSession || null,
+          folderId: folder?.id,
+          sourceUserEmail: isAdmin ? folder?.name : user?.email,
+          sourceFolderName: folder?.name,
+        };
+
+        setAnalysisResultCache(payload, {
+          requestedSheetName: sheetName,
+          modifiedTime: meta?.modifiedTime || file.modifiedTime,
+        });
+
+        completeJob(jobId, payload);
+
+        if (foregroundJobIdRef.current === jobId && !backgroundedJobIdsRef.current.has(jobId) && isMountedRef.current) {
+          setAnalysisProgress({
+            fileName: file.name,
+            sheetName: currentSheet,
+            label: "Opening dashboard",
+            percent: 100,
+          });
+          const tabId = openAnalysisTab(payload);
+          dismissNotification(jobId);
+          removeJob(jobId);
+          setForegroundJobId(null);
+          setOpeningFile(null);
+          setAnalysisProgress(null);
+          navigate("/dashboard", { state: { targetTabId: tabId } });
+          return;
+        }
+
+        if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+          setForegroundJobId(null);
+          setOpeningFile(null);
+          setAnalysisProgress(null);
+        }
+      } catch (err) {
+        if (err?.name === "AbortError") {
+          return;
+        }
+        failJob(jobId, `Failed to open ${file.name}: ${err.message}`);
+        if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+          setOpenError(`Failed to open ${file.name}: ${err.message}`);
+          setForegroundJobId(null);
+          setOpeningFile(null);
+          setAnalysisProgress(null);
+        }
+      } finally {
+        detachJobController(jobId);
+      }
+    })();
+  };
+
+  const cancelCurrentAnalysis = () => {
+    const currentForegroundJobId = foregroundJobIdRef.current;
+    if (currentForegroundJobId) {
+      backgroundedJobIdsRef.current.delete(currentForegroundJobId);
+      adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
+      abortJob(currentForegroundJobId);
+    }
+    setForegroundJobId(null);
     setOpeningFile(null);
+    setAnalysisProgress(null);
+  };
+
+  const continueCurrentAnalysisInBackground = () => {
+    const currentForegroundJobId = foregroundJobIdRef.current;
+    if (!currentForegroundJobId) return;
+    backgroundedJobIdsRef.current.add(currentForegroundJobId);
+    adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
+    markJobBackground(currentForegroundJobId);
+    setForegroundJobId(null);
+    setOpeningFile(null);
+    setAnalysisProgress(null);
   };
 
   const handleDownloadFile = async (file) => {
@@ -1043,9 +1352,16 @@ export default function HomePage() {
         }
       `}</style>
       <ScrollProgressBar />
+      <button
+        type="button"
+        className={`ui-sidebar-backdrop ${isSidebarOpen ? "is-open" : ""}`}
+        style={{ padding: 0, border: "none" }}
+        aria-label="Close sidebar"
+        onClick={() => setIsSidebarOpen(false)}
+      />
 
       <aside
-        className="ui-auto-hide-sidebar"
+        className={`ui-auto-hide-sidebar ${isSidebarOpen ? "is-open" : ""}`}
         style={{
           position: "fixed",
           top: 0,
@@ -1063,11 +1379,20 @@ export default function HomePage() {
           folder={folder}
           files={files}
           filesLoading={filesLoading}
-          onSelectFolder={isAdmin ? null : () => openFolderPicker(accessToken, handleFolderSelect)}
-          onRefresh={() => folder && listFolderContents(folder.id, accessToken)}
+          onSelectFolder={isAdmin ? null : () => {
+            setIsSidebarOpen(false);
+            openFolderPicker(accessToken, handleFolderSelect);
+          }}
+          onRefresh={() => {
+            setIsSidebarOpen(false);
+            folder && listFolderContents(folder.id, accessToken);
+          }}
           analysisTabs={tabs}
           activeAnalysisTabId={activeTabId}
-          onSelectAnalysisTab={handleSelectAnalysisTab}
+          onSelectAnalysisTab={(tabId) => {
+            setIsSidebarOpen(false);
+            handleSelectAnalysisTab(tabId);
+          }}
           onCloseAnalysisTab={closeAnalysisTab}
           onRenameAnalysisTab={renameAnalysisTab}
           onTogglePinAnalysisTab={togglePinAnalysisTab}
@@ -1076,6 +1401,77 @@ export default function HomePage() {
       </aside>
 
       <div className="home-main-shell" style={{ marginLeft: "var(--sidebar-offset)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        {analysisProgress && (
+          <div
+            className="fixed inset-0 z-[130] flex items-center justify-center px-6"
+            style={{
+              backgroundColor: "rgba(19, 48, 32, 0.58)",
+              backdropFilter: "blur(5px)",
+              WebkitBackdropFilter: "blur(5px)",
+            }}
+          >
+            <div
+              className="w-full max-w-md rounded-3xl border p-6 shadow-2xl"
+              style={{
+                backgroundColor: "var(--color-surface-elevated)",
+                borderColor: "var(--color-border)",
+                color: "var(--color-text)",
+              }}
+            >
+              <div className="mb-4 flex items-center gap-3">
+                <LoaderCircle className="h-6 w-6 animate-spin" style={{ color: "var(--color-castleton-green)" }} aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold" style={{ color: "var(--color-text)" }}>Analyzing workbook</p>
+                  <p className="truncate text-xs" style={{ color: "var(--color-text-light)" }}>
+                    {analysisProgress.fileName}{analysisProgress.sheetName ? ` - ${analysisProgress.sheetName}` : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold" style={{ color: "var(--color-text-light)" }}>
+                <span>{analysisProgress.label}</span>
+                <span>{analysisProgress.percent}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-surface-soft)" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${analysisProgress.percent}%`,
+                    background: "linear-gradient(90deg, var(--color-castleton-green), var(--color-saffron))",
+                  }}
+                />
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={continueCurrentAnalysisInBackground}
+                  className="mr-2 rounded-xl px-4 py-2 text-xs font-extrabold transition-all"
+                  style={{
+                    border: "1px solid var(--color-border)",
+                    backgroundColor: "var(--color-surface-soft)",
+                    color: "var(--color-text)",
+                  }}
+                >
+                  Continue in background
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelCurrentAnalysis}
+                  className="rounded-xl px-4 py-2 text-xs font-extrabold transition-all"
+                  style={{
+                    border: "1px solid var(--color-border)",
+                    backgroundColor: "var(--color-surface)",
+                    color: "var(--color-text)",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="mt-3 text-[11px] font-semibold" style={{ color: "var(--color-text-light)" }}>
+                Large sheets may take a little longer while LifeSights prepares rows, charts, and AI context.
+              </p>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <header
           className="sticky top-0 z-40 border-b"
@@ -1086,38 +1482,53 @@ export default function HomePage() {
           }}
         >
           <div className="home-header-inner max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div className="text-left">
-              <p className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
-                {breadcrumb}
-              </p>
-              {!folder && (
-                <p className="text-xs" style={{ color: "var(--color-text-light)" }}>
-                  No folder selected
+            <div className="flex min-w-0 items-start gap-3">
+              <button
+                type="button"
+                className="ui-sidebar-toggle"
+                aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+                aria-expanded={isSidebarOpen}
+                onClick={() => setIsSidebarOpen((current) => !current)}
+              >
+                {isSidebarOpen ? (
+                  <X size={22} strokeWidth={2.5} color="currentColor" aria-hidden="true" />
+                ) : (
+                  <Menu size={22} strokeWidth={2.5} color="currentColor" aria-hidden="true" />
+                )}
+              </button>
+              <div className="min-w-0 text-left">
+                <p className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
+                  {breadcrumb}
                 </p>
-              )}
-              {isAdmin && folderPath.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-                  {folderPath.map((pathFolder, index) => (
-                    <button
-                      key={pathFolder.id}
-                      type="button"
-                      onClick={() => handleAdminBreadcrumb(pathFolder.id)}
-                      disabled={index === folderPath.length - 1}
-                      className="inline-flex items-center gap-2 rounded-full px-3 py-1"
-                      style={{
-                        border: "1px solid var(--color-border)",
-                        backgroundColor: index === folderPath.length - 1 ? "var(--color-surface-soft)" : "var(--color-surface-elevated)",
-                        color: "var(--color-text)",
-                        opacity: index === folderPath.length - 1 ? 1 : 0.9,
-                        cursor: index === folderPath.length - 1 ? "default" : "pointer",
-                      }}
-                    >
-                      {index === 0 ? <House className="h-3.5 w-3.5" aria-hidden="true" /> : null}
-                      <span>{pathFolder.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+                {!folder && (
+                  <p className="text-xs" style={{ color: "var(--color-text-light)" }}>
+                    No folder selected
+                  </p>
+                )}
+                {isAdmin && folderPath.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    {folderPath.map((pathFolder, index) => (
+                      <button
+                        key={pathFolder.id}
+                        type="button"
+                        onClick={() => handleAdminBreadcrumb(pathFolder.id)}
+                        disabled={index === folderPath.length - 1}
+                        className="inline-flex items-center gap-2 rounded-full px-3 py-1"
+                        style={{
+                          border: "1px solid var(--color-border)",
+                          backgroundColor: index === folderPath.length - 1 ? "var(--color-surface-soft)" : "var(--color-surface-elevated)",
+                          color: "var(--color-text)",
+                          opacity: index === folderPath.length - 1 ? 1 : 0.9,
+                          cursor: index === folderPath.length - 1 ? "default" : "pointer",
+                        }}
+                      >
+                        {index === 0 ? <House className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                        <span>{pathFolder.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-end">
               <ThemeToggle />
@@ -1468,6 +1879,8 @@ export default function HomePage() {
           )}
         </main>
       </div>
+      <BackgroundAnalysisDock />
+      <BackgroundAnalysisToasts onOpenJob={handleOpenBackgroundJob} />
     </div>
   );
 }

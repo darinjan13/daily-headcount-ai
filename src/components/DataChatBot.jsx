@@ -309,7 +309,17 @@ function applyChartState(chartSpec, chartState) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DataChatbot({ headers, rows, blueprint, onResult, customCharts = [], filteredTables = [] }) {
+export default function DataChatbot({
+  headers,
+  rows,
+  columnContexts = {},
+  blueprint,
+  analysisSession = null,
+  onAnalysisSessionExpired = null,
+  onResult,
+  customCharts = [],
+  filteredTables = [],
+}) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME, chartSpec: null }]);
   const [input, setInput] = useState("");
@@ -349,51 +359,74 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
     abortRef.current = new AbortController();
 
     try {
-      const response = await fetch(`${HOST}/chat`, {
-        signal: abortRef.current.signal,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages
-            .filter((m) => m.content !== WELCOME)
-            .map(({ role, content }) => ({ role, content })),
-          headers,
-          rows,
-          datasetSummary: blueprint?.datasetSummary || null,
-          currentChartState: activeChartState ? {
-            id: activeChartState.chartId,
-            type: activeChartState.chartType,
-            title: activeChartState.chartSpec?.title,
-            x: activeChartState.chartSpec?.x,
-            y: activeChartState.chartSpec?.y,
-            rowDim: activeChartState.chartSpec?.rowDim,
-            colDim: activeChartState.chartSpec?.colDim,
-            measure: activeChartState.chartSpec?.measure,
-            aggregation: activeChartState.chartSpec?.aggregation,
-            limit: activeChartState.topN,
-            sort: activeChartState.sort,
-            filters: activeChartState.chartSpec?.filters || [],
-          } : null,
-          existingCharts: customCharts.map(c => ({
-            id: c.id,
-            title: c.title,
-            type: c.type,
-            pinned: c.pinned || false,
-          })),
-          existingTables: (filteredTables || []).map(t => ({
-            id: t.id,
-            title: t.title,
-            pinned: t.pinned || false,
-            filters: t.filters || [],
-          })),
-        }),
+      const buildChatPayload = (analysisSessionId = analysisSession?.sessionId || null) => ({
+        messages: newMessages
+          .filter((m) => m.content !== WELCOME)
+          .map(({ role, content }) => ({ role, content })),
+        headers,
+        rows,
+        analysisSessionId,
+        columnContexts,
+        datasetSummary: blueprint?.datasetSummary || null,
+        currentChartState: activeChartState ? {
+          id: activeChartState.chartId,
+          type: activeChartState.chartType,
+          title: activeChartState.chartSpec?.title,
+          x: activeChartState.chartSpec?.x,
+          y: activeChartState.chartSpec?.y,
+          rowDim: activeChartState.chartSpec?.rowDim,
+          colDim: activeChartState.chartSpec?.colDim,
+          measure: activeChartState.chartSpec?.measure,
+          aggregation: activeChartState.chartSpec?.aggregation,
+          limit: activeChartState.topN,
+          sort: activeChartState.sort,
+          filters: activeChartState.chartSpec?.filters || [],
+        } : null,
+        existingCharts: customCharts.map(c => ({
+          id: c.id,
+          title: c.title,
+          type: c.type,
+          pinned: c.pinned || false,
+        })),
+        existingTables: (filteredTables || []).map(t => ({
+          id: t.id,
+          title: t.title,
+          pinned: t.pinned || false,
+          filters: t.filters || [],
+        })),
       });
-      const data = await response.json();
+
+      const fetchChatResponse = async (analysisSessionId = analysisSession?.sessionId || null) => {
+        const response = await fetch(`${HOST}/chat`, {
+          signal: abortRef.current.signal,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildChatPayload(analysisSessionId)),
+        });
+        return response.json();
+      };
+
+      let data = await fetchChatResponse();
+      if (data?.cacheExpired && onAnalysisSessionExpired) {
+        const refreshedSession = await onAnalysisSessionExpired();
+        if (refreshedSession?.sessionId) {
+          data = await fetchChatResponse(refreshedSession.sessionId);
+        }
+      }
+
+      if (data?.cacheExpired) {
+        throw new Error("The active workbook cache expired. Please refresh this sheet and try again.");
+      }
+
       const steps = data.steps || [];
 
       // Execute steps in order
       const statusLines = [];
       const newChartSpecs = []; // track charts created in this batch for pinAll
+      let requestedChartCount = 0;
+      let createdChartCount = 0;
+      let rejectedChartCount = 0;
+      let updatedChartCount = 0;
 
       for (const step of steps) {
         if (step.type === "delete") {
@@ -450,27 +483,51 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
           statusLines.push("📋 Table added to Summary tab.");
 
         } else if (step.type === "chart") {
+          requestedChartCount += 1;
           const spec = { ...step, type: step.chartType || "bar" };
           const isModify = step.action === "modify" && activeChartState?.chartId;
 
           if (isModify) {
             const resolvedSpec = applyChartState(spec, updatedState || {});
             setActiveChartState(prev => ({ ...prev, chartSpec: resolvedSpec }));
-            onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
-            statusLines.push("✏️ Chart updated.");
+            const chartAccepted = onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
+            if (chartAccepted === false) {
+              rejectedChartCount += 1;
+              continue;
+            }
+            updatedChartCount += 1;
           } else {
             chartIdRef.current += 1;
             const chartId = `chat-chart-${chartIdRef.current}`;
             const specWithId = { ...spec, _chatId: chartId };
-            onResult({ chartSpec: specWithId, action: "new" });
-            newChartSpecs.push(specWithId);
-            statusLines.push("📊 Chart added to Charts tab.");
+            const chartAccepted = onResult({ chartSpec: specWithId, action: "new" });
+            if (chartAccepted === false) {
+              rejectedChartCount += 1;
+              continue;
+            }
+            if (chartAccepted !== false) newChartSpecs.push(specWithId);
+            createdChartCount += 1;
           }
         }
       }
 
+      if (createdChartCount > 0) {
+        statusLines.push(`${createdChartCount} chart${createdChartCount === 1 ? "" : "s"} added to Charts tab.`);
+      }
+      if (updatedChartCount > 0) {
+        statusLines.push(`${updatedChartCount} chart${updatedChartCount === 1 ? "" : "s"} updated.`);
+      }
+      if (rejectedChartCount > 0) {
+        statusLines.push(
+          `${rejectedChartCount} of ${requestedChartCount} chart request${requestedChartCount === 1 ? "" : "s"} skipped because the selected columns did not form valid charts.`
+        );
+      }
+
       // Compose final message
-      const replyContent = [data.reply, ...statusLines].filter(Boolean).join("\n");
+      const safeReply = rejectedChartCount > 0
+        ? String(data.reply || "").replace(/\bhere\s+(?:are|is)\s+\d+\s+new\s+charts?\b/ig, `created ${createdChartCount} valid chart${createdChartCount === 1 ? "" : "s"}`)
+        : data.reply;
+      const replyContent = [safeReply, ...statusLines].filter(Boolean).join("\n");
       const finalReply = replyContent || "Done.";
       setMessages((prev) => [...prev, {
         role: "assistant",
@@ -482,7 +539,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
       if (err?.name !== "AbortError") {
         setMessages((prev) => [...prev, {
           role: "assistant",
-          content: "Couldn't reach the server. Is the backend running?",
+          content: err?.message || "Couldn't reach the server. Is the backend running?",
           chartSpec: null,
         }]);
       }

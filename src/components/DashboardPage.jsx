@@ -1,12 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ThemeToggle from "./ThemeToggle";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAnalysisTabs } from "../context/AnalysisTabsContext";
+import { useAnalysisJobs } from "../context/AnalysisJobsContext";
+import BackgroundAnalysisDock from "./BackgroundAnalysisDock";
+import BackgroundAnalysisToasts from "./BackgroundAnalysisToasts";
 import Dashboard from "./Dashboard";
 import Sidebar from "./Sidebar";
-import { ChevronUp, LoaderCircle } from "lucide-react";
+import { ChevronUp, LoaderCircle, Menu, X } from "lucide-react";
 import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
+import { getAnalysisResultCache, setAnalysisResultCache } from "../utils/analysisResultCache";
+import { makeAnalysisRequestKey } from "../utils/analysisRequestKey";
+import { getCurrentWorkbookCache, setCurrentWorkbookCache } from "../utils/workbookCache";
 
 const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
 
@@ -27,6 +33,20 @@ export default function DashboardPage() {
     togglePinAnalysisTab,
     clearAnalysisTabs,
   } = useAnalysisTabs();
+  const {
+    createJob,
+    updateJob,
+    completeJob,
+    failJob,
+    abortJob,
+    attachJobController,
+    detachJobController,
+    markJobBackground,
+    removeJob,
+    getJob,
+    getJobByRequestKey,
+    dismissNotification,
+  } = useAnalysisJobs();
   const state = location.state;
   const [showBackToTop, setShowBackToTop] = useState(false);
 
@@ -36,8 +56,15 @@ export default function DashboardPage() {
   const [switching, setSwitching] = useState(false);
   const [tabSwitching, setTabSwitching] = useState(false);
   const [hydratingTabId, setHydratingTabId] = useState(null);
+  const [analysisProgress, setAnalysisProgress] = useState(null);
   const [switchError, setSwitchError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const analysisAbortRef = useRef(null);
+  const [foregroundJobId, setForegroundJobId] = useState(null);
+  const foregroundJobIdRef = useRef(null);
+  const backgroundedJobIdsRef = useRef(new Set());
+  const adoptedForegroundJobIdsRef = useRef(new Set());
 
   // Drive info for sheet switching
   const driveFileId = activeTab?.driveFileId || null;
@@ -100,50 +127,258 @@ export default function DashboardPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const fetchSheetData = async (sheet) => {
+  useEffect(() => () => {
+    analysisAbortRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    foregroundJobIdRef.current = foregroundJobId;
+  }, [foregroundJobId]);
+
+  const foregroundJob = foregroundJobId ? getJob(foregroundJobId) : null;
+
+  useEffect(() => {
+    if (!foregroundJob || foregroundJob.status !== "running") return;
+    setAnalysisProgress({
+      label: foregroundJob.label || "Analyzing workbook",
+      percent: foregroundJob.percent ?? 45,
+      sheetName: foregroundJob.sheetName || "",
+    });
+  }, [foregroundJob]);
+
+  useEffect(() => {
+    if (
+      !foregroundJob
+      || foregroundJob.status !== "completed"
+      || !foregroundJob.resultPayload
+      || !adoptedForegroundJobIdsRef.current.has(foregroundJob.id)
+    ) {
+      return;
+    }
+
+    adoptedForegroundJobIdsRef.current.delete(foregroundJob.id);
+    backgroundedJobIdsRef.current.delete(foregroundJob.id);
+    dismissNotification(foregroundJob.id);
+    removeJob(foregroundJob.id);
+    const tabId = openAnalysisTab(foregroundJob.resultPayload);
+    setData(foregroundJob.resultPayload.tableData || null);
+    setBlueprint(foregroundJob.resultPayload.blueprint || null);
+    setCurrentSheet(foregroundJob.resultPayload.currentSheet || "");
+    setActiveTabId(tabId);
+    setRefreshKey((key) => key + 1);
+    setForegroundJobId(null);
+    setSwitching(false);
+    setAnalysisProgress(null);
+    setHydratingTabId(null);
+    setTabSwitching(false);
+    setSwitchError("");
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  }, [foregroundJob, dismissNotification, removeJob, openAnalysisTab, setActiveTabId, navigate]);
+
+  const fetchSheetData = async (sheet, options = {}) => {
+    const {
+      tabToLoad = activeTab,
+      targetTabId = activeTabId,
+      autoActivate = true,
+      forceRemount = autoActivate,
+      ignoreAnalysisCache = false,
+    } = options;
+
+    if (!tabToLoad?.driveFileId) {
+      throw new Error("No Drive file available for this analysis.");
+    }
+
+    const knownModifiedTime = tabToLoad.driveModifiedTime || tabToLoad.latestDriveModifiedTime || "";
+    const knownRequestKey = makeAnalysisRequestKey({
+      driveFileId: tabToLoad.driveFileId,
+      sheetName: sheet,
+      modifiedTime: knownModifiedTime,
+    });
+    const existingJob = getJobByRequestKey(knownRequestKey);
+
+    if (existingJob?.status === "completed" && existingJob.resultPayload) {
+      dismissNotification(existingJob.id);
+      removeJob(existingJob.id);
+      updateAnalysisTab(targetTabId, {
+        tableData: existingJob.resultPayload.tableData,
+        blueprint: existingJob.resultPayload.blueprint,
+        currentSheet: existingJob.resultPayload.currentSheet || sheet,
+        allSheets: existingJob.resultPayload.allSheets || tabToLoad?.allSheets || [],
+        driveModifiedTime: existingJob.resultPayload.driveModifiedTime || knownModifiedTime || null,
+        analysisSession: existingJob.resultPayload.analysisSession || null,
+        latestDriveModifiedTime: existingJob.resultPayload.driveModifiedTime || knownModifiedTime || null,
+        isStale: false,
+      });
+      if (autoActivate) {
+        setData(existingJob.resultPayload.tableData || null);
+        setBlueprint(existingJob.resultPayload.blueprint || null);
+        setCurrentSheet(existingJob.resultPayload.currentSheet || sheet);
+        if (targetTabId && targetTabId !== activeTabId) {
+          setActiveTabId(targetTabId);
+        }
+        if (forceRemount) {
+          setRefreshKey((key) => key + 1);
+        }
+      }
+      return existingJob.resultPayload;
+    }
+
+    if (existingJob?.status === "running") {
+      backgroundedJobIdsRef.current.delete(existingJob.id);
+      adoptedForegroundJobIdsRef.current.add(existingJob.id);
+      setForegroundJobId(existingJob.id);
+      setSwitching(true);
+      setAnalysisProgress({
+        label: existingJob.label || "Analyzing workbook",
+        percent: existingJob.percent ?? 45,
+        sheetName: existingJob.sheetName || sheet,
+      });
+      setSwitchError("");
+      return null;
+    }
+
+    if (analysisAbortRef.current) {
+      analysisAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
+    const jobId = createJob({
+      fileId: tabToLoad.driveFileId,
+      fileName: tabToLoad.fileName || fileName,
+      sheetName: sheet,
+      label: "Checking Drive file",
+      percent: 20,
+      requestKey: knownRequestKey,
+    });
+    attachJobController(jobId, controller);
+    setForegroundJobId(jobId);
     setSwitching(true);
+    setAnalysisProgress({ label: "Checking Drive file", percent: 20, sheetName: sheet });
     setSwitchError("");
 
     try {
       // Check mimeType to decide download strategy
       const metaRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=version,modifiedTime,name,mimeType&supportsAllDrives=true`,
-        { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" }
+        `https://www.googleapis.com/drive/v3/files/${tabToLoad.driveFileId}?fields=version,modifiedTime,name,mimeType&supportsAllDrives=true`,
+        { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store", signal: controller.signal }
       );
       if (!metaRes.ok) throw new Error(`Drive metadata error: ${metaRes.status}`);
       const meta = await metaRes.json();
       const isGoogleSheet = meta.mimeType === "application/vnd.google-apps.spreadsheet";
-
-      const downloadUrl = isGoogleSheet
-        ? `https://www.googleapis.com/drive/v3/files/${driveFileId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&supportsAllDrives=true&t=${Date.now()}`
-        : `https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media&supportsAllDrives=true&v=${meta.version}`;
-
-      const dlRes = await fetch(downloadUrl, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Cache-Control": "no-cache, no-store",
-        },
-        cache: "no-store",
+      updateJob(jobId, {
+        requestKey: makeAnalysisRequestKey({
+          driveFileId: tabToLoad.driveFileId,
+          sheetName: sheet,
+          modifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || "",
+        }),
       });
-      if (!dlRes.ok) throw new Error("Failed to download file from Drive");
+      const cachedAnalysis = ignoreAnalysisCache ? null : getAnalysisResultCache({
+        driveFileId: tabToLoad.driveFileId,
+        sheetName: sheet,
+        modifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
+      });
 
-      const arrayBuffer = await dlRes.arrayBuffer();
+      if (cachedAnalysis) {
+        const shouldActivate = autoActivate && !backgroundedJobIdsRef.current.has(jobId);
+        updateJob(jobId, { label: "Using cached analysis", percent: 65 });
+        setAnalysisProgress({ label: "Using cached analysis", percent: 65, sheetName: sheet });
+        updateAnalysisTab(targetTabId, {
+          tableData: cachedAnalysis.tableData,
+          blueprint: cachedAnalysis.blueprint,
+          currentSheet: cachedAnalysis.currentSheet || sheet,
+          allSheets: cachedAnalysis.allSheets || tabToLoad?.allSheets || [],
+          driveModifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
+          analysisSession: cachedAnalysis.analysisSession || tabToLoad?.analysisSession || null,
+          latestDriveModifiedTime: meta.modifiedTime || tabToLoad?.latestDriveModifiedTime || null,
+          isStale: false,
+        });
+        if (shouldActivate) {
+          setData(cachedAnalysis.tableData);
+          setBlueprint(cachedAnalysis.blueprint);
+          setCurrentSheet(cachedAnalysis.currentSheet || sheet);
+          if (targetTabId && targetTabId !== activeTabId) {
+            setActiveTabId(targetTabId);
+          }
+          if (forceRemount) {
+            setRefreshKey((k) => k + 1);
+          }
+        }
+        completeJob(jobId, {
+          ...cachedAnalysis,
+          fileName: tabToLoad.fileName || cachedAnalysis.fileName,
+          driveFileId: tabToLoad.driveFileId,
+          driveModifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
+          folderId: tabToLoad?.folderId || cachedAnalysis.folderId || null,
+          sourceUserEmail: tabToLoad?.sourceUserEmail || cachedAnalysis.sourceUserEmail || "",
+          sourceFolderName: tabToLoad?.sourceFolderName || cachedAnalysis.sourceFolderName || "",
+        }, { suppressNotification: shouldActivate });
+        return cachedAnalysis;
+      }
+
+      const cachedWorkbook = getCurrentWorkbookCache({
+        driveFileId: tabToLoad.driveFileId,
+        modifiedTime: meta.modifiedTime,
+        version: meta.version,
+      });
+
+      let arrayBuffer = cachedWorkbook?.arrayBuffer || null;
+      if (arrayBuffer) {
+        updateJob(jobId, { label: "Using cached workbook", percent: 50 });
+        setAnalysisProgress({ label: "Using cached workbook", percent: 50, sheetName: sheet });
+      } else {
+        updateJob(jobId, { label: "Downloading workbook", percent: 40 });
+        setAnalysisProgress({ label: "Downloading workbook", percent: 40, sheetName: sheet });
+
+        const downloadUrl = isGoogleSheet
+          ? `https://www.googleapis.com/drive/v3/files/${tabToLoad.driveFileId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&supportsAllDrives=true&t=${Date.now()}`
+          : `https://www.googleapis.com/drive/v3/files/${tabToLoad.driveFileId}?alt=media&supportsAllDrives=true&v=${meta.version}`;
+
+        const dlRes = await fetch(downloadUrl, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Cache-Control": "no-cache, no-store",
+          },
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!dlRes.ok) throw new Error("Failed to download file from Drive");
+
+        arrayBuffer = await dlRes.arrayBuffer();
+        setCurrentWorkbookCache({
+          driveFileId: tabToLoad.driveFileId,
+          fileName: meta.name || tabToLoad.fileName || fileName,
+          modifiedTime: meta.modifiedTime,
+          version: meta.version,
+          mimeType: meta.mimeType,
+          arrayBuffer,
+        });
+      }
+
       if (arrayBuffer.byteLength < 1000) {
         throw new Error("Drive returned an empty file. Make sure it's saved before refreshing.");
       }
+      updateJob(jobId, { label: "Analyzing sheet and headers", percent: 65 });
+      setAnalysisProgress({ label: "Analyzing sheet and headers", percent: 65, sheetName: sheet });
 
       const blob = new Blob([arrayBuffer], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
 
       const formData = new FormData();
-      formData.append("file", blob, fileName);
+      formData.append("file", blob, tabToLoad.fileName || fileName);
 
+      const analyzeQuery = new URLSearchParams({
+        sheet_name: sheet,
+        drive_file_id: tabToLoad.driveFileId,
+        drive_modified_time: meta.modifiedTime || tabToLoad?.driveModifiedTime || "",
+      });
       const res = await fetch(
-        `${HOST}/analyze-bytes?sheet_name=${encodeURIComponent(sheet)}`,
-        { method: "POST", body: formData }
+        `${HOST}/analyze-bytes?${analyzeQuery.toString()}`,
+        { method: "POST", body: formData, signal: controller.signal }
       );
       const result = await res.json();
+      updateJob(jobId, { label: "Updating dashboard", percent: 90 });
+      setAnalysisProgress({ label: "Updating dashboard", percent: 90, sheetName: sheet });
 
       if (result.error) {
         setSwitchError(result.error);
@@ -151,25 +386,100 @@ export default function DashboardPage() {
         throw new Error(result.error);
       }
 
-      setData(result.tableData);
-      setBlueprint(result.blueprint);
-      setCurrentSheet(result.currentSheet);
-      updateAnalysisTab(activeTabId, {
+      const nextPayload = {
         tableData: result.tableData,
         blueprint: result.blueprint,
         currentSheet: result.currentSheet,
-        allSheets: result.allSheets || allSheets,
-        driveModifiedTime: meta.modifiedTime || activeTab?.driveModifiedTime || null,
-        latestDriveModifiedTime: meta.modifiedTime || activeTab?.latestDriveModifiedTime || null,
-        isStale: false,
+        allSheets: result.allSheets || tabToLoad?.allSheets || [],
+        fileName: tabToLoad.fileName || fileName,
+        driveFileId: tabToLoad.driveFileId,
+        driveModifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
+        analysisSession: result.analysisSession || null,
+        folderId: tabToLoad?.folderId || null,
+        sourceUserEmail: tabToLoad?.sourceUserEmail || "",
+        sourceFolderName: tabToLoad?.sourceFolderName || "",
+      };
+
+      setAnalysisResultCache(nextPayload, {
+        requestedSheetName: sheet,
+        modifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
       });
-      setRefreshKey(k => k + 1); // force Dashboard remount with fresh state
-    } catch (err) {
+
+        updateAnalysisTab(targetTabId, {
+          tableData: result.tableData,
+          blueprint: result.blueprint,
+          currentSheet: result.currentSheet,
+          allSheets: result.allSheets || tabToLoad?.allSheets || [],
+          driveModifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || null,
+          analysisSession: result.analysisSession || null,
+          latestDriveModifiedTime: meta.modifiedTime || tabToLoad?.latestDriveModifiedTime || null,
+          isStale: false,
+        });
+      completeJob(jobId, nextPayload, {
+        suppressNotification: autoActivate && !backgroundedJobIdsRef.current.has(jobId),
+      });
+        if (autoActivate && !backgroundedJobIdsRef.current.has(jobId)) {
+          setData(result.tableData);
+          setBlueprint(result.blueprint);
+          setCurrentSheet(result.currentSheet);
+          if (targetTabId && targetTabId !== activeTabId) {
+            setActiveTabId(targetTabId);
+          }
+          if (forceRemount) {
+            setRefreshKey(k => k + 1); // force Dashboard remount with fresh state
+          }
+        }
+        return nextPayload;
+      } catch (err) {
+      if (err?.name === "AbortError") {
+        return null;
+      }
+      failJob(jobId, `Refresh failed: ${err.message}`);
       setSwitchError(`Refresh failed: ${err.message}`);
       throw err;
     } finally {
+      if (analysisAbortRef.current === controller) {
+        analysisAbortRef.current = null;
+      }
+      detachJobController(jobId);
+      if (foregroundJobIdRef.current === jobId) {
+        setForegroundJobId(null);
+      }
       setSwitching(false);
+      setAnalysisProgress(null);
     }
+  };
+
+  const cancelCurrentAnalysis = () => {
+    const currentForegroundJobId = foregroundJobIdRef.current;
+    if (currentForegroundJobId) {
+      backgroundedJobIdsRef.current.delete(currentForegroundJobId);
+      adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
+      abortJob(currentForegroundJobId);
+    } else {
+      analysisAbortRef.current?.abort();
+      analysisAbortRef.current = null;
+    }
+    setForegroundJobId(null);
+    setSwitching(false);
+    setAnalysisProgress(null);
+    setHydratingTabId(null);
+    setTabSwitching(false);
+    setSwitchError("");
+  };
+
+  const continueCurrentAnalysisInBackground = () => {
+    const currentForegroundJobId = foregroundJobIdRef.current;
+    if (!currentForegroundJobId || !data || !blueprint) return;
+    backgroundedJobIdsRef.current.add(currentForegroundJobId);
+    adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
+    markJobBackground(currentForegroundJobId);
+    setForegroundJobId(null);
+    setSwitching(false);
+    setAnalysisProgress(null);
+    setHydratingTabId(null);
+    setTabSwitching(false);
+    setSwitchError("");
   };
 
   useEffect(() => {
@@ -222,7 +532,7 @@ export default function DashboardPage() {
     setHydratingTabId(activeTab.id);
     setTabSwitching(false);
 
-    fetchSheetData(targetSheet)
+    fetchSheetData(targetSheet, { tabToLoad: activeTab, targetTabId: activeTab.id, autoActivate: true })
       .catch((error) => {
         if (!cancelled) setSwitchError(`Failed to restore saved analysis: ${error.message}`);
       })
@@ -241,7 +551,7 @@ export default function DashboardPage() {
 
   const switchSheet = async (sheet) => {
     if (switching) return;
-    await fetchSheetData(sheet).catch(() => {});
+    await fetchSheetData(sheet, { tabToLoad: activeTab, targetTabId: activeTabId, autoActivate: true }).catch(() => {});
   };
 
   const refreshDashboard = async () => {
@@ -251,18 +561,76 @@ export default function DashboardPage() {
       return;
     }
     setSwitchError("");
-    await fetchSheetData(targetSheet).catch(() => {});
+    await fetchSheetData(targetSheet, { tabToLoad: activeTab, targetTabId: activeTabId, autoActivate: true }).catch(() => {});
+  };
+
+  const refreshActiveAnalysisSession = async () => {
+    const targetSheet = currentSheet || activeTab?.currentSheet || allSheets[0] || "";
+    if (!targetSheet || switching || !activeTab) return null;
+    const refreshed = await fetchSheetData(targetSheet, {
+      tabToLoad: activeTab,
+      targetTabId: activeTabId,
+      autoActivate: true,
+      forceRemount: false,
+      ignoreAnalysisCache: true,
+    }).catch(() => null);
+    return refreshed?.analysisSession || null;
   };
 
   const handleSelectAnalysisTab = (tabId) => {
     if (!tabId || tabId === activeTabId || switching || tabSwitching || hydratingTabId) return;
+    const targetTab = tabs.find((tab) => tab.id === tabId);
+    if (!targetTab) return;
     setSwitchError("");
-    setTabSwitching(true);
     touchAnalysisTab(tabId);
-    setActiveTabId(tabId);
+    if (targetTab.tableData && targetTab.blueprint) {
+      setTabSwitching(true);
+      setActiveTabId(tabId);
+      return;
+    }
+    const targetSheet = targetTab.currentSheet || targetTab.allSheets?.[0] || "";
+    if (!targetSheet) {
+      setSwitchError("This saved analysis no longer has a sheet name.");
+      return;
+    }
+    setHydratingTabId(tabId);
+    setTabSwitching(false);
+    setAnalysisProgress({ label: "Checking Drive file", percent: 20, sheetName: targetSheet });
+    void fetchSheetData(targetSheet, { tabToLoad: targetTab, targetTabId: tabId, autoActivate: true })
+      .then(() => {
+        if (!backgroundedJobIdsRef.current.has(foregroundJobIdRef.current)) {
+          setHydratingTabId(null);
+        }
+      })
+      .catch((error) => {
+        setSwitchError(`Failed to restore saved analysis: ${error.message}`);
+        setHydratingTabId(null);
+      })
+      .finally(() => {
+        if (!backgroundedJobIdsRef.current.has(foregroundJobIdRef.current)) {
+          setHydratingTabId(null);
+        }
+      });
   };
 
   const isDashboardBusy = switching || tabSwitching || Boolean(hydratingTabId);
+  const busyLabel = analysisProgress?.label
+    || (hydratingTabId ? "Restoring saved analysis" : "Refreshing data");
+  const busyDetail = analysisProgress?.sheetName
+    || (hydratingTabId ? "Re-analyzing the saved workbook from Drive" : currentSheet);
+
+  const handleOpenBackgroundJob = (jobId) => {
+    const job = getJob(jobId);
+    if (!job?.resultPayload) return;
+    dismissNotification(jobId);
+    removeJob(jobId);
+    const tabId = openAnalysisTab(job.resultPayload);
+    setData(job.resultPayload.tableData || null);
+    setBlueprint(job.resultPayload.blueprint || null);
+    setCurrentSheet(job.resultPayload.currentSheet || "");
+    setRefreshKey((key) => key + 1);
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  };
 
   if (authLoading) return null;
   if (!user || !accessToken || !activeTab) return null;
@@ -287,6 +655,9 @@ export default function DashboardPage() {
       .dashboard-sidebar:focus-within {
         transform: translateX(0);
       }
+      .dashboard-sidebar.is-open {
+        transform: translateX(0);
+      }
       .dashboard-main {
         margin-left: 20px;
         width: calc(100% - 20px);
@@ -297,12 +668,20 @@ export default function DashboardPage() {
       }
       @media (max-width: 900px) {
         .dashboard-sidebar {
-          position: static;
-          width: 100%;
-          height: auto;
-          transform: none;
-          border-right: none;
-          border-bottom: 1px solid var(--color-border);
+          position: fixed;
+          width: min(88vw, 390px);
+          height: 100vh;
+          transform: translateX(-105%);
+          border-right: 1px solid var(--color-border);
+          border-bottom: none;
+          box-shadow: 18px 0 48px rgba(6, 24, 17, 0.18);
+        }
+        .dashboard-sidebar:hover,
+        .dashboard-sidebar:focus-within {
+          transform: translateX(-105%);
+        }
+        .dashboard-sidebar.is-open {
+          transform: translateX(0);
         }
         .dashboard-main {
           margin-left: 0;
@@ -351,17 +730,33 @@ export default function DashboardPage() {
       }
     `}</style>
     <div className="min-h-screen w-screen" style={{ backgroundColor: "var(--color-bg)" }}>
-      <aside className="dashboard-sidebar">
+      <button
+        type="button"
+        className={`ui-sidebar-backdrop ${isSidebarOpen ? "is-open" : ""}`}
+        style={{ padding: 0, border: "none" }}
+        aria-label="Close sidebar"
+        onClick={() => setIsSidebarOpen(false)}
+      />
+      <aside className={`dashboard-sidebar ${isSidebarOpen ? "is-open" : ""}`}>
         <Sidebar
           folder={{ name: fileName }}
           files={[]}
           filesLoading={isDashboardBusy}
           onSelectFolder={null}
-          onRefresh={refreshDashboard}
-          onBack={() => navigate("/")}
+          onRefresh={() => {
+            setIsSidebarOpen(false);
+            refreshDashboard();
+          }}
+          onBack={() => {
+            setIsSidebarOpen(false);
+            navigate("/");
+          }}
           analysisTabs={tabs}
           activeAnalysisTabId={activeTabId}
-          onSelectAnalysisTab={handleSelectAnalysisTab}
+          onSelectAnalysisTab={(tabId) => {
+            setIsSidebarOpen(false);
+            handleSelectAnalysisTab(tabId);
+          }}
           onCloseAnalysisTab={closeAnalysisTab}
           onRenameAnalysisTab={renameAnalysisTab}
           onTogglePinAnalysisTab={togglePinAnalysisTab}
@@ -384,6 +779,19 @@ export default function DashboardPage() {
             className="dashboard-topbar-inner flex items-center gap-4"
             style={{ width: "100%", padding: "12px 32px", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}
           >
+            <button
+              type="button"
+              className="ui-sidebar-toggle"
+              aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+              aria-expanded={isSidebarOpen}
+              onClick={() => setIsSidebarOpen((current) => !current)}
+            >
+              {isSidebarOpen ? (
+                <X size={22} strokeWidth={2.5} color="currentColor" aria-hidden="true" />
+              ) : (
+                <Menu size={22} strokeWidth={2.5} color="currentColor" aria-hidden="true" />
+              )}
+            </button>
             <div className="flex items-center gap-2 min-w-0">
               <img src={lifewoodIconSquared} alt="Workbook" className="w-5 h-5 shrink-0" />
               <span className="text-sm font-semibold truncate" style={{ color: "var(--color-text)" }}>
@@ -432,7 +840,14 @@ export default function DashboardPage() {
         {/* Dashboard + loading overlay */}
         <div style={{ position: "relative", flex: 1 }}>
           {data && blueprint && (
-            <Dashboard key={`${activeTabId}-${refreshKey}`} data={data} blueprint={blueprint} fileId={driveFileId} />
+            <Dashboard
+              key={`${activeTabId}-${refreshKey}`}
+              data={data}
+              blueprint={blueprint}
+              fileId={driveFileId}
+              analysisSession={activeTab?.analysisSession || null}
+              onAnalysisSessionExpired={refreshActiveAnalysisSession}
+            />
           )}
 
           {(isDashboardBusy || !data || !blueprint) && (
@@ -452,12 +867,71 @@ export default function DashboardPage() {
                   <LoaderCircle className="h-8 w-8 animate-spin" style={{ color: "var(--color-castleton-green)" }} aria-hidden="true" />
                 )}
                 <p style={{ fontFamily: "'Manrope', sans-serif", fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: "0.05em", margin: 0 }}>
-                  Refreshing data…
+                  {busyLabel}
                 </p>
-                {hydratingTabId && (
-                  <p style={{ fontSize: 12, fontWeight: 700, color: "#fff", margin: 0 }}>
-                    Restoring saved analysis...
+                {busyDetail && !switchError && (
+                  <p style={{ maxWidth: 420, textAlign: "center", fontSize: 12, fontWeight: 700, color: "#fff", margin: 0, opacity: 0.88 }}>
+                    {busyDetail}
                   </p>
+                )}
+                {analysisProgress && !switchError && (
+                  <div style={{ width: 260, maxWidth: "70vw" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "#fff", fontSize: 11, fontWeight: 800, marginBottom: 6 }}>
+                      <span>Analysis progress</span>
+                      <span>{analysisProgress.percent}%</span>
+                    </div>
+                    <div style={{ height: 7, overflow: "hidden", borderRadius: 999, background: "rgba(255,255,255,0.22)" }}>
+                      <div
+                        style={{
+                          width: `${analysisProgress.percent}%`,
+                          height: "100%",
+                          borderRadius: 999,
+                          background: "linear-gradient(90deg, var(--color-castleton-green), var(--color-saffron))",
+                          transition: "width 0.45s ease",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                {analysisProgress && !switchError && (
+                  data && blueprint && (
+                    <button
+                      type="button"
+                      onClick={continueCurrentAnalysisInBackground}
+                      style={{
+                        marginTop: 2,
+                        padding: "8px 14px",
+                        borderRadius: 12,
+                        border: "1px solid rgba(255,255,255,0.28)",
+                        background: "rgba(255,255,255,0.12)",
+                        color: "#fff",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Continue in background
+                    </button>
+                  )
+                )}
+                {analysisProgress && !switchError && (
+                  <button
+                    type="button"
+                    onClick={cancelCurrentAnalysis}
+                    style={{
+                      marginTop: 2,
+                      padding: "8px 14px",
+                      borderRadius: 12,
+                      border: "1px solid rgba(255,255,255,0.28)",
+                      background: "rgba(255,255,255,0.12)",
+                      color: "#fff",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
                 )}
                 {switchError && (
                   <p style={{ maxWidth: 360, textAlign: "center", fontSize: 12, fontWeight: 600, color: "#fff", margin: 0 }}>
@@ -491,6 +965,8 @@ export default function DashboardPage() {
           </button>
         )}
       </div>
+      <BackgroundAnalysisDock />
+      <BackgroundAnalysisToasts onOpenJob={handleOpenBackgroundJob} />
     </div>
     </>
   );

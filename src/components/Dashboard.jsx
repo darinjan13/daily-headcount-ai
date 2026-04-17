@@ -67,6 +67,58 @@ function detectCategoryColumns(headers, rows, dateCol) {
   });
 }
 
+function isMostlyNumericColumn(data, column) {
+  const vals = data
+    .slice(0, 500)
+    .map(row => row?.[column])
+    .filter(v => v !== null && v !== undefined && String(v).trim() !== "");
+  if (!vals.length) return false;
+  const numericCount = vals.filter(v => !Number.isNaN(Number(String(v).replace(/,/g, "").replace("%", "")))).length;
+  return numericCount / vals.length >= 0.7;
+}
+
+function isMostlyDateColumn(data, column) {
+  const vals = data
+    .slice(0, 500)
+    .map(row => row?.[column])
+    .filter(v => v !== null && v !== undefined && String(v).trim() !== "");
+  if (!vals.length) return false;
+  const dateCount = vals.filter(v => !!parseDateValue(v)).length;
+  return dateCount / vals.length >= 0.7 || (/date|day|period|month|year|time/i.test(column) && dateCount / vals.length >= 0.35);
+}
+
+function validateChartSpecForData(spec, data, headers) {
+  if (!spec) return { ok: false, reason: "No chart spec returned." };
+  const type = spec.type || spec.chartType || "bar";
+  const xCol = spec.x || spec.xCol || spec.rowDim || null;
+  const yCol = spec.y || spec.measure || null;
+
+  if (type === "pivot") {
+    if (!spec.rowDim || !spec.measure) return { ok: false, reason: "Pivot needs a row dimension and measure." };
+    if (!headers.includes(spec.rowDim) || !headers.includes(spec.measure)) return { ok: false, reason: "Pivot references missing columns." };
+    if ((spec.aggregation || "sum") !== "count" && !isMostlyNumericColumn(data, spec.measure)) {
+      return { ok: false, reason: `"${spec.measure}" is not numeric enough to use as a pivot measure.` };
+    }
+    if (isMostlyNumericColumn(data, spec.rowDim) && !isMostlyDateColumn(data, spec.rowDim)) {
+      return { ok: false, reason: `"${spec.rowDim}" is numeric, so it is not a good pivot row category.` };
+    }
+    return { ok: true };
+  }
+
+  if (!xCol || !yCol) return { ok: false, reason: "Chart needs both x and y columns." };
+  if (!headers.includes(xCol) || !headers.includes(yCol)) return { ok: false, reason: "Chart references missing columns." };
+  if (xCol === yCol) return { ok: false, reason: "Chart x and y columns cannot be the same." };
+  if (!isMostlyNumericColumn(data, yCol)) return { ok: false, reason: `"${yCol}" is not numeric enough to chart as a measure.` };
+  if (type === "line" && !isMostlyDateColumn(data, xCol)) {
+    return { ok: false, reason: `Line charts need a date/time x column, but "${xCol}" is not date-like.` };
+  }
+  if (type !== "line" && isMostlyNumericColumn(data, xCol) && !isMostlyDateColumn(data, xCol)) {
+    return { ok: false, reason: `"${xCol}" is numeric, so it is not a good chart category.` };
+  }
+
+  return { ok: true };
+}
+
 function formatNum(v, hint) {
   if (hint==="currency") return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(v);
   if (hint==="percent") return `${Number(v).toFixed(1)}%`;
@@ -171,6 +223,19 @@ function getMonthRange(dateKey) {
 function getMonthStart(dateKey) {
   const [y,m]=dateKey.split("-").map(Number);
   return `${y}-${String(m).padStart(2,"0")}-01`;
+}
+
+function isSummaryRowValue(value) {
+  if (!value) return false;
+  const text = String(value).toLowerCase().trim();
+  return (
+    text === "total" ||
+    text === "grand total" ||
+    text === "sub total" ||
+    text === "overall" ||
+    text.startsWith("total ") ||
+    text.endsWith(" total")
+  );
 }
 function formatWeekLabel(dateKey) {
   const { start, end } = getWeekRange(dateKey);
@@ -768,8 +833,8 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
     const top = ranked[0].value;
     return (
       <div style={{background:UI.surfaceElevated,borderRadius:16,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,fontFamily:"'Manrope',sans-serif"}}
-        onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(19,48,32,0.11)"}}
-        onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
+        onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 8px 24px rgba(19,48,32,0.11)"}}
+        onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div>
             <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>{title}</div>
@@ -818,9 +883,9 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
       {cards.map((card,idx)=>{
         const accent=accents[idx%accents.length];
         return (
-          <div key={card.id||idx} style={{background:UI.surfaceElevated,borderRadius:14,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,transition:"transform 0.2s,box-shadow 0.2s"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.24)"}}
-            onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="var(--color-shadow-soft)"}}>
+          <div key={card.id||idx} style={{background:UI.surfaceElevated,borderRadius:14,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,transition:"box-shadow 0.2s ease"}}
+            onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.24)"}}
+            onMouseLeave={e=>{e.currentTarget.style.boxShadow="var(--color-shadow-soft)"}}>
              <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{card.label}</div>
              <div style={{fontSize:30,fontWeight:800,color:accent,letterSpacing:"-0.03em",lineHeight:1}}>{formatNum(card.value,card.formatHint)}</div>
            </div>
@@ -896,12 +961,28 @@ function getCardPixelWidth(span, workspaceWidth) {
 
 function buildChartLayouts(cards, previousLayouts, workspaceWidth) {
   const gap = 20;
-  const existingBottom = cards.reduce((maxBottom, card) => {
-    const prev = previousLayouts?.[card.id];
-    if (typeof prev?.x !== "number" || typeof prev?.y !== "number") return maxBottom;
-    return Math.max(maxBottom, prev.y + (prev.height ?? getChartWorkspaceDefault(card).height));
-  }, 0);
-  let nextStackY = existingBottom > 0 ? existingBottom + gap : 0;
+  const safeWidth = Math.max(workspaceWidth || 0, 360);
+  const storedLayouts = cards
+    .map(card => previousLayouts?.[card.id])
+    .filter(layout => typeof layout?.x === "number" && typeof layout?.y === "number");
+  const hasManualLayout = storedLayouts.some(layout => Math.abs(layout.x) > 2);
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+
+  const getNextPackedPosition = (span, height) => {
+    const cardWidth = getCardPixelWidth(span, safeWidth);
+    if (cursorX > 0 && cursorX + cardWidth > safeWidth) {
+      cursorX = 0;
+      cursorY += rowHeight + gap;
+      rowHeight = 0;
+    }
+
+    const position = { x: cursorX, y: cursorY };
+    cursorX += cardWidth + gap;
+    rowHeight = Math.max(rowHeight, height);
+    return position;
+  };
 
   return cards.reduce((acc, card) => {
     const defaults = getChartWorkspaceDefault(card);
@@ -909,18 +990,16 @@ function buildChartLayouts(cards, previousLayouts, workspaceWidth) {
     const span = prev.span ?? defaults.span;
     const height = prev.height ?? defaults.height;
     const hasStoredPosition = typeof prev.x === "number" && typeof prev.y === "number";
+    const shouldPreservePosition = hasStoredPosition && hasManualLayout;
+    const packedPosition = shouldPreservePosition ? null : getNextPackedPosition(span, height);
 
     acc[card.id] = {
       span,
       height,
       hidden: prev.hidden ?? false,
-      x: hasStoredPosition ? prev.x : 0,
-      y: hasStoredPosition ? prev.y : nextStackY,
+      x: shouldPreservePosition ? prev.x : packedPosition.x,
+      y: shouldPreservePosition ? prev.y : packedPosition.y,
     };
-
-    if (!hasStoredPosition) {
-      nextStackY += height + gap;
-    }
 
     return acc;
   }, {});
@@ -975,25 +1054,19 @@ function WindowActionButton({ label, title, active = false, tone = "neutral", co
         justifyContent: "center",
         gap: 6,
         boxShadow: active ? `0 8px 16px ${theme.glow}` : "0 1px 2px rgba(19, 48, 32, 0.06)",
-        transition: "transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease",
+        transition: "box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease",
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.transform = "translateY(-1px)";
         e.currentTarget.style.boxShadow = `0 10px 18px ${theme.glow}`;
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.transform = "translateY(0)";
         e.currentTarget.style.boxShadow = active ? `0 8px 16px ${theme.glow}` : "0 1px 2px rgba(19, 48, 32, 0.06)";
       }}
       onMouseDown={e => {
         e.stopPropagation();
-        e.currentTarget.style.transform = "translateY(1px) scale(0.98)";
       }}
       onPointerDown={e => {
         e.stopPropagation();
-      }}
-      onMouseUp={e => {
-        e.currentTarget.style.transform = "translateY(-1px)";
       }}
     >
       {label}
@@ -1066,8 +1139,8 @@ function MacWindowControls({
             padding: 0,
             cursor: control.enabled ? "pointer" : "not-allowed",
             boxShadow: hovered && control.enabled ? "0 4px 10px rgba(0,0,0,0.14)" : "none",
-            transform: hovered && control.enabled ? "translateY(-1px)" : "translateY(0)",
-            transition: "transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease",
+            transform: "none",
+            transition: "box-shadow 0.16s ease, filter 0.16s ease",
             filter: control.enabled ? "saturate(1)" : "saturate(0.6)",
             fontSize: 8,
             fontWeight: 800,
@@ -1274,7 +1347,7 @@ function ChartWorkspaceCard({
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 
-export default function Dashboard({ data, blueprint, fileId }) {
+export default function Dashboard({ data, blueprint, fileId, analysisSession = null, onAnalysisSessionExpired = null }) {
   const { headers, rows } = data;
 
   // filteredTables now persisted via usePins
@@ -1309,10 +1382,30 @@ export default function Dashboard({ data, blueprint, fileId }) {
 
 
   // Object data
-  const objectData = useMemo(()=>
-    rows.map(row=>Object.fromEntries(headers.map((h,i)=>[h,row[i]]))).filter(row=>
-      !Object.values(row).some(v=>{ if(!v)return false; const s=String(v).toLowerCase().trim(); return s==="total"||s==="grand total"||s==="sub total"||s==="overall"||s.startsWith("total ")||s.endsWith(" total"); })
-    ), [headers,rows]);
+  const objectData = useMemo(() => {
+    if (!rows?.length || !headers?.length) return [];
+
+    const output = [];
+    for (const row of rows) {
+      const record = {};
+      let isSummaryRow = false;
+
+      for (let index = 0; index < headers.length; index += 1) {
+        const header = headers[index];
+        const value = row?.[index];
+        record[header] = value;
+        if (!isSummaryRow && isSummaryRowValue(value)) {
+          isSummaryRow = true;
+        }
+      }
+
+      if (!isSummaryRow) {
+        output.push(record);
+      }
+    }
+
+    return output;
+  }, [headers, rows]);
 
   const dateCol = useMemo(()=>detectDateColumn(headers,objectData,isWide,data.dateCols),[headers,objectData,isWide,data.dateCols]);
   const categoryColumns = useMemo(()=>detectCategoryColumns(headers,objectData,dateCol),[headers,objectData,dateCol]);
@@ -1331,10 +1424,12 @@ export default function Dashboard({ data, blueprint, fileId }) {
     return result;
   },[objectData,filters,dateCol]);
 
-  const filteredRows = useMemo(()=>filteredData.map(row=>headers.map(h=>row[h]===undefined?null:row[h])),[filteredData,headers]);
   // Rebuild saved charts from Firestore — recompute chartData/pivotData from their spec
   // Must be after filteredData is defined
   const rebuiltSavedCharts = useMemo(() => {
+    if (activeView !== "charts") {
+      return savedCustomCharts;
+    }
     return savedCustomCharts.map(c => {
       if (c.type === "pivot" && c.xCol && !c.pivotData) {
         return { ...c, pivotData: generatePivot(filteredData, c.xCol, null, null, "sum") };
@@ -1344,7 +1439,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
       }
       return c;
     });
-  }, [savedCustomCharts, filteredData]);
+  }, [activeView, savedCustomCharts, filteredData]);
 
   // Merge session charts with rebuilt Firestore charts
   const allCustomCharts = [
@@ -1445,6 +1540,11 @@ export default function Dashboard({ data, blueprint, fileId }) {
   // Build a chart result from a spec, applying limit/sort/row-filters
   const buildChartResult = (spec, id) => {
     if (!spec) return null;
+    const validation = validateChartSpecForData(spec, filteredData, headers);
+    if (!validation.ok) {
+      console.warn("[chat-chart] Rejected invalid chart:", validation.reason, spec);
+      return null;
+    }
     let data = filteredData;
     if (spec.filters?.length) {
       data = data.filter(row => spec.filters.every(({ column, operator, value }) => {
@@ -1620,13 +1720,17 @@ export default function Dashboard({ data, blueprint, fileId }) {
     } else if (chartSpec) {
       const modifyId = targetId || updateChartId || (action === "modify" ? chartSpec.targetId : null);
       if (modifyId) {
+        let updatedAny = false;
         setCustomCharts(prev => prev.map(c => {
           if (String(c.id) !== String(modifyId)) return c;
-          return buildChartResult(chartSpec, c.id) || c;
+          const updated = buildChartResult(chartSpec, c.id);
+          if (updated) updatedAny = true;
+          return updated || c;
         }));
         const updated = buildChartResult(chartSpec, modifyId);
         if (updated) addCustomChart(updated);
         setActiveView("charts");
+        return updatedAny || Boolean(updated);
       } else {
         const id = chartSpec._chatId || Date.now();
         const result = buildChartResult(chartSpec, id);
@@ -1638,7 +1742,9 @@ export default function Dashboard({ data, blueprint, fileId }) {
             window.__pendingCharts[String(id)] = result;
           }
           setActiveView("charts");
+          return true;
         }
+        return false;
       }
     }
   };
@@ -2118,10 +2224,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
             />
             <DataTable
               headers={isWide ? wideVisibleHeaders : headers}
-              rows={isWide
-                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
-                : filteredRows
-              }
+              displayHeaderRows={isWide ? null : data.displayHeaderRows}
+              rows={isWide ? wideFilteredData : filteredData}
             />
           </Section>
 
@@ -2285,7 +2389,17 @@ export default function Dashboard({ data, blueprint, fileId }) {
         </>
       )}
 
-      <DataChatbot headers={headers} rows={filteredRows} blueprint={blueprint} onResult={handleChatResult} customCharts={allCustomCharts.map(c=>({...c, pinned: isPinned(String(c.id))}))} filteredTables={filteredTables.map(t=>({...t, pinned: isPinned(String(t.id))}))}/>
+      <DataChatbot
+        headers={headers}
+        rows={analysisSession?.sessionId ? [] : rows}
+        columnContexts={data.columnContexts || {}}
+        blueprint={blueprint}
+        analysisSession={analysisSession}
+        onAnalysisSessionExpired={onAnalysisSessionExpired}
+        onResult={handleChatResult}
+        customCharts={allCustomCharts.map(c=>({...c, pinned: isPinned(String(c.id))}))}
+        filteredTables={filteredTables.map(t=>({...t, pinned: isPinned(String(t.id))}))}
+      />
     </div>
   );
 }
