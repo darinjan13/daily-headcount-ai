@@ -596,9 +596,9 @@ button:disabled {
 
 :root[data-theme="dark"] .login-glass-card {
   background:
-    radial-gradient(120% 90% at 5% 10%, rgba(255, 195, 112, 0.12), transparent 60%),
-    radial-gradient(90% 70% at 95% 0%, rgba(4, 98, 65, 0.25), transparent 65%),
-    linear-gradient(145deg, rgba(22, 38, 30, 0.85), rgba(30, 49, 40, 0.7));
+    radial-gradient(120% 90% at 5% 10%, rgba(245, 238, 219, 0.72), transparent 60%),
+    radial-gradient(90% 70% at 95% 0%, rgba(4, 98, 65, 0.14), transparent 65%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(249, 247, 247, 0.66));
 }
 
 .login-google-wave-btn {
