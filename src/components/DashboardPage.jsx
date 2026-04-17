@@ -11,6 +11,7 @@ import Sidebar from "./Sidebar";
 import { ChevronUp, LoaderCircle, Menu, X } from "lucide-react";
 import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
 import { getAnalysisResultCache, setAnalysisResultCache } from "../utils/analysisResultCache";
+import { makeAnalysisRequestKey } from "../utils/analysisRequestKey";
 import { getCurrentWorkbookCache, setCurrentWorkbookCache } from "../utils/workbookCache";
 
 const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
@@ -43,6 +44,7 @@ export default function DashboardPage() {
     markJobBackground,
     removeJob,
     getJob,
+    getJobByRequestKey,
     dismissNotification,
   } = useAnalysisJobs();
   const state = location.state;
@@ -62,6 +64,7 @@ export default function DashboardPage() {
   const [foregroundJobId, setForegroundJobId] = useState(null);
   const foregroundJobIdRef = useRef(null);
   const backgroundedJobIdsRef = useRef(new Set());
+  const adoptedForegroundJobIdsRef = useRef(new Set());
 
   // Drive info for sheet switching
   const driveFileId = activeTab?.driveFileId || null;
@@ -132,6 +135,46 @@ export default function DashboardPage() {
     foregroundJobIdRef.current = foregroundJobId;
   }, [foregroundJobId]);
 
+  const foregroundJob = foregroundJobId ? getJob(foregroundJobId) : null;
+
+  useEffect(() => {
+    if (!foregroundJob || foregroundJob.status !== "running") return;
+    setAnalysisProgress({
+      label: foregroundJob.label || "Analyzing workbook",
+      percent: foregroundJob.percent ?? 45,
+      sheetName: foregroundJob.sheetName || "",
+    });
+  }, [foregroundJob]);
+
+  useEffect(() => {
+    if (
+      !foregroundJob
+      || foregroundJob.status !== "completed"
+      || !foregroundJob.resultPayload
+      || !adoptedForegroundJobIdsRef.current.has(foregroundJob.id)
+    ) {
+      return;
+    }
+
+    adoptedForegroundJobIdsRef.current.delete(foregroundJob.id);
+    backgroundedJobIdsRef.current.delete(foregroundJob.id);
+    dismissNotification(foregroundJob.id);
+    removeJob(foregroundJob.id);
+    const tabId = openAnalysisTab(foregroundJob.resultPayload);
+    setData(foregroundJob.resultPayload.tableData || null);
+    setBlueprint(foregroundJob.resultPayload.blueprint || null);
+    setCurrentSheet(foregroundJob.resultPayload.currentSheet || "");
+    setActiveTabId(tabId);
+    setRefreshKey((key) => key + 1);
+    setForegroundJobId(null);
+    setSwitching(false);
+    setAnalysisProgress(null);
+    setHydratingTabId(null);
+    setTabSwitching(false);
+    setSwitchError("");
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  }, [foregroundJob, dismissNotification, removeJob, openAnalysisTab, setActiveTabId, navigate]);
+
   const fetchSheetData = async (sheet, options = {}) => {
     const {
       tabToLoad = activeTab,
@@ -145,6 +188,55 @@ export default function DashboardPage() {
       throw new Error("No Drive file available for this analysis.");
     }
 
+    const knownModifiedTime = tabToLoad.driveModifiedTime || tabToLoad.latestDriveModifiedTime || "";
+    const knownRequestKey = makeAnalysisRequestKey({
+      driveFileId: tabToLoad.driveFileId,
+      sheetName: sheet,
+      modifiedTime: knownModifiedTime,
+    });
+    const existingJob = getJobByRequestKey(knownRequestKey);
+
+    if (existingJob?.status === "completed" && existingJob.resultPayload) {
+      dismissNotification(existingJob.id);
+      removeJob(existingJob.id);
+      updateAnalysisTab(targetTabId, {
+        tableData: existingJob.resultPayload.tableData,
+        blueprint: existingJob.resultPayload.blueprint,
+        currentSheet: existingJob.resultPayload.currentSheet || sheet,
+        allSheets: existingJob.resultPayload.allSheets || tabToLoad?.allSheets || [],
+        driveModifiedTime: existingJob.resultPayload.driveModifiedTime || knownModifiedTime || null,
+        analysisSession: existingJob.resultPayload.analysisSession || null,
+        latestDriveModifiedTime: existingJob.resultPayload.driveModifiedTime || knownModifiedTime || null,
+        isStale: false,
+      });
+      if (autoActivate) {
+        setData(existingJob.resultPayload.tableData || null);
+        setBlueprint(existingJob.resultPayload.blueprint || null);
+        setCurrentSheet(existingJob.resultPayload.currentSheet || sheet);
+        if (targetTabId && targetTabId !== activeTabId) {
+          setActiveTabId(targetTabId);
+        }
+        if (forceRemount) {
+          setRefreshKey((key) => key + 1);
+        }
+      }
+      return existingJob.resultPayload;
+    }
+
+    if (existingJob?.status === "running") {
+      backgroundedJobIdsRef.current.delete(existingJob.id);
+      adoptedForegroundJobIdsRef.current.add(existingJob.id);
+      setForegroundJobId(existingJob.id);
+      setSwitching(true);
+      setAnalysisProgress({
+        label: existingJob.label || "Analyzing workbook",
+        percent: existingJob.percent ?? 45,
+        sheetName: existingJob.sheetName || sheet,
+      });
+      setSwitchError("");
+      return null;
+    }
+
     if (analysisAbortRef.current) {
       analysisAbortRef.current.abort();
     }
@@ -156,6 +248,7 @@ export default function DashboardPage() {
       sheetName: sheet,
       label: "Checking Drive file",
       percent: 20,
+      requestKey: knownRequestKey,
     });
     attachJobController(jobId, controller);
     setForegroundJobId(jobId);
@@ -172,6 +265,13 @@ export default function DashboardPage() {
       if (!metaRes.ok) throw new Error(`Drive metadata error: ${metaRes.status}`);
       const meta = await metaRes.json();
       const isGoogleSheet = meta.mimeType === "application/vnd.google-apps.spreadsheet";
+      updateJob(jobId, {
+        requestKey: makeAnalysisRequestKey({
+          driveFileId: tabToLoad.driveFileId,
+          sheetName: sheet,
+          modifiedTime: meta.modifiedTime || tabToLoad?.driveModifiedTime || "",
+        }),
+      });
       const cachedAnalysis = ignoreAnalysisCache ? null : getAnalysisResultCache({
         driveFileId: tabToLoad.driveFileId,
         sheetName: sheet,
@@ -354,6 +454,7 @@ export default function DashboardPage() {
     const currentForegroundJobId = foregroundJobIdRef.current;
     if (currentForegroundJobId) {
       backgroundedJobIdsRef.current.delete(currentForegroundJobId);
+      adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
       abortJob(currentForegroundJobId);
     } else {
       analysisAbortRef.current?.abort();
@@ -371,6 +472,7 @@ export default function DashboardPage() {
     const currentForegroundJobId = foregroundJobIdRef.current;
     if (!currentForegroundJobId || !data || !blueprint) return;
     backgroundedJobIdsRef.current.add(currentForegroundJobId);
+    adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
     markJobBackground(currentForegroundJobId);
     setForegroundJobId(null);
     setSwitching(false);

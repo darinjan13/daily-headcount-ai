@@ -30,7 +30,8 @@ import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 import { getAnalysisResultCache, setAnalysisResultCache } from "../utils/analysisResultCache";
-import { setCurrentWorkbookCache } from "../utils/workbookCache";
+import { makeAnalysisRequestKey } from "../utils/analysisRequestKey";
+import { getCurrentWorkbookCache, setCurrentWorkbookCache } from "../utils/workbookCache";
 
 const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
 const ADMIN_ROOT_FOLDER_ID = import.meta.env.VITE_ADMIN_ROOT_FOLDER_ID || "";
@@ -542,6 +543,7 @@ export default function HomePage() {
     detachJobController,
     dismissNotification,
     markJobBackground,
+    getJobByRequestKey,
   } = useAnalysisJobs();
   const { openFolderPicker } = useDrivePicker();
   const {
@@ -577,6 +579,7 @@ export default function HomePage() {
   const isMountedRef = useRef(true);
   const foregroundJobIdRef = useRef(null);
   const backgroundedJobIdsRef = useRef(new Set());
+  const adoptedForegroundJobIdsRef = useRef(new Set());
 
   useEffect(() => {
     const handleResize = () => {
@@ -603,6 +606,39 @@ export default function HomePage() {
   useEffect(() => {
     foregroundJobIdRef.current = foregroundJobId;
   }, [foregroundJobId]);
+
+  const foregroundJob = foregroundJobId ? getJob(foregroundJobId) : null;
+
+  useEffect(() => {
+    if (!foregroundJob || foregroundJob.status !== "running") return;
+    setAnalysisProgress({
+      fileName: foregroundJob.fileName,
+      sheetName: foregroundJob.sheetName,
+      label: foregroundJob.label,
+      percent: foregroundJob.percent,
+    });
+  }, [foregroundJob]);
+
+  useEffect(() => {
+    if (
+      !foregroundJob
+      || foregroundJob.status !== "completed"
+      || !foregroundJob.resultPayload
+      || !adoptedForegroundJobIdsRef.current.has(foregroundJob.id)
+    ) {
+      return;
+    }
+
+    adoptedForegroundJobIdsRef.current.delete(foregroundJob.id);
+    backgroundedJobIdsRef.current.delete(foregroundJob.id);
+    dismissNotification(foregroundJob.id);
+    removeJob(foregroundJob.id);
+    const tabId = openAnalysisTab(foregroundJob.resultPayload);
+    setForegroundJobId(null);
+    setOpeningFile(null);
+    setAnalysisProgress(null);
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  }, [foregroundJob, dismissNotification, removeJob, openAnalysisTab, navigate]);
 
   useEffect(() => {
     try {
@@ -840,6 +876,44 @@ export default function HomePage() {
   };
 
   const handleOpenFile = (file, sheetName = "") => {
+    const requestKey = makeAnalysisRequestKey({
+      driveFileId: file.id,
+      sheetName,
+      modifiedTime: file.modifiedTime,
+    });
+    const existingJob = getJobByRequestKey(requestKey);
+
+    if (existingJob?.status === "completed" && existingJob.resultPayload) {
+      dismissNotification(existingJob.id);
+      removeJob(existingJob.id);
+      const tabId = openAnalysisTab({
+        ...existingJob.resultPayload,
+        fileName: file.name,
+        driveFileId: file.id,
+        driveModifiedTime: file.modifiedTime,
+        folderId: folder?.id,
+        sourceUserEmail: isAdmin ? folder?.name : user?.email,
+        sourceFolderName: folder?.name,
+      });
+      navigate("/dashboard", { state: { targetTabId: tabId } });
+      return;
+    }
+
+    if (existingJob?.status === "running") {
+      backgroundedJobIdsRef.current.delete(existingJob.id);
+      adoptedForegroundJobIdsRef.current.add(existingJob.id);
+      setForegroundJobId(existingJob.id);
+      setOpeningFile(file.id);
+      setAnalysisProgress({
+        fileName: existingJob.fileName || file.name,
+        sheetName: existingJob.sheetName || sheetName,
+        label: existingJob.label || "Analyzing workbook",
+        percent: existingJob.percent ?? 45,
+      });
+      setOpenError("");
+      return;
+    }
+
     const cachedAnalysis = getAnalysisResultCache({
       driveFileId: file.id,
       sheetName: sheetName || "",
@@ -872,6 +946,7 @@ export default function HomePage() {
       sheetName,
       label: "Downloading workbook from Drive",
       percent: 20,
+      requestKey,
     });
     const controller = new AbortController();
     attachJobController(jobId, controller);
@@ -888,19 +963,55 @@ export default function HomePage() {
 
     void (async () => {
       try {
-        const { arrayBuffer, meta } = await downloadFile(file.id, accessToken, controller.signal);
-        setCurrentWorkbookCache({
+        const cachedWorkbook = getCurrentWorkbookCache({
           driveFileId: file.id,
-          fileName: file.name,
-          modifiedTime: meta?.modifiedTime || file.modifiedTime,
-          version: meta?.version,
-          mimeType: meta?.mimeType || file.mimeType,
-          arrayBuffer,
+          modifiedTime: file.modifiedTime,
         });
+        let arrayBuffer = cachedWorkbook?.arrayBuffer || null;
+        let meta = cachedWorkbook
+          ? {
+            name: cachedWorkbook.fileName || file.name,
+            modifiedTime: cachedWorkbook.modifiedTime || file.modifiedTime,
+            version: cachedWorkbook.version,
+            mimeType: cachedWorkbook.mimeType || file.mimeType,
+          }
+          : null;
+
+        if (arrayBuffer) {
+          updateJob(jobId, {
+            label: "Using cached workbook",
+            percent: 35,
+          });
+          if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+            setAnalysisProgress({
+              fileName: file.name,
+              sheetName,
+              label: "Using cached workbook",
+              percent: 35,
+            });
+          }
+        } else {
+          const downloaded = await downloadFile(file.id, accessToken, controller.signal);
+          arrayBuffer = downloaded.arrayBuffer;
+          meta = downloaded.meta;
+          setCurrentWorkbookCache({
+            driveFileId: file.id,
+            fileName: file.name,
+            modifiedTime: meta?.modifiedTime || file.modifiedTime,
+            version: meta?.version,
+            mimeType: meta?.mimeType || file.mimeType,
+            arrayBuffer,
+          });
+        }
 
         updateJob(jobId, {
           label: "Reading workbook and detecting headers",
           percent: 45,
+          requestKey: makeAnalysisRequestKey({
+            driveFileId: file.id,
+            sheetName,
+            modifiedTime: meta?.modifiedTime || file.modifiedTime,
+          }),
         });
         if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
           setAnalysisProgress({
@@ -1036,6 +1147,7 @@ export default function HomePage() {
     const currentForegroundJobId = foregroundJobIdRef.current;
     if (currentForegroundJobId) {
       backgroundedJobIdsRef.current.delete(currentForegroundJobId);
+      adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
       abortJob(currentForegroundJobId);
     }
     setForegroundJobId(null);
@@ -1047,6 +1159,7 @@ export default function HomePage() {
     const currentForegroundJobId = foregroundJobIdRef.current;
     if (!currentForegroundJobId) return;
     backgroundedJobIdsRef.current.add(currentForegroundJobId);
+    adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
     markJobBackground(currentForegroundJobId);
     setForegroundJobId(null);
     setOpeningFile(null);

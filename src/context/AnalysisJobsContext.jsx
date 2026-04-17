@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 const AnalysisJobsContext = createContext(null);
 
@@ -10,6 +10,11 @@ export function AnalysisJobsProvider({ children }) {
   const [jobs, setJobs] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const controllersRef = useRef(new Map());
+  const jobsRef = useRef([]);
+
+  useEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
 
   const createJob = useCallback((payload) => {
     const id = makeJobId();
@@ -21,6 +26,7 @@ export function AnalysisJobsProvider({ children }) {
       label: payload?.label || "Preparing analysis",
       percent: payload?.percent ?? 0,
       status: payload?.status || "running",
+      requestKey: payload?.requestKey || "",
       createdAt: Date.now(),
       completedAt: null,
       error: "",
@@ -157,6 +163,14 @@ export function AnalysisJobsProvider({ children }) {
     jobs.find((job) => job.id === jobId) || null
   ), [jobs]);
 
+  const getJobByRequestKey = useCallback((requestKey) => {
+    if (!requestKey) return null;
+    return jobsRef.current.find((job) => (
+      job.requestKey === requestKey
+      && (job.status === "running" || job.status === "completed")
+    )) || null;
+  }, []);
+
   const runningJobs = useMemo(() => jobs.filter((job) => job.status === "running"), [jobs]);
   const visibleJobs = useMemo(() => jobs.slice(0, 5), [jobs]);
 
@@ -172,6 +186,7 @@ export function AnalysisJobsProvider({ children }) {
     abortJob,
     removeJob,
     getJob,
+    getJobByRequestKey,
     attachJobController,
     detachJobController,
     dismissNotification,
@@ -188,6 +203,7 @@ export function AnalysisJobsProvider({ children }) {
     abortJob,
     removeJob,
     getJob,
+    getJobByRequestKey,
     attachJobController,
     detachJobController,
     dismissNotification,

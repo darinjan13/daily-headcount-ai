@@ -1,4 +1,5 @@
 let currentWorkbookCache = null;
+const DEFAULT_MIN_WORKBOOK_CACHE_BYTES = 10 * 1024 * 1024;
 
 function makeCacheSignature({ driveFileId, modifiedTime, version }) {
   if (!driveFileId) return "";
@@ -12,9 +13,14 @@ export function setCurrentWorkbookCache({
   version,
   mimeType,
   arrayBuffer,
+  minCacheBytes = DEFAULT_MIN_WORKBOOK_CACHE_BYTES,
 }) {
   if (!driveFileId || !arrayBuffer) {
     currentWorkbookCache = null;
+    return;
+  }
+
+  if (arrayBuffer.byteLength < minCacheBytes) {
     return;
   }
 
@@ -36,6 +42,14 @@ export function getCurrentWorkbookCache({ driveFileId, modifiedTime, version }) 
     return null;
   }
 
+  if (!version && modifiedTime) {
+    if (currentWorkbookCache.modifiedTime !== modifiedTime) return null;
+    return {
+      ...currentWorkbookCache,
+      arrayBuffer: currentWorkbookCache.arrayBuffer.slice(0),
+    };
+  }
+
   const nextSignature = makeCacheSignature({ driveFileId, modifiedTime, version });
   if (nextSignature !== currentWorkbookCache.signature) {
     return null;
@@ -50,3 +64,5 @@ export function getCurrentWorkbookCache({ driveFileId, modifiedTime, version }) 
 export function clearCurrentWorkbookCache() {
   currentWorkbookCache = null;
 }
+
+export { DEFAULT_MIN_WORKBOOK_CACHE_BYTES };
