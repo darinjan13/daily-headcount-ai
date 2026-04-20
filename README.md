@@ -14,6 +14,8 @@ Current app version: `1.1.0`
 - Backend active-sheet cache/session support for large-file chatbot accuracy.
 - Environment-aware backend concurrency: safer production defaults, faster local development.
 - Optimized raw data table rendering for large datasets.
+- Whole-page loading state for large workbook hydration to reduce dashboard freezing.
+- Dev-only KPI refresh button for tuning summary cards without full workbook re-analysis.
 
 ## What The Frontend Does
 
@@ -28,6 +30,7 @@ Current app version: `1.1.0`
 - Mirrors regular-user analyzed workbooks to the backend admin Drive mirror endpoint.
 - Provides dashboard charts, filters, raw table viewing, pinned charts, and a chatbot.
 - Sends backend analysis session ids to the chatbot when available, so large active datasets can use the backend cache instead of relying only on frontend-held rows.
+- Keeps the whole dashboard behind a loading state while very large workbooks are still materializing rows, then shows the dashboard only after the dataset is ready.
 
 ## Local Setup
 
@@ -141,6 +144,18 @@ Workbook analysis can continue in the background after the user starts opening a
 
 When a background job finishes, the user can open the completed analysis from the notification. If the user is already waiting for the same sheet in the foreground, the app suppresses the redundant "ready to open" notification.
 
+## Dev-Only KPI Refresh
+
+In local development, the dashboard top bar shows a `Refresh KPI` button.
+
+This button:
+
+- re-runs the frontend KPI card selection using the currently loaded workbook rows
+- updates only `blueprint.cards`
+- does not re-download or re-analyze the workbook
+
+This is meant only for KPI tuning during development and is hidden in production builds.
+
 ## Multi-Level Headers
 
 LifeSights supports practical multi-row and merged spreadsheet headers by separating display headers from analysis headers:
@@ -161,6 +176,7 @@ What works now:
 - The backend can run multiple analyses locally, while production can stay conservative for limited hosting.
 - The frontend table avoids unnecessary full-table conversion when only a page of rows is visible.
 - The chatbot can use the backend active analysis session for large active datasets.
+- The dashboard stays on a full-page loading state while large row sets are still being materialized, which avoids rendering half-ready KPI cards and reduces visible freezing.
 
 What is still future work:
 
@@ -181,6 +197,7 @@ What is still future work:
 - Only the active backend analysis session is cached server-side. Opening another sheet or workbook may replace that backend cache.
 - Multi-level header support is practical and heuristic, not a full Excel layout engine.
 - The production build currently emits a Vite chunk-size warning. It does not block deployment, but future code splitting would improve load performance.
+- If the AI KPI planner fails or the model is unavailable, the frontend falls back to deterministic KPI selection heuristics. These are useful, but still less context-aware than a successful planner response.
 
 ## Useful Commands
 
