@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useMemo } from "react";
 
 const WELCOME = "Hi! I have access to your full dataset and can answer precise questions — totals, rankings, breakdowns, anything. What would you like to know?";
 
+const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
+
 const BRAND = {
   dark: "var(--color-text)",
   header: "var(--color-dark-serpent)",
@@ -83,6 +85,76 @@ function renderInline(text) {
   }
   if (last < text.length) parts.push(text.slice(last));
   return parts.length === 1 && typeof parts[0] === "string" ? parts[0] : parts;
+}
+
+function ChartSelector({ customCharts, activeChartState, setActiveChartState }) {
+  if (customCharts.length === 0) return null;
+  const activeId = activeChartState?.chartId ? String(activeChartState.chartId) : "";
+  const typeIcon = (type) => ({ bar: "📊", hbar: "📊", line: "📈", donut: "🍩", pivot: "🗂️" }[type] || "📊");
+
+  const handleSelect = (e) => {
+    const val = e.target.value;
+    if (!val) {
+      setActiveChartState(null);
+      return;
+    }
+    const chart = customCharts.find((c) => String(c.id) === val);
+    if (!chart) return;
+    setActiveChartState({
+      chartId: chart.id,
+      chartType: chart.type,
+      chartSpec: chart.spec || chart,
+      topN: chart.spec?.limit || null,
+      sort: chart.spec?.sort || null,
+      aggregation: chart.spec?.aggregation || null,
+    });
+  };
+
+  return (
+    <div style={{
+      margin: "0 4px 8px",
+      padding: "7px 10px",
+      borderRadius: 8,
+      background: "rgba(4,98,65,0.07)",
+      border: `1px solid ${activeId ? "rgba(4,98,65,0.35)" : "rgba(4,98,65,0.15)"}`,
+      display: "flex",
+      alignItems: "center",
+      gap: 8,
+    }}>
+      <span style={{ fontSize: 12, flexShrink: 0 }}>✏️</span>
+      <select
+        value={activeId}
+        onChange={handleSelect}
+        style={{
+          flex: 1,
+          fontSize: 11,
+          fontWeight: 600,
+          color: activeId ? "var(--color-castleton-green)" : "var(--color-text-light)",
+          backgroundColor: BRAND.white,
+          border: "none",
+          outline: "none",
+          cursor: "pointer",
+          minWidth: 0,
+          colorScheme: "dark",
+        }}
+      >
+        <option value="" style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>Select a chart to edit…</option>
+        {customCharts.map((chart) => (
+          <option key={chart.id} value={String(chart.id)} style={{ backgroundColor: BRAND.white, color: BRAND.dark }}>
+            {typeIcon(chart.type)} {chart.title}
+          </option>
+        ))}
+      </select>
+      {activeId && (
+        <button
+          type="button"
+          onClick={() => setActiveChartState(null)}
+          style={{ width: 24, height: 24, borderRadius: 8, background: BRAND.white, border: `1px solid ${BRAND.border}`, cursor: "pointer", fontSize: 14, color: BRAND.dark, padding: 0, lineHeight: 1, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+          title="Stop editing"
+        >×</button>
+      )}
+    </div>
+  );
 }
 
 // ── FilterTable ───────────────────────────────────────────────────────────────
@@ -237,7 +309,17 @@ function applyChartState(chartSpec, chartState) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function DataChatbot({ headers, rows, blueprint, onResult, customCharts = [], filteredTables = [] }) {
+export default function DataChatbot({
+  headers,
+  rows,
+  columnContexts = {},
+  blueprint,
+  analysisSession = null,
+  onAnalysisSessionExpired = null,
+  onResult,
+  customCharts = [],
+  filteredTables = [],
+}) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: "assistant", content: WELCOME, chartSpec: null }]);
   const [input, setInput] = useState("");
@@ -250,20 +332,22 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
+  const chartIdRef = useRef(0);
 
   useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 100); }, [open]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
   useEffect(() => {
+    // Reset chat state when a new dataset is loaded into the dashboard.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMessages([{ role: "assistant", content: WELCOME, chartSpec: null }]);
     setActiveChartState(null);
   }, [headers, rows]);
 
-  const send = async () => {
-    const text = input.trim();
-    if (!text || loading) return;
+  const send = async () => { setInput(""); await sendText(input.trim()); };
 
-    // If a chart is explicitly selected, always treat as update — skip classifyIntent
-    const { action, updatedState } = activeChartState
+  const sendText = async (text) => {
+    if (!text || loading) return;
+    const { updatedState } = activeChartState
       ? { action: "update", updatedState: activeChartState }
       : classifyIntent(text, null);
 
@@ -275,55 +359,74 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
     abortRef.current = new AbortController();
 
     try {
-      const response = await fetch("https://daily-headcount-ai-backend.onrender.com/chat", {
-        signal: abortRef.current.signal,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages
-            .filter((m) => m.content !== WELCOME)
-            .map(({ role, content }) => ({ role, content })),
-          headers,
-          rows,
-          datasetSummary: blueprint?.datasetSummary || null,
-          currentChartState: activeChartState ? {
-            id: activeChartState.chartId,
-            type: activeChartState.chartType,
-            title: activeChartState.chartSpec?.title,
-            x: activeChartState.chartSpec?.x,
-            y: activeChartState.chartSpec?.y,
-            rowDim: activeChartState.chartSpec?.rowDim,
-            colDim: activeChartState.chartSpec?.colDim,
-            measure: activeChartState.chartSpec?.measure,
-            aggregation: activeChartState.chartSpec?.aggregation,
-            limit: activeChartState.topN,
-            sort: activeChartState.sort,
-            filters: activeChartState.chartSpec?.filters || [],
-          } : null,
-          existingCharts: customCharts.map(c => ({
-            id: c.id,
-            title: c.title,
-            type: c.type,
-            pinned: c.pinned || false,
-          })),
-          existingTables: (filteredTables || []).map(t => ({
-            id: t.id,
-            title: t.title,
-            pinned: t.pinned || false,
-            filters: t.filters || [],
-          })),
-          existingTables: filteredTables?.map(t => ({
-            id: t.id,
-            title: t.title,
-          })) || [],
-        }),
+      const buildChatPayload = (analysisSessionId = analysisSession?.sessionId || null) => ({
+        messages: newMessages
+          .filter((m) => m.content !== WELCOME)
+          .map(({ role, content }) => ({ role, content })),
+        headers,
+        rows,
+        analysisSessionId,
+        columnContexts,
+        datasetSummary: blueprint?.datasetSummary || null,
+        currentChartState: activeChartState ? {
+          id: activeChartState.chartId,
+          type: activeChartState.chartType,
+          title: activeChartState.chartSpec?.title,
+          x: activeChartState.chartSpec?.x,
+          y: activeChartState.chartSpec?.y,
+          rowDim: activeChartState.chartSpec?.rowDim,
+          colDim: activeChartState.chartSpec?.colDim,
+          measure: activeChartState.chartSpec?.measure,
+          aggregation: activeChartState.chartSpec?.aggregation,
+          limit: activeChartState.topN,
+          sort: activeChartState.sort,
+          filters: activeChartState.chartSpec?.filters || [],
+        } : null,
+        existingCharts: customCharts.map(c => ({
+          id: c.id,
+          title: c.title,
+          type: c.type,
+          pinned: c.pinned || false,
+        })),
+        existingTables: (filteredTables || []).map(t => ({
+          id: t.id,
+          title: t.title,
+          pinned: t.pinned || false,
+          filters: t.filters || [],
+        })),
       });
-      const data = await response.json();
+
+      const fetchChatResponse = async (analysisSessionId = analysisSession?.sessionId || null) => {
+        const response = await fetch(`${HOST}/chat`, {
+          signal: abortRef.current.signal,
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildChatPayload(analysisSessionId)),
+        });
+        return response.json();
+      };
+
+      let data = await fetchChatResponse();
+      if (data?.cacheExpired && onAnalysisSessionExpired) {
+        const refreshedSession = await onAnalysisSessionExpired();
+        if (refreshedSession?.sessionId) {
+          data = await fetchChatResponse(refreshedSession.sessionId);
+        }
+      }
+
+      if (data?.cacheExpired) {
+        throw new Error("The active workbook cache expired. Please refresh this sheet and try again.");
+      }
+
       const steps = data.steps || [];
 
       // Execute steps in order
       const statusLines = [];
       const newChartSpecs = []; // track charts created in this batch for pinAll
+      let requestedChartCount = 0;
+      let createdChartCount = 0;
+      let rejectedChartCount = 0;
+      let updatedChartCount = 0;
 
       for (const step of steps) {
         if (step.type === "delete") {
@@ -337,9 +440,11 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
           }
 
         } else if (step.type === "delete_table") {
-          onResult({ action: "delete_table", deleteTableSpec: step });
-          if (step.deleteAll) statusLines.push("🗑️ All filter tables deleted.");
-          else statusLines.push(`🗑️ "${step.targetTitle}" table deleted.`);
+          // Route as table_action so Dashboard handler picks it up
+          const tableStep = step.deleteAll
+            ? { action: "deleteAll" }
+            : { action: "delete", targetTitle: step.targetTitle };
+          onResult({ action: "table_action", tableActionSpec: tableStep });
 
         } else if (step.type === "pin") {
           // Pass newly created charts so Dashboard can pin them even before state settles
@@ -354,8 +459,13 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
           if (act === "deleteAll") statusLines.push("🗑️ All filtered tables deleted.");
           else if (act === "delete") statusLines.push(`🗑️ Table "${step.targetTitle}" deleted.`);
           else if (act === "pinAll") statusLines.push("📌 All filtered tables pinned.");
+          else if (act === "unpinAll") statusLines.push("📌 All filtered tables unpinned.");
           else if (act === "pin") statusLines.push(`📌 "${step.targetTitle}" pinned.`);
           else if (act === "rename") statusLines.push(`✏️ Table renamed to "${step.newTitle}".`);
+          else if (act === "sort") statusLines.push(`🔃 "${step.targetTitle}" sorted by ${step.sort_col} (${step.sort_dir || "asc"}).`);
+          else if (act === "limit") statusLines.push(`✂️ "${step.targetTitle}" limited to ${step.limit} rows.`);
+          else if (act === "add_filter") statusLines.push(`🔍 Filter added to "${step.targetTitle}".`);
+          else if (act === "remove_filter") statusLines.push(`🔍 Filter removed from "${step.targetTitle}".`);
 
         } else if (step.type === "rename") {
           onResult({ action: "rename", renameSpec: step });
@@ -373,36 +483,63 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
           statusLines.push("📋 Table added to Summary tab.");
 
         } else if (step.type === "chart") {
+          requestedChartCount += 1;
           const spec = { ...step, type: step.chartType || "bar" };
           const isModify = step.action === "modify" && activeChartState?.chartId;
 
           if (isModify) {
             const resolvedSpec = applyChartState(spec, updatedState || {});
             setActiveChartState(prev => ({ ...prev, chartSpec: resolvedSpec }));
-            onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
-            statusLines.push("✏️ Chart updated.");
+            const chartAccepted = onResult({ chartSpec: { ...resolvedSpec, targetId: activeChartState.chartId }, action: "modify" });
+            if (chartAccepted === false) {
+              rejectedChartCount += 1;
+              continue;
+            }
+            updatedChartCount += 1;
           } else {
-            const chartId = Date.now() + Math.random(); // unique id stamped before dispatch
+            chartIdRef.current += 1;
+            const chartId = `chat-chart-${chartIdRef.current}`;
             const specWithId = { ...spec, _chatId: chartId };
-            onResult({ chartSpec: specWithId, action: "new" });
-            newChartSpecs.push(specWithId);
-            statusLines.push("📊 Chart added to Charts tab.");
+            const chartAccepted = onResult({ chartSpec: specWithId, action: "new" });
+            if (chartAccepted === false) {
+              rejectedChartCount += 1;
+              continue;
+            }
+            if (chartAccepted !== false) newChartSpecs.push(specWithId);
+            createdChartCount += 1;
           }
         }
       }
 
+      if (createdChartCount > 0) {
+        statusLines.push(`${createdChartCount} chart${createdChartCount === 1 ? "" : "s"} added to Charts tab.`);
+      }
+      if (updatedChartCount > 0) {
+        statusLines.push(`${updatedChartCount} chart${updatedChartCount === 1 ? "" : "s"} updated.`);
+      }
+      if (rejectedChartCount > 0) {
+        statusLines.push(
+          `${rejectedChartCount} of ${requestedChartCount} chart request${requestedChartCount === 1 ? "" : "s"} skipped because the selected columns did not form valid charts.`
+        );
+      }
+
       // Compose final message
-      const replyContent = [data.reply, ...statusLines].filter(Boolean).join("\n");
+      const safeReply = rejectedChartCount > 0
+        ? String(data.reply || "").replace(/\bhere\s+(?:are|is)\s+\d+\s+new\s+charts?\b/ig, `created ${createdChartCount} valid chart${createdChartCount === 1 ? "" : "s"}`)
+        : data.reply;
+      const replyContent = [safeReply, ...statusLines].filter(Boolean).join("\n");
+      const finalReply = replyContent || "Done.";
       setMessages((prev) => [...prev, {
         role: "assistant",
-        content: replyContent || "Done.",
+        content: finalReply,
         chartSpec: null,
+        suggestions: generateFollowUps(finalReply, steps),
       }]);
     } catch (err) {
       if (err?.name !== "AbortError") {
         setMessages((prev) => [...prev, {
           role: "assistant",
-          content: "Couldn't reach the server. Is the backend running?",
+          content: err?.message || "Couldn't reach the server. Is the backend running?",
           chartSpec: null,
         }]);
       }
@@ -427,18 +564,128 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
-  const suggestedQuestions = useMemo(() => {
+  // Generate contextual follow-up suggestions after each reply
+  const generateFollowUps = (replyText, steps = []) => {
+    const reply = (replyText || "").toLowerCase();
+    const suggestions = [];
+
+    // Detect what action(s) were just taken from steps
+    const stepTypes = steps.map(s => s.type);
+    const tableActions = steps.filter(s => s.type === "table_action").map(s => s.action);
+    const madeChart = stepTypes.includes("chart");
+    const madeFilter = stepTypes.includes("filter");
+    const deletedTables = tableActions.includes("deleteAll") || tableActions.includes("delete");
+    const pinned = stepTypes.includes("pin") || tableActions.includes("pin") || tableActions.includes("pinAll");
+    const sorted = tableActions.includes("sort");
+    const limited = tableActions.includes("limit");
+    const renamed = tableActions.includes("rename") || stepTypes.includes("rename");
+    const navigated = stepTypes.includes("navigate");
+
+    // Step-based smart suggestions
+    if (madeChart) {
+      suggestions.push("Pin this chart");
+      suggestions.push("Show top 20 instead");
+      suggestions.push("Make it a horizontal bar chart");
+    }
+    if (madeFilter) {
+      suggestions.push("Pin this table");
+      suggestions.push("Show me a bar chart of this result");
+      suggestions.push("Delete all filter tables");
+    }
+    if (deletedTables) {
+      suggestions.push("Create a new filter table");
+      suggestions.push("Summarize the full dataset");
+      suggestions.push("Show top 10 by count");
+    }
+    if (pinned) {
+      suggestions.push("Go to Charts tab");
+      suggestions.push("Create another chart");
+      suggestions.push("Summarize this dataset");
+    }
+    if (sorted || limited) {
+      suggestions.push("Pin this table");
+      suggestions.push("Show me a chart of this");
+      suggestions.push("Reset to show all rows");
+    }
+    if (renamed || navigated) {
+      suggestions.push("Summarize this dataset");
+      suggestions.push("Show me the top 10 rows");
+      suggestions.push("Create a chart");
+    }
+
+    // Reply-text based (fallback when steps don't give enough signal)
+    if (suggestions.length === 0) {
+      if (reply.includes("top") || reply.includes("rank") || reply.includes("highest") || reply.includes("most")) {
+        suggestions.push("Show bottom 5 instead");
+        suggestions.push("Make a bar chart of this");
+        suggestions.push("Filter to just the top result");
+      } else if (reply.includes("total") || reply.includes("sum") || reply.includes("count") || reply.includes("average")) {
+        suggestions.push("Break this down by month");
+        suggestions.push("Show as a bar chart");
+        suggestions.push("Compare by category");
+      } else if (reply.includes("filter") || reply.includes("rows where")) {
+        suggestions.push("Show me a chart of this result");
+        suggestions.push("Pin this table");
+        suggestions.push("Clear all filters");
+      } else if (reply.includes("summarize") || reply.includes("dataset") || reply.includes("column")) {
+        suggestions.push("Show top 10 by count");
+        suggestions.push("Create a pivot table by month");
+        suggestions.push("What is the total count per site?");
+      } else {
+        // Skip index/ID/serial-like columns
+        const skipPattern = /^(no\.?|id|#|index|row|num|number|serial|s\.?no\.?)$/i;
+        const isIndexCol = (h) => skipPattern.test(h.trim());
+
+        const meaningfulNumeric = headers?.find(h => {
+          if (isIndexCol(h)) return false;
+          const vals = (rows || []).slice(0, 30).map(r => r[headers.indexOf(h)]).filter(v => v != null && String(v).trim() !== "");
+          const numCount = vals.filter(v => !isNaN(parseFloat(String(v).replace(/,/g, "")))).length;
+          // Must be numeric but NOT a sequential index (check variance)
+          if (numCount / vals.length < 0.7) return false;
+          const nums = vals.map(v => parseFloat(String(v).replace(/,/g, ""))).filter(n => !isNaN(n));
+          const mean = nums.reduce((a, b) => a + b, 0) / nums.length;
+          const allSameOrSeq = nums.every((n, i) => i === 0 || Math.abs(n - nums[i - 1]) === 1);
+          return !allSameOrSeq && mean !== nums.length / 2;
+        });
+
+        const meaningfulCat = headers?.find(h => {
+          if (isIndexCol(h)) return false;
+          const vals = (rows || []).slice(0, 30).map(r => r[headers.indexOf(h)]).filter(v => v != null && String(v).trim() !== "");
+          const unique = new Set(vals.map(v => String(v).trim().toLowerCase())).size;
+          return unique >= 2 && unique <= 30 && unique < vals.length * 0.8;
+        });
+
+        if (meaningfulNumeric && meaningfulCat) suggestions.push(`Total ${meaningfulNumeric} per ${meaningfulCat}`);
+        else if (meaningfulCat) suggestions.push(`Count rows by ${meaningfulCat}`);
+        if (meaningfulCat) suggestions.push(`Top 10 by ${meaningfulCat}`);
+        else suggestions.push("Show me the top 10 rows");
+        suggestions.push("Summarize this dataset");
+        suggestions.push("Create a pivot table");
+      }
+    }
+
+    // Dedupe and cap at 3
+    return [...new Set(suggestions)].slice(0, 3);
+  };
+
+    const suggestedQuestions = useMemo(() => {
     if (!headers || !rows || rows.length === 0) return ["Summarize this dataset"];
+    const skipPattern = /^(no\.?|id|#|index|row|num|number|serial|s\.?no\.?)$/i;
     const suggestions = [];
     const numericCols = [], categoryCols = [];
     headers.forEach(col => {
+      if (skipPattern.test(col.trim())) return;
       const vals = rows.map(r => r[headers.indexOf(col)]).filter(v => v !== null && v !== undefined && String(v).trim() !== "");
       if (!vals.length) return;
       const numCount = vals.filter(v => !isNaN(parseFloat(String(v).replace(/,/g, "")))).length;
       const uniqueCount = new Set(vals.map(v => String(v).trim().toLowerCase())).size;
       const uniqueRatio = uniqueCount / vals.length;
-      if (numCount / vals.length >= 0.7) numericCols.push(col);
-      else if (uniqueRatio < 0.6 && uniqueCount >= 2 && uniqueCount <= 50) categoryCols.push(col);
+      // Skip sequential index-like numeric columns
+      if (numCount / vals.length >= 0.7) {
+        const nums = vals.slice(0, 20).map(v => parseFloat(String(v).replace(/,/g, ""))).filter(n => !isNaN(n));
+        const isSeq = nums.every((n, i) => i === 0 || Math.abs(n - nums[i-1]) === 1);
+        if (!isSeq) numericCols.push(col);
+      } else if (uniqueRatio < 0.6 && uniqueCount >= 2 && uniqueCount <= 50) categoryCols.push(col);
     });
     suggestions.push("Summarize this dataset");
     if (numericCols.length > 0) suggestions.push(`Who are the top 5 by ${numericCols[numericCols.length - 1]}?`);
@@ -458,9 +705,9 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
   }, [headers, rows]);
 
   // Active chart state pill — shows what chart is being "tracked" for follow-ups
-  const ChartSelector = () => {
-    if (customCharts.length === 0) return null;
 
+  const _ChartSelector = () => {
+    if (customCharts.length === 0) return null;
     const activeId = activeChartState?.chartId ? String(activeChartState.chartId) : "";
     const typeIcon = (type) => ({ bar:"📊", hbar:"📊", line:"📈", donut:"🍩", pivot:"🗂️" }[type] || "📊");
 
@@ -524,13 +771,28 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
       </div>
     );
   };
-
   return (
     <>
+      <style>{`
+        @media (max-width: 640px) {
+          .data-chatbot-toggle {
+            right: 16px !important;
+            bottom: 16px !important;
+          }
+          .data-chatbot-panel {
+            right: 8px !important;
+            left: 8px !important;
+            bottom: 84px !important;
+            width: auto !important;
+            max-width: none !important;
+            height: min(72vh, 620px) !important;
+          }
+        }
+      `}</style>
       {/* Floating Button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl transition-all duration-200 cursor-pointer border-none"
+        className="data-chatbot-toggle fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center text-2xl transition-all duration-200 cursor-pointer border-none"
         style={{
           color: open ? BRAND.dark : BRAND.white,
           backgroundColor: open ? BRAND.white : BRAND.green,
@@ -546,14 +808,14 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
       {/* Chat Panel */}
       {open && (
         <div
-          className="fixed bottom-24 right-6 z-50 w-[460px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          className="data-chatbot-panel fixed bottom-24 right-6 z-50 w-[460px] max-w-[calc(100vw-2rem)] rounded-2xl shadow-2xl flex flex-col overflow-hidden"
           style={{ height: "600px", backgroundColor: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.dark }}
         >
           {/* Header */}
           <div className="px-4 py-3 flex items-center gap-3 shrink-0" style={{ backgroundColor: BRAND.header }}>
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-base" style={{ backgroundColor: BRAND.green }}>🤖</div>
             <div>
-              <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>Data Assistant</div>
+              <div className="font-bold text-sm leading-tight" style={{ color: BRAND.white }}>LifeSights Assistant</div>
               <div className="text-xs" style={{ color: "rgba(255, 255, 255, 0.75)" }}>Full dataset access · {rows.length.toLocaleString()} rows</div>
             </div>
             <div className="ml-auto flex items-center gap-1.5">
@@ -580,6 +842,29 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
                   </div>
                 </div>
 
+                {/* Follow-up suggestions — only on last assistant message */}
+                {msg.role === "assistant" && msg.suggestions && i === messages.length - 1 && !loading && (
+                  <div className="ml-8 mt-2 flex flex-col gap-1.5">
+                    {msg.suggestions.map((q, si) => (
+                      <button key={si}
+                        onClick={() => sendText(q)}
+                        className="text-left px-3 py-2 rounded-xl text-xs cursor-pointer"
+                        style={{
+                          backgroundColor: BRAND.green,
+                          border: "none",
+                          color: "#fff",
+                          fontWeight: 600,
+                          opacity: 0.82,
+                          transition: "opacity 0.15s",
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+                        onMouseLeave={e => e.currentTarget.style.opacity = "0.82"}
+                      >
+                        ↩ {q}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
               </div>
             ))}
@@ -589,7 +874,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
               <div className="space-y-1.5 mt-2">
                 <p className="text-xs font-medium px-1" style={{ color: BRAND.muted }}>Try asking:</p>
                 {suggestedQuestions.map((q, i) => (
-                  <button key={i} onClick={() => { setInput(q); inputRef.current?.focus(); }}
+                  <button key={i} onClick={() => sendText(q)}
                     className="w-full text-left px-3 py-2 rounded-xl text-xs transition-colors cursor-pointer"
                     style={{ backgroundColor: BRAND.white, border: `1px solid ${BRAND.border}`, color: BRAND.dark }}
                   >{q}</button>
@@ -610,18 +895,20 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
             <div ref={bottomRef} />
           </div>
 
-          {/* Active chart pill + Input */}
+          {/* Input */}
           <div className="shrink-0" style={{ borderTop: `1px solid ${BRAND.border}`, backgroundColor: BRAND.white }}>
-            <div className="pt-2 px-3">
-              <ChartSelector />
-            </div>
-            <div className="px-3 pb-3 flex gap-2 items-end">
+            <ChartSelector
+              customCharts={customCharts}
+              activeChartState={activeChartState}
+              setActiveChartState={setActiveChartState}
+            />
+            <div className="px-3 pb-3 pt-2 flex gap-2 items-end">
               <textarea
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKey}
-                placeholder={activeChartState?.chartSpec?.title ? `Editing "${activeChartState.chartSpec.title}" — what changes?` : "Ask about your data..."}
+                placeholder="Ask about your data..."
                 rows={1}
                 className="flex-1 px-3.5 py-2.5 rounded-xl text-sm resize-none leading-snug"
                 style={{ maxHeight: "100px", overflowY: "auto", border: `1px solid ${BRAND.border}`, color: BRAND.dark, outline: "none" }}
@@ -629,11 +916,11 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
               {loading ? (
                 <button
                   onClick={stop}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-white text-base transition-all shrink-0 border-none cursor-pointer"
-                  style={{ backgroundColor: "#dc2626" }}
-                  title="Stop"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center transition-all shrink-0 border-none cursor-pointer text-white"
+                  style={{ backgroundColor: "#e53e3e", fontSize: 13 }}
+                  title="Stop generating"
                 >
-                  ■
+                  ⏹
                 </button>
               ) : (
                 <button
@@ -650,7 +937,7 @@ export default function DataChatbot({ headers, rows, blueprint, onResult, custom
 
           <div className="px-4 py-1.5 text-center shrink-0" style={{ backgroundColor: BRAND.soft, borderTop: `1px solid ${BRAND.border}` }}>
             <span className="text-xs" style={{ color: BRAND.muted }}>
-              {loading ? "Generating… click ■ to stop" : "Enter to send · Shift+Enter for new line"}
+              {loading ? "Generating… click to stop" : "Enter to send · Shift+Enter for new line"}
             </span>
           </div>
         </div>

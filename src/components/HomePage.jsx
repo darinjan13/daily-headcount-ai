@@ -1,18 +1,51 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useAnalysisTabs } from "../context/AnalysisTabsContext";
+import { useAnalysisJobs } from "../context/AnalysisJobsContext";
 import { useTheme } from "../context/ThemeContext";
 import { useDrivePicker } from "../hooks/useDrivePicker";
 import { useDriveFiles } from "../hooks/useDriveFiles";
+import BackgroundAnalysisDock from "./BackgroundAnalysisDock";
+import BackgroundAnalysisToasts from "./BackgroundAnalysisToasts";
 import Sidebar from "./Sidebar";
 import Grainient from "./Grainient";
 import UserAvatar from "./UserAvatar";
 import ThemeToggle from "./ThemeToggle";
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileX,
+  FolderOpen,
+  FolderSearch,
+  House,
+  LoaderCircle,
+  Menu,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
+import lifeSightsLogo from "../assets/LifeSights_LOGO.png";
 import excelFileIcon from "../assets/icons/excel-file-icon.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
+import { getAnalysisResultCache, setAnalysisResultCache } from "../utils/analysisResultCache";
+import { makeAnalysisRequestKey } from "../utils/analysisRequestKey";
+import { getCurrentWorkbookCache, setCurrentWorkbookCache } from "../utils/workbookCache";
 
-const HOST = "https://daily-headcount-ai-backend.onrender.com";
+const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
+const ADMIN_ROOT_FOLDER_ID = import.meta.env.VITE_ADMIN_ROOT_FOLDER_ID || "";
+const PAGE_SIZE_OPTIONS = [3, 4, 6, 8, 12, 18];
+
+function getDefaultPageSize() {
+  if (typeof window === "undefined") return 6;
+  const width = window.innerWidth;
+  if (width >= 1440) return 8;
+  if (width >= 1024) return 6;
+  if (width >= 700) return 4;
+  return 3;
+}
 
 function formatSize(bytes) {
   if (!bytes) return "—";
@@ -41,6 +74,29 @@ function getErrorTags() {
   return ["Sheets Unavailable"];
 }
 
+function isOpenableSheetTag(tag) {
+  return tag && tag !== "No Sheets Found" && tag !== "Sheets Unavailable";
+}
+
+function normalizeAdminCopyName(file) {
+  if (file.mimeType === "application/vnd.google-apps.spreadsheet") {
+    return file.name.toLowerCase().endsWith(".xlsx") ? file.name : `${file.name}.xlsx`;
+  }
+  return file.name;
+}
+
+function triggerBrowserDownload(arrayBuffer, fileName, mimeType = "application/octet-stream") {
+  const blob = new Blob([arrayBuffer], { type: mimeType });
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(blobUrl);
+}
+
 // Scroll Progress Indicator
 function ScrollProgressBar() {
   const [scrollProgress, setScrollProgress] = useState(0);
@@ -67,7 +123,7 @@ function ScrollProgressBar() {
 }
 
 // File Card Component
-function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
+function FileCard({ file, onOpen, onDownload, loading, openDisabled = false, downloadLoading, tags, isTagLoading, showDownload = false }) {
   return (
     <div
       className="rounded-2xl p-6 flex flex-col transition-all hover:shadow-xl border"
@@ -75,17 +131,12 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
         backgroundColor: "var(--color-surface-elevated)",
         borderColor: "var(--color-border)",
         backdropFilter: "blur(10px)",
-      }}
-    >
-      {/* Icon and Header */}
+        }}
+      >
+        {/* Icon and Header */}
       <div className="flex min-h-[86px] items-start gap-4" style={{ marginBottom: "10px" }}>
         <div className="w-12 h-12 flex items-center justify-center flex-shrink-0">
-          <img
-            src={excelFileIcon}
-            alt="Excel file"
-            className="w-11 h-11"
-            style={{ objectFit: "contain" }}
-          />
+          <img src={excelFileIcon} alt="Excel file" className="w-11 h-11" style={{ objectFit: "contain" }} />
         </div>
         <div className="min-w-0 flex-1">
           <h4
@@ -119,16 +170,18 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
               gap: "6px",
             }}
           >
-            <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
+            <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />
             Loading Sheets
           </span>
         ) : (
-          tags.map((tag) => (
-            <span
+          tags.map((tag) => {
+            const canOpenSheet = isOpenableSheetTag(tag);
+            return (
+            <button
               key={`${file.id}-${tag}`}
+              type="button"
+              onClick={() => canOpenSheet && onOpen(file, tag)}
+              disabled={!canOpenSheet || openDisabled}
               style={{
                 borderRadius: "20px",
                 backgroundColor: "var(--color-chip-bg)",
@@ -137,60 +190,121 @@ function FileCard({ file, onOpen, loading, tags, isTagLoading }) {
                 fontSize: "11px",
                 fontWeight: 600,
                 padding: "3px 9px",
+                cursor: canOpenSheet && !openDisabled ? "pointer" : "default",
+                opacity: openDisabled ? 0.65 : 1,
               }}
+              title={canOpenSheet ? `Open ${tag}` : tag}
             >
               {tag}
-            </span>
-          ))
+            </button>
+            );
+          })
         )}
       </div>
 
       {/* Metadata */}
       <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-meta-text)", marginBottom: "16px" }}>
-        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
+        <CalendarDays className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
         <span>Modified {formatDate(file.modifiedTime)}</span>
       </div>
 
-      {/* Action Button */}
-      <button
-        onClick={() => onOpen(file)}
-        disabled={loading}
-        className="mt-auto w-full rounded-lg py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2"
-        style={{
-          backgroundColor: loading ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
-          color: "#FFFFFF",
-          border: "none",
-        }}
-      >
-        {loading ? (
-          <>
-            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-            </svg>
-            Opening analysis
-          </>
+      <div className="mt-auto flex gap-3">
+        <button
+          onClick={() => onOpen(file)}
+          disabled={openDisabled}
+          className="flex-1 rounded-lg py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2"
+          style={{
+            backgroundColor: loading ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
+            color: "#FFFFFF",
+            border: "none",
+          }}
+        >
+          {loading ? (
+            <>
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+              Opening analysis
+            </>
         ) : (
           <>
             <span>Open analysis</span>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
           </>
         )}
       </button>
+
+        {showDownload && (
+          <button
+            onClick={() => onDownload(file)}
+            disabled={downloadLoading}
+            className="rounded-lg px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2"
+            style={{
+              backgroundColor: "var(--color-surface-soft)",
+              color: "var(--color-text)",
+              border: "1px solid var(--color-border)",
+              minWidth: "116px",
+              opacity: downloadLoading ? 0.7 : 1,
+            }}
+          >
+            {downloadLoading ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="h-4 w-4" aria-hidden="true" />
+            )}
+            <span>{downloadLoading ? "Downloading" : "Download"}</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-function FileTable({ files, fileTagsById, onOpen, openingFile }) {
+function FolderCard({ folder, onOpen }) {
+  return (
+    <button
+      onClick={() => onOpen(folder)}
+      className="w-full min-w-0 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:shadow-xl border text-left cursor-pointer"
+      style={{
+        backgroundColor: "var(--color-surface-elevated)",
+        borderColor: "var(--color-border)",
+        backdropFilter: "blur(10px)",
+      }}
+    >
+      <div className="flex items-start gap-4 min-w-0 flex-1">
+        <div
+          className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: "var(--color-surface-soft)", color: "var(--color-castleton-green)" }}
+        >
+          <FolderOpen className="h-6 w-6" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h4
+            className="mb-2 text-sm font-semibold leading-snug truncate"
+            title={folder.name}
+            style={{ color: "var(--color-text)", marginBottom: "4px", maxWidth: "100%" }}
+          >
+            {folder.name}
+          </h4>
+          <p className="text-xs" style={{ color: "var(--color-text-light)" }}>
+            Open subfolder
+          </p>
+        </div>
+      </div>
+      <div
+        className="inline-flex items-center justify-center rounded-xl w-11 h-11 shrink-0"
+        style={{
+          backgroundColor: "var(--color-castleton-green)",
+          color: "#FFFFFF",
+          border: "1px solid rgba(255,255,255,0.08)",
+        }}
+        title={`Open ${folder.name}`}
+        aria-label={`Open ${folder.name}`}
+      >
+        <ChevronRight className="h-5 w-5" aria-hidden="true" />
+      </div>
+    </button>
+  );
+}
+
+function FileTable({ files, fileTagsById, onOpen, onDownload, openingFile, downloadingFile, showDownload = false }) {
   return (
     <div
       className="rounded-2xl border overflow-hidden"
@@ -215,12 +329,7 @@ function FileTable({ files, fileTagsById, onOpen, openingFile }) {
                 <tr key={file.id} className="border-t" style={{ borderColor: "var(--color-border)" }}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={excelFileIcon}
-                        alt="Excel file"
-                        className="w-8 h-8 flex-shrink-0"
-                        style={{ objectFit: "contain" }}
-                      />
+                      <img src={excelFileIcon} alt="Excel file" className="w-8 h-8 flex-shrink-0" style={{ objectFit: "contain" }} />
                       <div className="min-w-0">
                         <p className="font-semibold truncate" style={{ color: "var(--color-text)" }} title={file.name}>
                           {file.name}
@@ -247,16 +356,18 @@ function FileTable({ files, fileTagsById, onOpen, openingFile }) {
                             padding: "3px 9px",
                           }}
                         >
-                          <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                        </svg>
+                          <LoaderCircle className="h-3 w-3 animate-spin" aria-hidden="true" />
                           Loading
                         </span>
                       ) : (
-                        (tags || []).map((tag) => (
-                          <span
+                        (tags || []).map((tag) => {
+                          const canOpenSheet = isOpenableSheetTag(tag);
+                          return (
+                          <button
                             key={`${file.id}-${tag}`}
+                            type="button"
+                            onClick={() => canOpenSheet && onOpen(file, tag)}
+                            disabled={!canOpenSheet || Boolean(openingFile)}
                             style={{
                               borderRadius: "20px",
                               backgroundColor: "var(--color-chip-bg)",
@@ -265,37 +376,60 @@ function FileTable({ files, fileTagsById, onOpen, openingFile }) {
                               fontSize: "11px",
                               fontWeight: 600,
                               padding: "3px 9px",
+                              cursor: canOpenSheet && !openingFile ? "pointer" : "default",
+                              opacity: openingFile ? 0.65 : 1,
                             }}
+                            title={canOpenSheet ? `Open ${tag}` : tag}
                           >
                             {tag}
-                          </span>
-                        ))
+                          </button>
+                          );
+                        })
                       )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right align-top">
-                    <button
-                      onClick={() => onOpen(file)}
-                      disabled={openingFile === file.id}
-                      className="rounded-lg px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
-                      style={{
-                        backgroundColor: openingFile === file.id ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
-                        color: "#FFFFFF",
-                        border: "none",
-                      }}
-                    >
-                      {openingFile === file.id ? (
-                        <>
-                          <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                          </svg>
-                          Opening
-                        </>
-                      ) : (
-                        "Open analysis"
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        onClick={() => onOpen(file)}
+                        disabled={Boolean(openingFile)}
+                        className="rounded-lg px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
+                        style={{
+                          backgroundColor: openingFile === file.id ? "rgba(19, 48, 32, 0.5)" : "var(--color-castleton-green)",
+                          color: "#FFFFFF",
+                          border: "none",
+                        }}
+                        >
+                          {openingFile === file.id ? (
+                            <>
+                            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                            Opening
+                          </>
+                        ) : (
+                          "Open analysis"
+                        )}
+                      </button>
+                      {showDownload && (
+                        <button
+                          onClick={() => onDownload(file)}
+                          disabled={downloadingFile === file.id}
+                          className="rounded-lg px-3 py-2 text-sm font-semibold inline-flex items-center justify-center gap-2"
+                          style={{
+                            backgroundColor: "var(--color-surface-soft)",
+                            color: "var(--color-text)",
+                            border: "1px solid var(--color-border)",
+                            opacity: downloadingFile === file.id ? 0.7 : 1,
+                          }}
+                        >
+                          {downloadingFile === file.id ? (
+                            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Download className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          {downloadingFile === file.id ? "Downloading" : "Download"}
+                        </button>
                       )}
-                    </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -323,20 +457,7 @@ function EmptyState({ folderName, onChangeFolder }) {
           backgroundColor: "var(--color-surface-soft)",
         }}
       >
-        <svg
-          className="w-8 h-8"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          style={{ color: "var(--color-text)" }}
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
+        <FileX className="h-8 w-8" style={{ color: "var(--color-text)" }} aria-hidden="true" />
       </div>
       <h3
         style={{
@@ -372,24 +493,26 @@ function EmptyState({ folderName, onChangeFolder }) {
       >
         Upload Excel files to this folder and refresh to get started
       </p>
-      <button
-        onClick={onChangeFolder}
-        className="rounded-lg transition-all"
-        style={{
-          marginTop: "16px",
-          backgroundColor: "var(--color-surface-elevated)",
-          color: "var(--color-text)",
-          border: "1.5px solid var(--color-saffron)",
-          borderRadius: "8px",
-          padding: "10px 20px",
-          fontSize: "14px",
-          fontWeight: 500,
-          width: "auto",
-          boxShadow: "none",
-        }}
-      >
-        Choose different folder
-      </button>
+      {onChangeFolder && (
+        <button
+          onClick={onChangeFolder}
+          className="rounded-lg transition-all"
+          style={{
+            marginTop: "16px",
+            backgroundColor: "var(--color-surface-elevated)",
+            color: "var(--color-text)",
+            border: "1.5px solid var(--color-saffron)",
+            borderRadius: "8px",
+            padding: "10px 20px",
+            fontSize: "14px",
+            fontWeight: 500,
+            width: "auto",
+            boxShadow: "none",
+          }}
+        >
+          Choose different folder
+        </button>
+      )}
     </div>
   );
 }
@@ -398,25 +521,151 @@ function EmptyState({ folderName, onChangeFolder }) {
 export default function HomePage() {
   const navigate = useNavigate();
   const { theme } = useTheme();
-  const { user, accessToken, loading: authLoading, login } = useAuth();
+  const { user, accessToken, loading: authLoading, login, isAdmin } = useAuth();
+  const {
+    tabs,
+    activeTabId,
+    setActiveTabId,
+    openAnalysisTab,
+    closeAnalysisTab,
+    touchAnalysisTab,
+    renameAnalysisTab,
+    togglePinAnalysisTab,
+    clearAnalysisTabs,
+  } = useAnalysisTabs();
+  const {
+    createJob,
+    updateJob,
+    completeJob,
+    failJob,
+    abortJob,
+    removeJob,
+    getJob,
+    attachJobController,
+    detachJobController,
+    dismissNotification,
+    markJobBackground,
+    getJobByRequestKey,
+  } = useAnalysisJobs();
   const { openFolderPicker } = useDrivePicker();
-  const { files, loading: filesLoading, error, listFiles, downloadFile } = useDriveFiles();
+  const {
+    files,
+    folders,
+    loading: filesLoading,
+    error,
+    listFolderContents,
+    getFolderMeta,
+    downloadFile,
+  } = useDriveFiles();
   const lifewoodLogoSrc = theme === "dark" ? LIFEWOOD_DARK_LOGO_URL : lifewoodIconText;
 
-  const [folder, setFolder] = useState(() => {
-    const saved = localStorage.getItem("lastFolder");
-    return saved ? JSON.parse(saved) : null;
-  });
+  const [folder, setFolder] = useState(null);
+  const [folderPath, setFolderPath] = useState([]);
   const [openingFile, setOpeningFile] = useState(null);
+  const [analysisProgress, setAnalysisProgress] = useState(null);
+  const [downloadingFile, setDownloadingFile] = useState(null);
   const [openError, setOpenError] = useState("");
   const [fileTagsById, setFileTagsById] = useState({});
   const tagLoadInProgress = useRef(new Set());
+  const tagCacheRef = useRef({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [viewMode, setViewMode] = useState("cards");
-  const [pageSize, setPageSize] = useState(6);
+  const [pageSize, setPageSize] = useState(() => getDefaultPageSize());
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [foregroundJobId, setForegroundJobId] = useState(null);
+  const pageSizeTouchedRef = useRef(false);
   const [currentPage, setCurrentPage] = useState(1);
   const toolbarDropdownGroupRef = useRef(null);
+  const TAG_CACHE_KEY = "fileSheetTagsCache";
+  const isMountedRef = useRef(true);
+  const foregroundJobIdRef = useRef(null);
+  const backgroundedJobIdsRef = useRef(new Set());
+  const adoptedForegroundJobIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (!pageSizeTouchedRef.current) {
+        setPageSize(getDefaultPageSize());
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      const currentForegroundJobId = foregroundJobIdRef.current;
+      if (currentForegroundJobId && !backgroundedJobIdsRef.current.has(currentForegroundJobId)) {
+        abortJob(currentForegroundJobId);
+      }
+    };
+  }, [abortJob]);
+
+  useEffect(() => {
+    foregroundJobIdRef.current = foregroundJobId;
+  }, [foregroundJobId]);
+
+  const foregroundJob = foregroundJobId ? getJob(foregroundJobId) : null;
+
+  useEffect(() => {
+    if (!foregroundJob || foregroundJob.status !== "running") return;
+    setAnalysisProgress({
+      fileName: foregroundJob.fileName,
+      sheetName: foregroundJob.sheetName,
+      label: foregroundJob.label,
+      percent: foregroundJob.percent,
+    });
+  }, [foregroundJob]);
+
+  useEffect(() => {
+    if (
+      !foregroundJob
+      || foregroundJob.status !== "completed"
+      || !foregroundJob.resultPayload
+      || !adoptedForegroundJobIdsRef.current.has(foregroundJob.id)
+    ) {
+      return;
+    }
+
+    adoptedForegroundJobIdsRef.current.delete(foregroundJob.id);
+    backgroundedJobIdsRef.current.delete(foregroundJob.id);
+    dismissNotification(foregroundJob.id);
+    removeJob(foregroundJob.id);
+    const tabId = openAnalysisTab(foregroundJob.resultPayload);
+    setForegroundJobId(null);
+    setOpeningFile(null);
+    setAnalysisProgress(null);
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  }, [foregroundJob, dismissNotification, removeJob, openAnalysisTab, navigate]);
+
+  useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(TAG_CACHE_KEY) || "{}");
+      if (cached && typeof cached === "object") {
+        tagCacheRef.current = cached;
+      }
+    } catch {
+      tagCacheRef.current = {};
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!files.length) return;
+    const cachedTags = {};
+    files.forEach((file) => {
+      const cached = tagCacheRef.current?.[file.id];
+      if (cached && cached.modifiedTime === file.modifiedTime && Array.isArray(cached.tags)) {
+        cachedTags[file.id] = cached.tags;
+      }
+    });
+    if (Object.keys(cachedTags).length) {
+      setFileTagsById((prev) => ({ ...cachedTags, ...prev }));
+    }
+  }, [files]);
 
   const filteredFiles = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -435,6 +684,12 @@ export default function HomePage() {
     });
   }, [files, fileTagsById, searchTerm, selectedType]);
 
+  const filteredFolders = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return folders;
+    return folders.filter((subfolder) => subfolder.name.toLowerCase().includes(term));
+  }, [folders, searchTerm]);
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedType, pageSize, files.length]);
@@ -444,6 +699,12 @@ export default function HomePage() {
   const startIndex = filteredFiles.length ? (safePage - 1) * pageSize : 0;
   const endIndex = filteredFiles.length ? Math.min(filteredFiles.length, safePage * pageSize) : 0;
   const paginatedFiles = filteredFiles.slice(startIndex, endIndex);
+  const hasActiveFileFilters = searchTerm.trim().length > 0 || selectedType !== "all";
+  const emptyFilesMessage = hasActiveFileFilters
+    ? "No spreadsheet files match your search or filters."
+    : folders.length > 0
+      ? "No spreadsheet files in this folder. Open a subfolder to continue."
+      : "No spreadsheet files in this folder.";
 
   useEffect(() => {
     if (currentPage > totalPages) {
@@ -452,10 +713,62 @@ export default function HomePage() {
   }, [currentPage, totalPages]);
 
   useEffect(() => {
-    if (folder && accessToken) {
-      listFiles(folder.id, accessToken);
+    if (authLoading || !user) return;
+    if (isAdmin) {
+      setFolder(null);
+      setFolderPath([]);
+      return;
     }
-  }, [folder, accessToken, listFiles]);
+
+    const saved = localStorage.getItem("lastFolder");
+    if (!saved) {
+      setFolder(null);
+      setFolderPath([]);
+      return;
+    }
+
+    try {
+      const parsedFolder = JSON.parse(saved);
+      setFolder(parsedFolder);
+      setFolderPath([parsedFolder]);
+    } catch {
+      setFolder(null);
+      setFolderPath([]);
+    }
+  }, [authLoading, user, isAdmin]);
+
+  useEffect(() => {
+    if (!accessToken || !isAdmin) return;
+    if (!ADMIN_ROOT_FOLDER_ID) {
+      setOpenError("Admin root folder is not configured. Set VITE_ADMIN_ROOT_FOLDER_ID.");
+      return;
+    }
+
+    let cancelled = false;
+    const initAdminRoot = async () => {
+      try {
+        const rootFolder = await getFolderMeta(ADMIN_ROOT_FOLDER_ID, accessToken);
+        if (cancelled) return;
+        setFolder(rootFolder);
+        setFolderPath([rootFolder]);
+        await listFolderContents(rootFolder.id, accessToken);
+      } catch (err) {
+        if (!cancelled) {
+          setOpenError(`Failed to open admin workspace: ${err.message}`);
+        }
+      }
+    };
+
+    initAdminRoot();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, isAdmin, getFolderMeta, listFolderContents]);
+
+  useEffect(() => {
+    if (!accessToken || isAdmin || !folder) return;
+    listFolderContents(folder.id, accessToken);
+  }, [folder, accessToken, isAdmin, listFolderContents]);
 
   useEffect(() => {
     if (!files.length || !accessToken) return;
@@ -470,7 +783,14 @@ export default function HomePage() {
       tagLoadInProgress.current.add(file.id);
 
       try {
-        const arrayBuffer = await downloadFile(file.id, accessToken);
+        const cached = tagCacheRef.current?.[file.id];
+        if (cached && cached.modifiedTime === file.modifiedTime && Array.isArray(cached.tags)) {
+          if (!isCancelled) {
+            setFileTagsById((prev) => ({ ...prev, [file.id]: cached.tags }));
+          }
+          return;
+        }
+        const { arrayBuffer } = await downloadFile(file.id, accessToken);
         const blob = new Blob([arrayBuffer], {
           type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         });
@@ -487,6 +807,19 @@ export default function HomePage() {
         const tags = getSheetBasedTags(data?.sheets || []);
         if (!isCancelled) {
           setFileTagsById((prev) => ({ ...prev, [file.id]: tags }));
+        }
+        tagCacheRef.current = {
+          ...tagCacheRef.current,
+          [file.id]: {
+            tags,
+            modifiedTime: file.modifiedTime || null,
+            updatedAt: Date.now(),
+          },
+        };
+        try {
+          localStorage.setItem(TAG_CACHE_KEY, JSON.stringify(tagCacheRef.current));
+        } catch {
+          // ignore storage quota errors
         }
       } catch {
         if (!isCancelled) {
@@ -516,49 +849,354 @@ export default function HomePage() {
 
   const handleFolderSelect = (selectedFolder) => {
     setFolder(selectedFolder);
+    setFolderPath([selectedFolder]);
     localStorage.setItem("lastFolder", JSON.stringify(selectedFolder));
-    listFiles(selectedFolder.id, accessToken);
+    listFolderContents(selectedFolder.id, accessToken);
   };
 
-  const handleOpenFile = async (file) => {
+  const handleOpenAdminFolder = async (nextFolder) => {
+    if (!accessToken || !isAdmin) return;
+    setOpenError("");
+    setFolder(nextFolder);
+    setFolderPath((prev) => [...prev, nextFolder]);
+    await listFolderContents(nextFolder.id, accessToken);
+  };
+
+  const handleAdminBreadcrumb = async (targetFolderId) => {
+    if (!accessToken || !isAdmin) return;
+    const nextPath = folderPath.slice(0, folderPath.findIndex((item) => item.id === targetFolderId) + 1);
+    const nextFolder = nextPath[nextPath.length - 1];
+    if (!nextFolder) return;
+    setFolder(nextFolder);
+    setFolderPath(nextPath);
+    await listFolderContents(nextFolder.id, accessToken);
+  };
+
+  const handleOpenBackgroundJob = (jobId) => {
+    const job = getJob(jobId);
+    if (!job?.resultPayload) return;
+
+    backgroundedJobIdsRef.current.delete(jobId);
+    dismissNotification(jobId);
+    removeJob(jobId);
+    const tabId = openAnalysisTab(job.resultPayload);
+    navigate("/dashboard", { state: { targetTabId: tabId } });
+  };
+
+  const handleOpenFile = (file, sheetName = "") => {
+    const requestKey = makeAnalysisRequestKey({
+      driveFileId: file.id,
+      sheetName,
+      modifiedTime: file.modifiedTime,
+    });
+    const existingJob = getJobByRequestKey(requestKey);
+
+    if (existingJob?.status === "completed" && existingJob.resultPayload) {
+      dismissNotification(existingJob.id);
+      removeJob(existingJob.id);
+      const tabId = openAnalysisTab({
+        ...existingJob.resultPayload,
+        fileName: file.name,
+        driveFileId: file.id,
+        driveModifiedTime: file.modifiedTime,
+        folderId: folder?.id,
+        sourceUserEmail: isAdmin ? folder?.name : user?.email,
+        sourceFolderName: folder?.name,
+      });
+      navigate("/dashboard", { state: { targetTabId: tabId } });
+      return;
+    }
+
+    if (existingJob?.status === "running") {
+      backgroundedJobIdsRef.current.delete(existingJob.id);
+      adoptedForegroundJobIdsRef.current.add(existingJob.id);
+      setForegroundJobId(existingJob.id);
+      setOpeningFile(file.id);
+      setAnalysisProgress({
+        fileName: existingJob.fileName || file.name,
+        sheetName: existingJob.sheetName || sheetName,
+        label: existingJob.label || "Analyzing workbook",
+        percent: existingJob.percent ?? 45,
+      });
+      setOpenError("");
+      return;
+    }
+
+    const cachedAnalysis = getAnalysisResultCache({
+      driveFileId: file.id,
+      sheetName: sheetName || "",
+      modifiedTime: file.modifiedTime,
+      allowDefaultAlias: !sheetName,
+    });
+
+    if (cachedAnalysis) {
+      const tabId = openAnalysisTab({
+        ...cachedAnalysis,
+        fileName: file.name,
+        driveFileId: file.id,
+        driveModifiedTime: file.modifiedTime,
+        folderId: folder?.id,
+        sourceUserEmail: isAdmin ? folder?.name : user?.email,
+        sourceFolderName: folder?.name,
+      });
+      navigate("/dashboard", { state: { targetTabId: tabId } });
+      return;
+    }
+
+    const currentForegroundJobId = foregroundJobIdRef.current;
+    if (currentForegroundJobId && !backgroundedJobIdsRef.current.has(currentForegroundJobId)) {
+      abortJob(currentForegroundJobId);
+    }
+
+    const jobId = createJob({
+      fileId: file.id,
+      fileName: file.name,
+      sheetName,
+      label: "Downloading workbook from Drive",
+      percent: 20,
+      requestKey,
+    });
+    const controller = new AbortController();
+    attachJobController(jobId, controller);
+
+    setForegroundJobId(jobId);
     setOpeningFile(file.id);
+    setAnalysisProgress({
+      fileName: file.name,
+      sheetName,
+      label: "Downloading workbook from Drive",
+      percent: 20,
+    });
     setOpenError("");
 
-    try {
-      const arrayBuffer = await downloadFile(file.id, accessToken);
-      const blob = new Blob([arrayBuffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
+    void (async () => {
+      try {
+        const cachedWorkbook = getCurrentWorkbookCache({
+          driveFileId: file.id,
+          modifiedTime: file.modifiedTime,
+        });
+        let arrayBuffer = cachedWorkbook?.arrayBuffer || null;
+        let meta = cachedWorkbook
+          ? {
+            name: cachedWorkbook.fileName || file.name,
+            modifiedTime: cachedWorkbook.modifiedTime || file.modifiedTime,
+            version: cachedWorkbook.version,
+            mimeType: cachedWorkbook.mimeType || file.mimeType,
+          }
+          : null;
 
-      const formData = new FormData();
-      formData.append("file", blob, file.name);
+        if (arrayBuffer) {
+          updateJob(jobId, {
+            label: "Using cached workbook",
+            percent: 35,
+          });
+          if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+            setAnalysisProgress({
+              fileName: file.name,
+              sheetName,
+              label: "Using cached workbook",
+              percent: 35,
+            });
+          }
+        } else {
+          const downloaded = await downloadFile(file.id, accessToken, controller.signal);
+          arrayBuffer = downloaded.arrayBuffer;
+          meta = downloaded.meta;
+          setCurrentWorkbookCache({
+            driveFileId: file.id,
+            fileName: file.name,
+            modifiedTime: meta?.modifiedTime || file.modifiedTime,
+            version: meta?.version,
+            mimeType: meta?.mimeType || file.mimeType,
+            arrayBuffer,
+          });
+        }
 
-      const res = await fetch(`${HOST}/analyze-bytes`, {
-        method: "POST",
-        body: formData,
-      });
+        updateJob(jobId, {
+          label: "Reading workbook and detecting headers",
+          percent: 45,
+          requestKey: makeAnalysisRequestKey({
+            driveFileId: file.id,
+            sheetName,
+            modifiedTime: meta?.modifiedTime || file.modifiedTime,
+          }),
+        });
+        if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+          setAnalysisProgress({
+            fileName: file.name,
+            sheetName,
+            label: "Reading workbook and detecting headers",
+            percent: 45,
+          });
+        }
 
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const { tableData, blueprint, allSheets, currentSheet } = await res.json();
+        const blob = new Blob([arrayBuffer], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
 
-      navigate("/dashboard", {
-        state: {
+        const formData = new FormData();
+        formData.append("file", blob, file.name);
+
+        const analyzeQuery = new URLSearchParams();
+        if (sheetName) analyzeQuery.set("sheet_name", sheetName);
+        analyzeQuery.set("drive_file_id", file.id);
+        analyzeQuery.set("drive_modified_time", meta?.modifiedTime || file.modifiedTime || "");
+        const analyzeUrl = `${HOST}/analyze-bytes?${analyzeQuery.toString()}`;
+
+        const res = await fetch(analyzeUrl, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+        updateJob(jobId, {
+          label: "Building dashboard and AI context",
+          percent: 80,
+        });
+        if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+          setAnalysisProgress({
+            fileName: file.name,
+            sheetName,
+            label: "Building dashboard and AI context",
+            percent: 80,
+          });
+        }
+
+        const { tableData, blueprint, allSheets, currentSheet, analysisSession } = await res.json();
+
+        if (!isAdmin && ADMIN_ROOT_FOLDER_ID && user?.email) {
+          const mirrorBlob = new Blob([arrayBuffer], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          });
+          const mirrorFormData = new FormData();
+          mirrorFormData.append("file", mirrorBlob, normalizeAdminCopyName(file));
+
+          void fetch(
+            `${HOST}/admin-mirror?user_email=${encodeURIComponent(user.email)}&file_name=${encodeURIComponent(normalizeAdminCopyName(file))}`,
+            {
+              method: "POST",
+              body: mirrorFormData,
+            }
+          )
+            .then(async (mirrorRes) => {
+              const result = await mirrorRes.json().catch(() => ({}));
+              if (!mirrorRes.ok || result.ok === false || result.error) {
+                throw new Error(result.error || `Mirror request failed: ${mirrorRes.status}`);
+              }
+            })
+            .catch((copyErr) => {
+              console.warn("[admin-mirror] Failed to sync analyzed file:", copyErr.message);
+            });
+        }
+
+        const payload = {
           tableData,
           blueprint,
           currentSheet,
           allSheets,
           fileName: file.name,
           driveFileId: file.id,
-          driveModifiedTime: file.modifiedTime,
-          folderId: folder.id,
-          accessToken,
-        },
-      });
+          driveModifiedTime: meta?.modifiedTime || file.modifiedTime,
+          analysisSession: analysisSession || null,
+          folderId: folder?.id,
+          sourceUserEmail: isAdmin ? folder?.name : user?.email,
+          sourceFolderName: folder?.name,
+        };
+
+        setAnalysisResultCache(payload, {
+          requestedSheetName: sheetName,
+          modifiedTime: meta?.modifiedTime || file.modifiedTime,
+        });
+
+        completeJob(jobId, payload);
+
+        if (foregroundJobIdRef.current === jobId && !backgroundedJobIdsRef.current.has(jobId) && isMountedRef.current) {
+          setAnalysisProgress({
+            fileName: file.name,
+            sheetName: currentSheet,
+            label: "Opening dashboard",
+            percent: 100,
+          });
+          const tabId = openAnalysisTab(payload);
+          dismissNotification(jobId);
+          removeJob(jobId);
+          setForegroundJobId(null);
+          setOpeningFile(null);
+          setAnalysisProgress(null);
+          navigate("/dashboard", { state: { targetTabId: tabId } });
+          return;
+        }
+
+        if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+          setForegroundJobId(null);
+          setOpeningFile(null);
+          setAnalysisProgress(null);
+        }
+      } catch (err) {
+        if (err?.name === "AbortError") {
+          return;
+        }
+        failJob(jobId, `Failed to open ${file.name}: ${err.message}`);
+        if (foregroundJobIdRef.current === jobId && isMountedRef.current) {
+          setOpenError(`Failed to open ${file.name}: ${err.message}`);
+          setForegroundJobId(null);
+          setOpeningFile(null);
+          setAnalysisProgress(null);
+        }
+      } finally {
+        detachJobController(jobId);
+      }
+    })();
+  };
+
+  const cancelCurrentAnalysis = () => {
+    const currentForegroundJobId = foregroundJobIdRef.current;
+    if (currentForegroundJobId) {
+      backgroundedJobIdsRef.current.delete(currentForegroundJobId);
+      adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
+      abortJob(currentForegroundJobId);
+    }
+    setForegroundJobId(null);
+    setOpeningFile(null);
+    setAnalysisProgress(null);
+  };
+
+  const continueCurrentAnalysisInBackground = () => {
+    const currentForegroundJobId = foregroundJobIdRef.current;
+    if (!currentForegroundJobId) return;
+    backgroundedJobIdsRef.current.add(currentForegroundJobId);
+    adoptedForegroundJobIdsRef.current.delete(currentForegroundJobId);
+    markJobBackground(currentForegroundJobId);
+    setForegroundJobId(null);
+    setOpeningFile(null);
+    setAnalysisProgress(null);
+  };
+
+  const handleDownloadFile = async (file) => {
+    setDownloadingFile(file.id);
+    setOpenError("");
+
+    try {
+      const { arrayBuffer } = await downloadFile(file.id, accessToken);
+      triggerBrowserDownload(
+        arrayBuffer,
+        normalizeAdminCopyName(file),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
     } catch (err) {
-      setOpenError(`Failed to open ${file.name}: ${err.message}`);
+      setOpenError(`Failed to download ${file.name}: ${err.message}`);
     }
 
-    setOpeningFile(null);
+    setDownloadingFile(null);
+  };
+
+  const handleSelectAnalysisTab = (tabId) => {
+    if (!tabs.some((tab) => tab.id === tabId)) return;
+    touchAnalysisTab(tabId);
+    setActiveTabId(tabId);
+    navigate("/dashboard", { state: { targetTabId: tabId } });
   };
 
   // Loading state
@@ -566,18 +1204,15 @@ export default function HomePage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: "var(--color-bg)" }}>
         <div className="flex flex-col items-center gap-4">
-          <svg className="animate-spin w-10 h-10" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-text)" }}>
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-          </svg>
-          <p style={{ color: "var(--color-text-light)" }}>Loading DataViz</p>
+          <LoaderCircle className="h-10 w-10 animate-spin" style={{ color: "var(--color-text)" }} aria-hidden="true" />
+          <p style={{ color: "var(--color-text-light)" }}>Loading LifeSights</p>
         </div>
       </div>
     );
   }
 
   // Login state
-  if (!user) {
+  if (!user || !accessToken) {
     return (
     <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{ backgroundColor: "var(--color-bg)" }}>
         <ScrollProgressBar />
@@ -632,18 +1267,25 @@ export default function HomePage() {
               padding: "48px 48px",
             }}
           >
-            <h1 className="text-2xl font-bold mb-4 text-center" style={{ color: "var(--color-text)" }}>
-              DataViz
-            </h1>
-            <div className="mb-5">
-              <p className="text-xs text-center mb-8" style={{ color: "var(--color-text-light)" }}>
-                Powered by Lifewood PH
-              </p>
+            <div className="mb-8 flex justify-center">
+              <img
+                src={lifeSightsLogo}
+                alt="LifeSights powered by Lifewood"
+                className="h-auto w-full max-w-[260px]"
+                style={{
+                  objectFit: "contain",
+                }}
+              />
             </div>
             <div className="mb-5">
-              <p className="text-sm text-center leading-relaxed" style={{ color: "var(--color-text-light)" }}>
+              <p className="text-sm text-center leading-relaxed" style={{ color: "var(--color-dark-serpent)", opacity: 0.82 }}>
                 Connect your Google Drive to visualize and analyze Excel files in real time
               </p>
+              {user && !accessToken && (
+                <p className="text-xs text-center mt-3" style={{ color: "var(--color-dark-serpent)", opacity: 0.78 }}>
+                  Session expired. Please sign in again to continue.
+                </p>
+              )}
             </div>
             <button
               onClick={login}
@@ -660,8 +1302,8 @@ export default function HomePage() {
               </svg>
               <span className="login-google-wave-text">Sign in with Google</span>
             </button>
-            <p className="text-xs text-center" style={{ color: "var(--color-text-light)" }}>
-              Read-only access to your Google Drive files
+            <p className="text-xs text-center" style={{ color: "var(--color-dark-serpent)", opacity: 0.72 }}>
+              Secure access to your Google Drive files
             </p>
           </div>
         </div>
@@ -669,7 +1311,11 @@ export default function HomePage() {
     );
   }
 
-  const breadcrumb = folder ? `Your Google Drive > ... > ${folder.name}` : "Your Google Drive";
+  const breadcrumb = isAdmin
+    ? `Admin Workspace > ${folderPath.map((item) => item.name).join(" > ")}`
+    : folder
+      ? `Your Google Drive > ... > ${folder.name}`
+      : "Your Google Drive";
   const handleToolbarDropdownToggle = (e) => {
     const currentDetails = e.currentTarget;
     if (!currentDetails?.open) return;
@@ -685,10 +1331,47 @@ export default function HomePage() {
   // Main logged-in view
   return (
     <div style={{ backgroundColor: "var(--color-bg)", minHeight: "100vh" }}>
+      <style>{`
+        .home-page-title {
+          font-size: clamp(2rem, 4vw, 3rem) !important;
+          line-height: 1.05 !important;
+          letter-spacing: -0.045em;
+        }
+        @media (max-width: 900px) {
+          .home-main-shell {
+            margin-left: 0 !important;
+          }
+          .home-header-inner {
+            padding: 14px 16px !important;
+            gap: 12px;
+            align-items: flex-start !important;
+          }
+          .home-main-content {
+            padding: 24px 16px 40px !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .home-page-title {
+            font-size: 1.75rem !important;
+            line-height: 1.15 !important;
+          }
+          .home-toolbar-row {
+            flex-direction: column;
+            align-items: stretch !important;
+          }
+        }
+      `}</style>
       <ScrollProgressBar />
+      <button
+        type="button"
+        className={`ui-sidebar-backdrop ${isSidebarOpen ? "is-open" : ""}`}
+        style={{ padding: 0, border: "none" }}
+        aria-label="Close sidebar"
+        onClick={() => setIsSidebarOpen(false)}
+      />
 
       <aside
-        className="ui-auto-hide-sidebar"
+        className={`ui-auto-hide-sidebar ${isSidebarOpen ? "is-open" : ""}`}
         style={{
           position: "fixed",
           top: 0,
@@ -706,12 +1389,99 @@ export default function HomePage() {
           folder={folder}
           files={files}
           filesLoading={filesLoading}
-          onSelectFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
-          onRefresh={() => folder && listFiles(folder.id, accessToken)}
+          onSelectFolder={isAdmin ? null : () => {
+            setIsSidebarOpen(false);
+            openFolderPicker(accessToken, handleFolderSelect);
+          }}
+          onRefresh={() => {
+            setIsSidebarOpen(false);
+            folder && listFolderContents(folder.id, accessToken);
+          }}
+          analysisTabs={tabs}
+          activeAnalysisTabId={activeTabId}
+          onSelectAnalysisTab={(tabId) => {
+            setIsSidebarOpen(false);
+            handleSelectAnalysisTab(tabId);
+          }}
+          onCloseAnalysisTab={closeAnalysisTab}
+          onRenameAnalysisTab={renameAnalysisTab}
+          onTogglePinAnalysisTab={togglePinAnalysisTab}
+          onClearAnalysisTabs={clearAnalysisTabs}
         />
       </aside>
 
-      <div style={{ marginLeft: "var(--sidebar-offset)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      <div className="home-main-shell" style={{ marginLeft: "var(--sidebar-offset)", minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+        {analysisProgress && (
+          <div
+            className="fixed inset-0 z-[130] flex items-center justify-center px-6"
+            style={{
+              backgroundColor: "rgba(19, 48, 32, 0.58)",
+              backdropFilter: "blur(5px)",
+              WebkitBackdropFilter: "blur(5px)",
+            }}
+          >
+            <div
+              className="w-full max-w-md rounded-3xl border p-6 shadow-2xl"
+              style={{
+                backgroundColor: "var(--color-surface-elevated)",
+                borderColor: "var(--color-border)",
+                color: "var(--color-text)",
+              }}
+            >
+              <div className="mb-4 flex items-center gap-3">
+                <LoaderCircle className="h-6 w-6 animate-spin" style={{ color: "var(--color-castleton-green)" }} aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-sm font-extrabold" style={{ color: "var(--color-text)" }}>Analyzing workbook</p>
+                  <p className="truncate text-xs" style={{ color: "var(--color-text-light)" }}>
+                    {analysisProgress.fileName}{analysisProgress.sheetName ? ` - ${analysisProgress.sheetName}` : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold" style={{ color: "var(--color-text-light)" }}>
+                <span>{analysisProgress.label}</span>
+                <span>{analysisProgress.percent}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-surface-soft)" }}>
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${analysisProgress.percent}%`,
+                    background: "linear-gradient(90deg, var(--color-castleton-green), var(--color-saffron))",
+                  }}
+                />
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={continueCurrentAnalysisInBackground}
+                  className="mr-2 rounded-xl px-4 py-2 text-xs font-extrabold transition-all"
+                  style={{
+                    border: "1px solid var(--color-border)",
+                    backgroundColor: "var(--color-surface-soft)",
+                    color: "var(--color-text)",
+                  }}
+                >
+                  Continue in background
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelCurrentAnalysis}
+                  className="rounded-xl px-4 py-2 text-xs font-extrabold transition-all"
+                  style={{
+                    border: "1px solid var(--color-border)",
+                    backgroundColor: "var(--color-surface)",
+                    color: "var(--color-text)",
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="mt-3 text-[11px] font-semibold" style={{ color: "var(--color-text-light)" }}>
+                Large sheets may take a little longer while LifeSights prepares rows, charts, and AI context.
+              </p>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <header
           className="sticky top-0 z-40 border-b"
@@ -721,16 +1491,54 @@ export default function HomePage() {
             borderColor: "var(--color-border)",
           }}
         >
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <div className="text-left">
-              <p className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
-                {breadcrumb}
-              </p>
-              {!folder && (
-                <p className="text-xs" style={{ color: "var(--color-text-light)" }}>
-                  No folder selected
+          <div className="home-header-inner max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div className="flex min-w-0 items-start gap-3">
+              <button
+                type="button"
+                className="ui-sidebar-toggle"
+                aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+                aria-expanded={isSidebarOpen}
+                onClick={() => setIsSidebarOpen((current) => !current)}
+              >
+                {isSidebarOpen ? (
+                  <X size={22} strokeWidth={2.5} color="currentColor" aria-hidden="true" />
+                ) : (
+                  <Menu size={22} strokeWidth={2.5} color="currentColor" aria-hidden="true" />
+                )}
+              </button>
+              <div className="min-w-0 text-left">
+                <p className="text-sm font-semibold" style={{ color: "var(--color-text)" }}>
+                  {breadcrumb}
                 </p>
-              )}
+                {!folder && (
+                  <p className="text-xs" style={{ color: "var(--color-text-light)" }}>
+                    No folder selected
+                  </p>
+                )}
+                {isAdmin && folderPath.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    {folderPath.map((pathFolder, index) => (
+                      <button
+                        key={pathFolder.id}
+                        type="button"
+                        onClick={() => handleAdminBreadcrumb(pathFolder.id)}
+                        disabled={index === folderPath.length - 1}
+                        className="inline-flex items-center gap-2 rounded-full px-3 py-1"
+                        style={{
+                          border: "1px solid var(--color-border)",
+                          backgroundColor: index === folderPath.length - 1 ? "var(--color-surface-soft)" : "var(--color-surface-elevated)",
+                          color: "var(--color-text)",
+                          opacity: index === folderPath.length - 1 ? 1 : 0.9,
+                          cursor: index === folderPath.length - 1 ? "default" : "pointer",
+                        }}
+                      >
+                        {index === 0 ? <House className="h-3.5 w-3.5" aria-hidden="true" /> : null}
+                        <span>{pathFolder.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center justify-end">
               <ThemeToggle />
@@ -739,16 +1547,18 @@ export default function HomePage() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 max-w-7xl mx-auto px-6 py-12 w-full flex flex-col">
+        <main className="home-main-content flex-1 max-w-7xl mx-auto px-6 py-12 w-full flex flex-col">
           {/* Page Title */}
           <div className="mb-12">
-            <h1 className="text-3xl font-bold mb-4" style={{ color: "var(--color-text)", marginBottom: "4px" }}>
-              Excel Files
+            <h1 className="home-page-title text-3xl font-bold mb-4" style={{ color: "var(--color-text)", marginBottom: "4px" }}>
+              {isAdmin ? "Admin Workspace" : "Excel Files"}
             </h1>
             <p style={{ color: "var(--color-text-light)" }}>
-              {folder
-                ? `${files.length} file${files.length !== 1 ? "s" : ""} available in `
-                : "Select a Google Drive folder to begin exploring your data"}
+              {isAdmin
+                ? `Browsing ${folders.length} folder${folders.length !== 1 ? "s" : ""} and ${files.length} file${files.length !== 1 ? "s" : ""} in `
+                : folder
+                  ? `${files.length} file${files.length !== 1 ? "s" : ""} available in `
+                  : "Select a Google Drive folder to begin exploring your data"}
               {folder && <span style={{ fontWeight: 700, color: "var(--color-text)" }}>{folder.name}</span>}
             </p>
           </div>
@@ -763,20 +1573,7 @@ export default function HomePage() {
                 borderLeft: `4px solid var(--color-saffron)`,
               }}
             >
-              <svg
-                className="w-5 h-5 flex-shrink-0 mt-0.5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                style={{ color: "var(--color-text)" }}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <TriangleAlert className="mt-0.5 h-5 w-5 flex-shrink-0" style={{ color: "var(--color-text)" }} aria-hidden="true" />
               <div className="text-sm" style={{ color: "var(--color-text)" }}>
                 {error || openError}
               </div>
@@ -786,10 +1583,7 @@ export default function HomePage() {
           {/* Loading State */}
           {filesLoading && (
             <div className="flex flex-col items-center justify-center py-24">
-              <svg className="animate-spin w-10 h-10 mb-4" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-text)" }}>
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
+              <LoaderCircle className="mb-4 h-10 w-10 animate-spin" style={{ color: "var(--color-text)" }} aria-hidden="true" />
               <p style={{ color: "var(--color-text-light)" }}>Loading files from Google Drive</p>
             </div>
           )}
@@ -801,49 +1595,38 @@ export default function HomePage() {
                 className="w-24 h-24 rounded-2xl flex items-center justify-center mb-8"
                 style={{ backgroundColor: "var(--color-surface-soft)" }}
               >
-                <svg
-                  className="w-12 h-12"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  style={{ color: "var(--color-text)" }}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                  />
-                </svg>
+                <FolderSearch className="h-12 w-12" style={{ color: "var(--color-text)" }} aria-hidden="true" />
               </div>
               <h2 className="text-xl font-bold mb-4 text-center" style={{ color: "var(--color-text)" }}>
                 Select a folder to get started
               </h2>
               <p className="text-sm mb-12 text-center max-w-sm leading-relaxed" style={{ color: "var(--color-text-light)" }}>
-                Choose a Google Drive folder containing your Excel files to start analyzing
+                {isAdmin
+                  ? "Admin users are automatically scoped to the configured admin Drive workspace"
+                  : "Choose a Google Drive folder containing your Excel files to start analyzing"}
               </p>
-              <button
-                onClick={() => openFolderPicker(accessToken, handleFolderSelect)}
-                className="text-sm font-semibold px-8 py-3 flex items-center gap-2 rounded-lg transition-all"
-                style={{
-                  backgroundColor: "var(--color-dark-serpent)",
-                  color: "#FFFFFF",
-                  border: "none",
-                }}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                Select Google Drive Folder
-              </button>
+              {!isAdmin && (
+                <button
+                  onClick={() => openFolderPicker(accessToken, handleFolderSelect)}
+                  className="text-sm font-semibold px-8 py-3 flex items-center gap-2 rounded-lg transition-all"
+                  style={{
+                    backgroundColor: "var(--color-dark-serpent)",
+                    color: "#FFFFFF",
+                    border: "none",
+                  }}
+                >
+                  <FolderSearch className="h-5 w-5" aria-hidden="true" />
+                  Select Google Drive Folder
+                </button>
+              )}
             </div>
           )}
 
           {/* File Grid */}
-          {!filesLoading && folder && files.length > 0 && (
+          {!filesLoading && folder && (files.length > 0 || folders.length > 0) && (
             <>
               <div className="mb-6 flex flex-col gap-3">
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="home-toolbar-row flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-[240px]">
                     <label className="sr-only" htmlFor="file-search">Search files</label>
                     <div className="relative">
@@ -874,9 +1657,7 @@ export default function HomePage() {
                         <span>
                           {selectedType === "all" ? "All types" : selectedType === "xlsx" ? ".xlsx" : ".xls"}
                         </span>
-                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
-                        </svg>
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </summary>
 
                       <div
@@ -928,9 +1709,7 @@ export default function HomePage() {
                         aria-label="Page size"
                       >
                         <span>Show {pageSize}</span>
-                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
-                        </svg>
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </summary>
 
                       <div
@@ -939,11 +1718,12 @@ export default function HomePage() {
                         role="menu"
                         aria-label="Page size options"
                       >
-                        {[6, 12, 18].map((size) => (
+                        {PAGE_SIZE_OPTIONS.map((size) => (
                           <button
                             key={size}
                             type="button"
                             onClick={(e) => {
+                              pageSizeTouchedRef.current = true;
                               setPageSize(size);
                               e.currentTarget.closest("details")?.removeAttribute("open");
                             }}
@@ -966,9 +1746,7 @@ export default function HomePage() {
                         aria-label="View"
                       >
                         <span>View</span>
-                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                          <path d="M5.25 7.5a.75.75 0 0 1 1.06 0L10 11.19l3.69-3.69a.75.75 0 1 1 1.06 1.06l-4.22 4.22a.75.75 0 0 1-1.06 0L5.25 8.56a.75.75 0 0 1 0-1.06z" />
-                        </svg>
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
                       </summary>
 
                       <div
@@ -1002,7 +1780,7 @@ export default function HomePage() {
                   <span>
                     {filteredFiles.length
                       ? `Showing ${startIndex + 1}-${endIndex} of ${filteredFiles.length} file${filteredFiles.length !== 1 ? "s" : ""}`
-                      : "No files match your search or filters"}
+                      : emptyFilesMessage}
                   </span>
                   <div className="flex items-center gap-2">
                     <button
@@ -1036,22 +1814,48 @@ export default function HomePage() {
                 </div>
               </div>
 
-              {filteredFiles.length === 0 && (
+              {filteredFiles.length === 0 && (hasActiveFileFilters || folders.length === 0 || !isAdmin) && (
                 <div className="rounded-2xl border p-6 text-center" style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}>
-                  No files match your search or filters.
+                  {emptyFilesMessage}
+                </div>
+              )}
+
+              {isAdmin && filteredFolders.length > 0 && (
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-bold" style={{ color: "var(--color-text)" }}>Subfolders</h2>
+                    <span className="text-sm" style={{ color: "var(--color-text-light)" }}>
+                      {filteredFolders.length} folder{filteredFolders.length !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
+                    {filteredFolders.map((subfolder) => (
+                      <FolderCard key={subfolder.id} folder={subfolder} onOpen={handleOpenAdminFolder} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {isAdmin && folders.length > 0 && filteredFolders.length === 0 && searchTerm.trim() && (
+                <div className="rounded-2xl border p-6 text-center mb-8" style={{ borderColor: "var(--color-border)", color: "var(--color-text)" }}>
+                  No subfolders match your search.
                 </div>
               )}
 
               {filteredFiles.length > 0 && viewMode === "cards" && (
-                <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
+                <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
                   {paginatedFiles.map((file) => (
                     <FileCard
                       key={file.id}
                       file={file}
                       onOpen={handleOpenFile}
+                      onDownload={handleDownloadFile}
                       loading={openingFile === file.id}
+                      openDisabled={Boolean(openingFile)}
+                      downloadLoading={downloadingFile === file.id}
                       tags={fileTagsById[file.id] || []}
                       isTagLoading={!fileTagsById[file.id]}
+                      showDownload={isAdmin}
                     />
                   ))}
                 </div>
@@ -1062,14 +1866,17 @@ export default function HomePage() {
                   files={paginatedFiles}
                   fileTagsById={fileTagsById}
                   onOpen={handleOpenFile}
+                  onDownload={handleDownloadFile}
                   openingFile={openingFile}
+                  downloadingFile={downloadingFile}
+                  showDownload={isAdmin}
                 />
               )}
             </>
           )}
 
           {/* Empty Folder State */}
-          {!filesLoading && folder && files.length === 0 && (
+          {!filesLoading && folder && files.length === 0 && folders.length === 0 && (
             <div
               style={{
                 flex: 1,
@@ -1082,12 +1889,14 @@ export default function HomePage() {
             >
               <EmptyState
                 folderName={folder.name}
-                onChangeFolder={() => openFolderPicker(accessToken, handleFolderSelect)}
+                onChangeFolder={isAdmin ? null : () => openFolderPicker(accessToken, handleFolderSelect)}
               />
             </div>
           )}
         </main>
       </div>
+      <BackgroundAnalysisDock />
+      <BackgroundAnalysisToasts onOpenJob={handleOpenBackgroundJob} />
     </div>
   );
 }

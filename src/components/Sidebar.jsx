@@ -4,23 +4,98 @@ import { useTheme } from "../context/ThemeContext";
 import lifewoodIconText from "../assets/branding/lifewood-icon-text.png";
 import { LIFEWOOD_DARK_LOGO_URL } from "../constants/branding";
 import UserAvatar from "./UserAvatar";
+import { ArrowLeft, Check, ChevronDown, FileSpreadsheet, LoaderCircle, LogOut, MoreVertical, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
 
-export default function Sidebar({ folder, files, filesLoading, onSelectFolder, onRefresh, onBack }) {
-  const { user, logout } = useAuth();
+function formatTabTime(timestamp) {
+  if (!timestamp) return "Not opened yet";
+  return new Date(timestamp).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function getTabLabel(tab) {
+  if (tab.customLabel?.trim()) return tab.customLabel.trim();
+  return tab.currentSheet ? `${tab.fileName} - ${tab.currentSheet}` : tab.fileName;
+}
+
+function groupTabs(tabs, isAdmin) {
+  if (!isAdmin) return [{ key: "my-tabs", label: "My analysis", tabs }];
+
+  const grouped = new Map();
+  tabs.forEach((tab) => {
+    const label = tab.sourceUserEmail || tab.sourceFolderName || "Admin workspace";
+    if (!grouped.has(label)) grouped.set(label, []);
+    grouped.get(label).push(tab);
+  });
+
+  return Array.from(grouped.entries()).map(([label, groupTabs]) => ({
+    key: label,
+    label,
+    tabs: groupTabs,
+  }));
+}
+
+export default function Sidebar({
+  folder,
+  filesLoading,
+  onSelectFolder,
+  onRefresh,
+  onBack,
+  analysisTabs = [],
+  activeAnalysisTabId = null,
+  onSelectAnalysisTab,
+  onCloseAnalysisTab,
+  onRenameAnalysisTab,
+  onTogglePinAnalysisTab,
+  onClearAnalysisTabs,
+}) {
+  const { user, logout, isAdmin } = useAuth();
   const { theme } = useTheme();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [openTabMenuId, setOpenTabMenuId] = useState(null);
+  const [editingTabId, setEditingTabId] = useState(null);
+  const [editingLabel, setEditingLabel] = useState("");
   const profileMenuRef = useRef(null);
   const lifewoodLogoSrc = theme === "dark" ? LIFEWOOD_DARK_LOGO_URL : lifewoodIconText;
+  const visibleAnalysisTabs = analysisTabs.slice(0, 5);
+  const hasHiddenAnalysisTabs = analysisTabs.length > visibleAnalysisTabs.length;
+
+  const startRenameTab = (tab, fallbackLabel) => {
+    setOpenTabMenuId(null);
+    setEditingTabId(tab.id);
+    setEditingLabel(tab.customLabel?.trim() || fallbackLabel);
+  };
+
+  const commitRenameTab = (tab) => {
+    onRenameAnalysisTab?.(tab.id, editingLabel);
+    setEditingTabId(null);
+    setEditingLabel("");
+  };
+
+  const cancelRenameTab = () => {
+    setEditingTabId(null);
+    setEditingLabel("");
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
         setIsProfileMenuOpen(false);
       }
+      if (!event.target.closest?.("[data-tab-menu]")) {
+        setOpenTabMenuId(null);
+      }
     };
 
     const handleEscape = (event) => {
-      if (event.key === "Escape") setIsProfileMenuOpen(false);
+      if (event.key === "Escape") {
+        setIsProfileMenuOpen(false);
+        setOpenTabMenuId(null);
+        cancelRenameTab();
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -32,7 +107,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
   }, []);
 
   return (
-    <div className="h-full flex flex-col px-6 py-6" style={{ color: "var(--color-text)" }}>
+    <div className="h-full flex flex-col px-5 py-6" style={{ color: "var(--color-text)" }}>
       {/* Top brand */}
       <div className="pb-6 border-b" style={{ borderColor: "var(--color-border)" }}>
         <img
@@ -52,14 +127,15 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
         {onBack && (
           <button
             onClick={onBack}
-            className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all"
+            className="w-full text-sm font-semibold py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
             style={{
               backgroundColor: "var(--color-surface-soft)",
               color: "var(--color-text)",
               border: "1.5px solid var(--color-border)",
             }}
           >
-            ← Go Back
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Go Back
           </button>
         )}
 
@@ -90,17 +166,272 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
             }}
           >
             {filesLoading && (
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
+              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
             )}
             Refresh
           </button>
         )}
       </div>
 
-      <div className="flex-1" />
+      <div className="flex-1 min-h-0 pt-6">
+        {analysisTabs.length > 0 && (
+          <div className="h-full min-h-0 flex flex-col">
+            <div className="flex items-end justify-between gap-3 mb-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold tracking-wide uppercase" style={{ color: "var(--color-text)", margin: 0 }}>
+                  Recent analysis
+                </p>
+                <p className="text-[10px] truncate" style={{ color: "var(--color-text-light)", margin: 0 }}>
+                  Restored from workspace
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {analysisTabs.length > 0 && onClearAnalysisTabs && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Clear all saved analysis tabs for this workspace?")) {
+                        onClearAnalysisTabs();
+                      }
+                    }}
+                    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-full px-3"
+                    style={{ color: "var(--color-text)", border: "1px solid var(--color-border)", backgroundColor: "var(--color-surface-elevated)", fontSize: 11, fontWeight: 800, boxShadow: "none", transform: "none" }}
+                    title="Clear workspace"
+                    aria-label="Clear workspace"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Clear</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto pr-1.5">
+              {hasHiddenAnalysisTabs && (
+                <p className="px-1 text-[10px] font-semibold" style={{ color: "var(--color-text-light)", margin: 0 }}>
+                  Showing latest saved analyses.
+                </p>
+              )}
+              {groupTabs(visibleAnalysisTabs, isAdmin).map((group) => (
+                <div key={group.key} className="space-y-2">
+                  {isAdmin && visibleAnalysisTabs.length > 1 && (
+                    <p className="px-1 pt-1 text-[10px] font-bold uppercase tracking-wide truncate" style={{ color: "var(--color-text-light)", margin: 0 }}>
+                      {group.label}
+                    </p>
+                  )}
+                  {group.tabs.map((tab, tabIndex) => {
+                    const isActive = tab.id === activeAnalysisTabId;
+                    const fullLabel = getTabLabel(tab);
+                    const label = tab.customLabel?.trim() || tab.fileName || "Untitled workbook";
+                    const openedLabel = `Last opened ${formatTabTime(tab.lastOpenedAtMs)}`;
+                    const shouldOpenMenuUp = group.tabs.length - tabIndex <= 2;
+                    return (
+                      <div
+                        key={tab.id}
+                        className="group relative rounded-2xl border p-2.5 transition-colors"
+                        style={{
+                          backgroundColor: isActive ? "var(--color-castleton-green)" : "var(--color-surface-elevated)",
+                          borderColor: tab.isStale ? "var(--color-saffron)" : isActive ? "var(--color-castleton-green)" : "var(--color-border)",
+                          color: isActive ? "#FFFFFF" : "var(--color-text)",
+                          boxShadow: "none",
+                        }}
+                        title={fullLabel}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          {editingTabId === tab.id ? (
+                            <form
+                              className="flex min-w-0 flex-1 items-start gap-2 rounded-xl p-1"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                commitRenameTab(tab);
+                              }}
+                            >
+                              <span
+                                className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+                                style={{ backgroundColor: isActive ? "rgba(255,255,255,0.13)" : "var(--color-surface-soft)" }}
+                              >
+                                <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <input
+                                  type="text"
+                                  value={editingLabel}
+                                  autoFocus
+                                  onChange={(event) => setEditingLabel(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Escape") {
+                                      event.preventDefault();
+                                      cancelRenameTab();
+                                    }
+                                  }}
+                                  className="w-full rounded-lg border px-2 py-1 text-[12px] font-bold"
+                                  style={{
+                                    backgroundColor: isActive ? "rgba(255,255,255,0.14)" : "var(--color-surface)",
+                                    borderColor: isActive ? "rgba(255,255,255,0.32)" : "var(--color-border)",
+                                    color: "inherit",
+                                    outline: "none",
+                                  }}
+                                  placeholder="Tab name"
+                                />
+                                <span className="mt-1 block truncate text-[10px] font-semibold leading-4" style={{ color: isActive ? "rgba(255,255,255,0.68)" : "var(--color-text-light)" }}>
+                                  Enter to save, Esc to cancel
+                                </span>
+                              </span>
+                              <span className="flex shrink-0 items-center gap-1 pt-0.5">
+                                <button
+                                  type="submit"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg"
+                                  style={{
+                                    color: "inherit",
+                                    backgroundColor: isActive ? "rgba(255,255,255,0.12)" : "var(--color-surface-soft)",
+                                    boxShadow: "none",
+                                    transform: "none",
+                                    padding: 0,
+                                  }}
+                                  title="Save name"
+                                >
+                                  <Check className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg"
+                                  style={{
+                                    color: "inherit",
+                                    backgroundColor: isActive ? "rgba(255,255,255,0.12)" : "var(--color-surface-soft)",
+                                    boxShadow: "none",
+                                    transform: "none",
+                                    padding: 0,
+                                  }}
+                                  onClick={cancelRenameTab}
+                                  title="Cancel rename"
+                                >
+                                  <X className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                              </span>
+                            </form>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => onSelectAnalysisTab?.(tab.id)}
+                              onDoubleClick={(event) => {
+                                event.stopPropagation();
+                                startRenameTab(tab, label);
+                              }}
+                              className="flex min-w-0 flex-1 items-start gap-2 rounded-xl p-1 text-left"
+                              style={{
+                                backgroundColor: "transparent",
+                                color: "inherit",
+                                boxShadow: "none",
+                                transform: "none",
+                              }}
+                              title="Open analysis. Double-click to rename."
+                            >
+                              <span
+                                className="mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+                                style={{ backgroundColor: isActive ? "rgba(255,255,255,0.13)" : "var(--color-surface-soft)" }}
+                              >
+                                <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[13px] font-extrabold leading-5">{label}</span>
+                                <span className="block truncate text-[10px] font-semibold leading-4" style={{ color: isActive ? "rgba(255,255,255,0.68)" : "var(--color-text-light)" }}>
+                                  {openedLabel}
+                                </span>
+                              </span>
+                            </button>
+                          )}
+
+                          {editingTabId !== tab.id && (
+                          <span className="relative shrink-0 pt-1" data-tab-menu style={{ color: "inherit" }}>
+                            <button
+                              type="button"
+                              aria-label={`Open options for ${fullLabel}`}
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-lg"
+                              style={{
+                                color: "inherit",
+                                backgroundColor: isActive ? "rgba(255,255,255,0.12)" : "transparent",
+                                boxShadow: "none",
+                                transform: "none",
+                                padding: 0,
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenTabMenuId((current) => current === tab.id ? null : tab.id);
+                              }}
+                              title="Tab options"
+                            >
+                              <MoreVertical className="h-4 w-4" aria-hidden="true" />
+                            </button>
+
+                            {openTabMenuId === tab.id && (
+                              <div
+                                className={`absolute right-0 z-30 w-40 overflow-hidden rounded-xl border py-1 shadow-lg ${shouldOpenMenuUp ? "bottom-9" : "top-9"}`}
+                                style={{
+                                  backgroundColor: "var(--color-surface-elevated)",
+                                  borderColor: "var(--color-border)",
+                                  color: "var(--color-text)",
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-bold"
+                                  style={{ backgroundColor: "transparent", color: "inherit", boxShadow: "none", transform: "none" }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    startRenameTab(tab, label);
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Rename
+                                </button>
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-bold"
+                                  style={{ backgroundColor: "transparent", color: "inherit", boxShadow: "none", transform: "none" }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setOpenTabMenuId(null);
+                                    onTogglePinAnalysisTab?.(tab.id);
+                                  }}
+                                >
+                                  {tab.pinned ? <PinOff className="h-3.5 w-3.5" aria-hidden="true" /> : <Pin className="h-3.5 w-3.5" aria-hidden="true" />}
+                                  {tab.pinned ? "Unpin" : "Pin"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-bold"
+                                  style={{ backgroundColor: "transparent", color: "#B42318", boxShadow: "none", transform: "none" }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setOpenTabMenuId(null);
+                                    onCloseAnalysisTab?.(tab.id);
+                                  }}
+                                >
+                                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                                  Close
+                                </button>
+                              </div>
+                            )}
+                          </span>
+                          )}
+                        </div>
+
+                          {tab.isStale && editingTabId !== tab.id && (
+                          <div className="pl-10">
+                            <span className="mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ backgroundColor: "var(--color-saffron)", color: "#000" }}>
+                              Updated in Drive
+                            </span>
+                          </div>
+                          )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Bottom profile menu */}
       {user && (
@@ -116,12 +447,20 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
               borderColor="var(--color-saffron)"
             />
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-sm truncate" style={{ color: "var(--color-text)" }}>{user.displayName}</p>
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="font-semibold text-sm truncate" style={{ color: "var(--color-text)" }}>{user.displayName}</p>
+                {isAdmin && (
+                  <span
+                    className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: "var(--color-saffron)", color: "#000" }}
+                  >
+                    Admin
+                  </span>
+                )}
+              </div>
               <p className="text-xs truncate" style={{ color: "var(--color-text-light)" }}>{user.email}</p>
             </div>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
           </button>
 
           {isProfileMenuOpen && (
@@ -141,9 +480,7 @@ export default function Sidebar({ folder, files, filesLoading, onSelectFolder, o
                   border: "1px solid var(--color-border)",
                 }}
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
-                </svg>
+                <LogOut className="h-4 w-4" aria-hidden="true" />
                 Sign Out
               </button>
             </div>

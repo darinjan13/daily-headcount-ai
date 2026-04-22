@@ -9,6 +9,7 @@ import DataTable from "./DataTable";
 import DataChatbot from "./DataChatBot";
 import { useAuth } from "../context/AuthContext";
 import { usePins } from "../hooks/usePins";
+import { Grip, PencilLine, Sparkles } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ResponsiveContainer, Cell, AreaChart, Area,
@@ -30,14 +31,62 @@ const CHART_THEME = {
   tooltipBg: "var(--color-surface-elevated)",
   tooltipText: "var(--color-text)",
 };
-const CHART_COLORS = ["#046241","#059669","#10b981","#34d399","#6ee7b7","#a7f3d0","#FFB347","#f97316","#3b82f6","#8b5cf6"];
+const CHART_COLORS = ["#0f9d71","#12c48b","#7be3b3","#ffb347","#f97316","#3b82f6","#8b5cf6","#0b6b4a"];
+const PREMIUM_GRADIENTS = [
+  ["#0f9d71", "#06452f"],
+  ["#12c48b", "#046241"],
+  ["#7be3b3", "#0f9d71"],
+  ["#ffca6e", "#f59e0b"],
+  ["#fb923c", "#c2410c"],
+  ["#60a5fa", "#2563eb"],
+  ["#a78bfa", "#7c3aed"],
+  ["#34d399", "#065f46"],
+];
 const CMP = { a:"#046241", b:"#FFB347" };
+const EMPTY_CHAT_ROWS = [];
+const CHART_WORKSPACE_LAYOUT_VERSION = 2;
+const LARGE_ROW_MATERIALIZE_THRESHOLD = 25000;
+const ROW_MATERIALIZE_CHUNK_SIZE = 12000;
+
+function getAxisInterval(length, maxTicks = 8) {
+  if (!length || length <= maxTicks) return 0;
+  return Math.max(0, Math.ceil(length / maxTicks) - 1);
+}
+
+function formatCompactNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return value;
+  if (Math.abs(number) >= 10000) {
+    return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(number);
+  }
+  return number.toLocaleString();
+}
+
+function formatAxisLabel(value, maxLength = 14) {
+  const raw = value == null ? "" : String(value);
+  const parsed = new Date(raw);
+  const label = !Number.isNaN(parsed.getTime()) && /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(raw)
+    ? parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : raw;
+  return label.length > maxLength ? `${label.slice(0, maxLength - 1)}…` : label;
+}
+
+const cleanTooltipStyle = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.18)",
+  fontSize: 12,
+  background: CHART_THEME.tooltipBg,
+  color: CHART_THEME.tooltipText,
+  boxShadow: "0 18px 44px rgba(0,0,0,0.22)",
+  backdropFilter: "blur(14px)",
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 function parseDateValue(v) { if(!v)return null; const d=new Date(v); return isNaN(d.getTime())?null:d; }
 function toDateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
 function formatDateLabel(k) { const d=new Date(`${k}T00:00:00`); return isNaN(d.getTime())?k:d.toLocaleDateString("en-US",{year:"numeric",month:"short",day:"numeric"}); }
+function formatMonthLabel(k) { const d=new Date(`${k}T00:00:00`); return isNaN(d.getTime())?k:d.toLocaleDateString("en-US",{year:"numeric",month:"long"}); }
 
 function detectDateColumn(headers, rows, isWide, dateCols) {
   // Wide format files use dates as column headers — no row-level date filter applies
@@ -63,6 +112,58 @@ function detectCategoryColumns(headers, rows, dateCol) {
     const unique = new Set(vals.map(v=>String(v).trim().toLowerCase()));
     return unique.size >= 2 && unique.size <= 30;
   });
+}
+
+function isMostlyNumericColumn(data, column) {
+  const vals = data
+    .slice(0, 500)
+    .map(row => row?.[column])
+    .filter(v => v !== null && v !== undefined && String(v).trim() !== "");
+  if (!vals.length) return false;
+  const numericCount = vals.filter(v => !Number.isNaN(Number(String(v).replace(/,/g, "").replace("%", "")))).length;
+  return numericCount / vals.length >= 0.7;
+}
+
+function isMostlyDateColumn(data, column) {
+  const vals = data
+    .slice(0, 500)
+    .map(row => row?.[column])
+    .filter(v => v !== null && v !== undefined && String(v).trim() !== "");
+  if (!vals.length) return false;
+  const dateCount = vals.filter(v => !!parseDateValue(v)).length;
+  return dateCount / vals.length >= 0.7 || (/date|day|period|month|year|time/i.test(column) && dateCount / vals.length >= 0.35);
+}
+
+function validateChartSpecForData(spec, data, headers) {
+  if (!spec) return { ok: false, reason: "No chart spec returned." };
+  const type = spec.type || spec.chartType || "bar";
+  const xCol = spec.x || spec.xCol || spec.rowDim || null;
+  const yCol = spec.y || spec.measure || null;
+
+  if (type === "pivot") {
+    if (!spec.rowDim || !spec.measure) return { ok: false, reason: "Pivot needs a row dimension and measure." };
+    if (!headers.includes(spec.rowDim) || !headers.includes(spec.measure)) return { ok: false, reason: "Pivot references missing columns." };
+    if ((spec.aggregation || "sum") !== "count" && !isMostlyNumericColumn(data, spec.measure)) {
+      return { ok: false, reason: `"${spec.measure}" is not numeric enough to use as a pivot measure.` };
+    }
+    if (isMostlyNumericColumn(data, spec.rowDim) && !isMostlyDateColumn(data, spec.rowDim)) {
+      return { ok: false, reason: `"${spec.rowDim}" is numeric, so it is not a good pivot row category.` };
+    }
+    return { ok: true };
+  }
+
+  if (!xCol || !yCol) return { ok: false, reason: "Chart needs both x and y columns." };
+  if (!headers.includes(xCol) || !headers.includes(yCol)) return { ok: false, reason: "Chart references missing columns." };
+  if (xCol === yCol) return { ok: false, reason: "Chart x and y columns cannot be the same." };
+  if (!isMostlyNumericColumn(data, yCol)) return { ok: false, reason: `"${yCol}" is not numeric enough to chart as a measure.` };
+  if (type === "line" && !isMostlyDateColumn(data, xCol)) {
+    return { ok: false, reason: `Line charts need a date/time x column, but "${xCol}" is not date-like.` };
+  }
+  if (type !== "line" && isMostlyNumericColumn(data, xCol) && !isMostlyDateColumn(data, xCol)) {
+    return { ok: false, reason: `"${xCol}" is numeric, so it is not a good chart category.` };
+  }
+
+  return { ok: true };
 }
 
 function formatNum(v, hint) {
@@ -123,16 +224,23 @@ function generatePivot(data, rowField, columnField, metric, aggregation) {
   return{columns:[rowField,...columnLabels],rows:pivotRows,totalRow,hasColDim:!!columnField};
 }
 
-function groupForBar(data, xField, yField, topN=15) {
+function groupForBar(data, xField, yField, topN=15, aggregation="sum") {
   const grouped={};
   data.forEach(row=>{
     const raw=row[xField]!=null?String(row[xField]).trim():null;
     if(!raw)return;
     const k=raw.toLowerCase();
-    if(!grouped[k])grouped[k]={label:raw,value:0};
-    grouped[k].value+=Number(row[yField])||0;
+    if(!grouped[k])grouped[k]={label:raw,values:[]};
+    const n=Number(row[yField]);
+    if(!isNaN(n))grouped[k].values.push(n);
   });
-  return Object.values(grouped).map(({label,value})=>({name:label,value})).sort((a,b)=>b.value-a.value).slice(0,topN);
+  return Object.values(grouped).map(({label,values})=>{
+    let value=0;
+    if(aggregation==="count")value=values.length;
+    else if(aggregation==="avg")value=values.length?values.reduce((a,b)=>a+b,0)/values.length:0;
+    else value=values.reduce((a,b)=>a+b,0);
+    return{name:label,value:Math.round(value*100)/100};
+  }).sort((a,b)=>b.value-a.value).slice(0,topN);
 }
 
 function analyticsToObjects(payload) {
@@ -158,6 +266,122 @@ function getMonthRange(dateKey) {
   const start=`${y}-${String(m).padStart(2,"0")}-01`;
   const lastDay=new Date(y,m,0).getDate();
   return{start,end:`${y}-${String(m).padStart(2,"0")}-${lastDay}`};
+}
+function getMonthStart(dateKey) {
+  const [y,m]=dateKey.split("-").map(Number);
+  return `${y}-${String(m).padStart(2,"0")}-01`;
+}
+
+function isSummaryRowValue(value) {
+  if (!value) return false;
+  const text = String(value).toLowerCase().trim();
+  return (
+    text === "total" ||
+    text === "grand total" ||
+    text === "sub total" ||
+    text === "overall" ||
+    text.startsWith("total ") ||
+    text.endsWith(" total")
+  );
+}
+
+function rowToObject(headers, row) {
+  const record = {};
+  let isSummaryRow = false;
+
+  for (let index = 0; index < headers.length; index += 1) {
+    const header = headers[index];
+    const value = row?.[index];
+    record[header] = value;
+    if (!isSummaryRow && isSummaryRowValue(value)) {
+      isSummaryRow = true;
+    }
+  }
+
+  return isSummaryRow ? null : record;
+}
+
+function useMaterializedObjectRows(headers, rows) {
+  const [state, setState] = useState({
+    rows: [],
+    isMaterializing: false,
+    sourceRowCount: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!rows?.length || !headers?.length) {
+      setState({ rows: [], isMaterializing: false, sourceRowCount: 0 });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const sourceRowCount = rows.length;
+
+    if (sourceRowCount <= LARGE_ROW_MATERIALIZE_THRESHOLD) {
+      const materialized = [];
+      for (const row of rows) {
+        const record = rowToObject(headers, row);
+        if (record) materialized.push(record);
+      }
+      if (!cancelled) {
+        setState({ rows: materialized, isMaterializing: false, sourceRowCount });
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const materialized = [];
+    setState({ rows: [], isMaterializing: true, sourceRowCount });
+
+    const processChunk = (startIndex) => {
+      if (cancelled) return;
+      const endIndex = Math.min(startIndex + ROW_MATERIALIZE_CHUNK_SIZE, sourceRowCount);
+
+      for (let index = startIndex; index < endIndex; index += 1) {
+        const record = rowToObject(headers, rows[index]);
+        if (record) materialized.push(record);
+      }
+
+      if (cancelled) return;
+
+      if (endIndex >= sourceRowCount) {
+        setState({ rows: materialized.slice(), isMaterializing: false, sourceRowCount });
+        return;
+      }
+
+      setState({ rows: materialized.slice(), isMaterializing: true, sourceRowCount });
+      window.setTimeout(() => processChunk(endIndex), 0);
+    };
+
+    window.setTimeout(() => processChunk(0), 0);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [headers, rows]);
+
+  return state;
+}
+function formatWeekLabel(dateKey) {
+  const { start, end } = getWeekRange(dateKey);
+  return `${formatDateLabel(start)} - ${formatDateLabel(end)}`;
+}
+function getComparePeriodOptions(dateOptions, mode) {
+  const seen = new Set();
+  return dateOptions.reduce((acc, dateKey) => {
+    const value = mode === "week" ? getWeekRange(dateKey).start : mode === "month" ? getMonthStart(dateKey) : dateKey;
+    if (seen.has(value)) return acc;
+    seen.add(value);
+    acc.push({
+      value,
+      label: mode === "week" ? formatWeekLabel(value) : mode === "month" ? formatMonthLabel(value) : formatDateLabel(value),
+    });
+    return acc;
+  }, []);
 }
 
 // ── UI primitives ──────────────────────────────────────────────────────────────
@@ -203,7 +427,7 @@ function SectionHeader({ title, subtitle, badge, onPin, pinned, onRemove, onRena
             <h3
               onClick={startEdit}
               title={onRename ? "Click to rename" : undefined}
-              style={{ fontSize:15, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em", cursor:onRename?"text":"default", borderBottom:onRename?"1px dashed transparent":"none" }}
+              style={{ fontSize:15, fontWeight:800, color:LW.dark, margin:0, letterSpacing:"-0.02em", cursor:"default", borderBottom:"none" }}
               onMouseEnter={e=>{ if(onRename) e.currentTarget.style.borderBottomColor="#9cafa4"; }}
               onMouseLeave={e=>{ if(onRename) e.currentTarget.style.borderBottomColor="transparent"; }}
             >{title}</h3>
@@ -274,7 +498,7 @@ function AIBanner({ summary }) {
   if(!summary)return null;
   return (
     <div style={{ display:"flex", alignItems:"flex-start", gap:12, padding:"16px 20px", marginBottom:20, background:LW.dark, borderRadius:14, fontFamily:"'Manrope',sans-serif" }}>
-      <span style={{ fontSize:20, flexShrink:0 }}>✨</span>
+      <Sparkles style={{ width: 20, height: 20, flexShrink: 0, color: LW.saffron }} aria-hidden="true" />
       <div style={{ flex:1 }}>
         <div style={{ fontSize:10, fontWeight:700, color:LW.saffron, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:5 }}>AI Analysis</div>
         <p style={{ fontSize:13, color:"rgba(255,255,255,0.85)", margin:0, lineHeight:1.6 }}>{summary}</p>
@@ -521,6 +745,20 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
   const [mode, setMode] = useState("day");
   const [dateA, setDateA] = useState(dateOptions[0]||"");
   const [dateB, setDateB] = useState(dateOptions[1]||"");
+  const periodOptions = useMemo(() => getComparePeriodOptions(dateOptions, mode), [dateOptions, mode]);
+
+  useEffect(() => {
+    if (!periodOptions.length) {
+      setDateA("");
+      setDateB("");
+      return;
+    }
+    setDateA((current) => periodOptions.some((option) => option.value === current) ? current : periodOptions[0].value);
+    setDateB((current) => {
+      if (periodOptions.some((option) => option.value === current)) return current;
+      return (periodOptions[1] || periodOptions[0]).value;
+    });
+  }, [periodOptions]);
 
   const filterByRange = (range) => {
     if (!dateCol) return objectData;
@@ -557,12 +795,12 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
         <div style={{ display:"flex", gap:8, alignItems:"center", marginLeft:8 }}>
           <span style={{ width:10,height:10,borderRadius:2,background:CMP.a,display:"inline-block" }}/>
           <select value={dateA} onChange={e=>setDateA(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}>
-            {dateOptions.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
+            {periodOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
           <span style={{ fontSize:12, color:"#9cafa4", fontWeight:700 }}>vs</span>
           <span style={{ width:10,height:10,borderRadius:2,background:CMP.b,display:"inline-block" }}/>
           <select value={dateB} onChange={e=>setDateB(e.target.value)} style={{ padding:"5px 10px", borderRadius:8, border:`1.5px solid ${UI.border}`, fontSize:12, color:UI.text, background:UI.surface, outline:"none", cursor:"pointer" }}>
-            {dateOptions.map(d=><option key={d} value={d}>{formatDateLabel(d)}</option>)}
+            {periodOptions.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>
         <span style={{ fontSize:11, color:UI.textLight }}>{dataA.length} vs {dataB.length} rows</span>
@@ -598,38 +836,68 @@ function CompareCards({ blueprint, objectData, dateCol, dateOptions, isWide }) {
 
 // ── Clickable charts ───────────────────────────────────────────────────────────
 
-function ClickableBarChart({ data, config, onDrilldown, labels }) {
+function ClickableBarChart({ data, config, labels, height = 320 }) {
   const xKey=config?.x||"name", yKey=config?.y||"value";
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
+  const interval = getAxisInterval(data.length, 8);
+  const angled = data.length > 8;
   return (
-    <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
-        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
-        <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0} label={undefined}/>
-        <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
-        <Tooltip formatter={(v,_)=>[v.toLocaleString(), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        <Bar dataKey={yKey} radius={[4,4,0,0]} cursor={onDrilldown?"pointer":"default"} onClick={d=>onDrilldown&&onDrilldown(d[xKey])}>
-          {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{top:12,right:18,left:4,bottom:angled?44:20}} style={{cursor:"default"}}>
+        <defs>
+          {PREMIUM_GRADIENTS.map(([start, end], index) => (
+            <linearGradient key={index} id={`premiumBar${index}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={start} stopOpacity={0.98}/>
+              <stop offset="100%" stopColor={end} stopOpacity={0.88}/>
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="4 8" stroke={CHART_THEME.grid} vertical={false} opacity={0.55}/>
+        <XAxis
+          dataKey={xKey}
+          tick={{fontSize:10,fill:CHART_THEME.axis}}
+          angle={angled?-28:0}
+          textAnchor={angled?"end":"middle"}
+          interval={interval}
+          minTickGap={18}
+          tickFormatter={value=>formatAxisLabel(value)}
+          axisLine={false}
+          tickLine={false}
+          label={undefined}
+        />
+        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={formatCompactNumber} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={(v,_)=>[formatCompactNumber(v), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={cleanTooltipStyle} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
+        <Bar dataKey={yKey} radius={[8,8,0,0]} maxBarSize={38} cursor="default" isAnimationActive={false} activeBar={false}>
+          {data.map((_,i)=><Cell key={i} fill={`url(#premiumBar${i%PREMIUM_GRADIENTS.length})`}/>)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
-function HorizontalBarChart({ data, config, onDrilldown, labels }) {
+function HorizontalBarChart({ data, config, labels, height }) {
   const xKey=config?.x||"name", yKey=config?.y||"value";
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
+  const autoHeight = height || Math.max(260, data.length * 34);
   return (
-    <ResponsiveContainer width="100%" height={Math.max(260,data.length*34)}>
-      <BarChart data={data} layout="vertical" margin={{top:5,right:40,left:120,bottom:5}}>
-        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} horizontal={false}/>
-        <XAxis type="number" tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
-        <YAxis type="category" dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} width={110}/>
-        <Tooltip formatter={(v,_)=>[v.toLocaleString(), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        <Bar dataKey={yKey} radius={[0,4,4,0]} cursor={onDrilldown?"pointer":"default"} onClick={d=>onDrilldown&&onDrilldown(d[xKey])}>
-          {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
+    <ResponsiveContainer width="100%" height={autoHeight}>
+      <BarChart data={data} layout="vertical" margin={{top:8,right:24,left:118,bottom:8}}>
+        <defs>
+          {PREMIUM_GRADIENTS.map(([start, end], index) => (
+            <linearGradient key={index} id={`premiumHBar${index}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={end} stopOpacity={0.9}/>
+              <stop offset="100%" stopColor={start} stopOpacity={0.98}/>
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="4 8" stroke={CHART_THEME.grid} horizontal={false} opacity={0.55}/>
+        <XAxis type="number" tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={formatCompactNumber} axisLine={false} tickLine={false}/>
+        <YAxis type="category" dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={value=>formatAxisLabel(value, 18)} width={112} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={(v,_)=>[formatCompactNumber(v), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={cleanTooltipStyle} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
+        <Bar dataKey={yKey} radius={[0,8,8,0]} maxBarSize={24} cursor="default" isAnimationActive={false} activeBar={false}>
+          {data.map((_,i)=><Cell key={i} fill={`url(#premiumHBar${i%PREMIUM_GRADIENTS.length})`}/>)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -639,30 +907,44 @@ function HorizontalBarChart({ data, config, onDrilldown, labels }) {
 function StackedBarChart({ data }) {
   if (!data||!data.length) return <p style={{color:"#9cafa4",fontSize:13}}>No data.</p>;
   const stackKeys=Object.keys(data[0]).filter(k=>k!=="name");
+  const angled = data.length > 8;
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
-        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
-        <XAxis dataKey="name" tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0}/>
-        <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        {stackKeys.map((k,i)=><Bar key={k} dataKey={k} stackId="a" fill={CHART_COLORS[i%CHART_COLORS.length]} radius={i===stackKeys.length-1?[4,4,0,0]:[0,0,0,0]}/>)}
+      <BarChart data={data} margin={{top:12,right:18,left:4,bottom:angled?44:20}}>
+        <defs>
+          {PREMIUM_GRADIENTS.map(([start, end], index) => (
+            <linearGradient key={index} id={`premiumStack${index}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={start} stopOpacity={0.98}/>
+              <stop offset="100%" stopColor={end} stopOpacity={0.88}/>
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="4 8" stroke={CHART_THEME.grid} vertical={false} opacity={0.55}/>
+        <XAxis dataKey="name" tick={{fontSize:10,fill:CHART_THEME.axis}} angle={angled?-28:0} textAnchor={angled?"end":"middle"} interval={getAxisInterval(data.length, 8)} tickFormatter={value=>formatAxisLabel(value)} axisLine={false} tickLine={false}/>
+        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={formatCompactNumber} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={formatCompactNumber} contentStyle={cleanTooltipStyle} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
+        {stackKeys.map((k,i)=><Bar key={k} dataKey={k} stackId="a" fill={`url(#premiumStack${i%PREMIUM_GRADIENTS.length})`} radius={i===stackKeys.length-1?[8,8,0,0]:[0,0,0,0]} activeBar={false} isAnimationActive={false}/>)}
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
 function SimpleAreaChart({ data, xKey, yKey }) {
-  const angle=data.length>14?-45:0, mb=angle!==0?60:10;
+  const angle=data.length>12?-24:0, mb=angle!==0?42:16;
   return (
     <ResponsiveContainer width="100%" height={340}>
-      <AreaChart data={data} margin={{top:8,right:20,left:10,bottom:mb}}>
-        <defs><linearGradient id="lwGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={LW.green} stopOpacity={0.15}/><stop offset="95%" stopColor={LW.green} stopOpacity={0}/></linearGradient></defs>
-        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
-        <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={angle} textAnchor={angle!==0?"end":"middle"} interval={data.length>30?Math.floor(data.length/15):0} axisLine={false} tickLine={false}/>
-        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()} axisLine={false} tickLine={false}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:10,border:`1px solid ${CHART_THEME.tooltipBorder}`,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText,fontSize:13}} labelStyle={{color:CHART_THEME.tooltipText,fontSize:11}}/>
-        <Area type="monotone" dataKey={yKey} stroke={LW.green} strokeWidth={2.5} fill="url(#lwGrad)" dot={{fill:LW.green,r:data.length>30?0:4,strokeWidth:0}} activeDot={{r:6,fill:LW.saffron,stroke:LW.dark,strokeWidth:2}}/>
+      <AreaChart data={data} margin={{top:14,right:20,left:4,bottom:mb}}>
+        <defs>
+          <linearGradient id="lwGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={LW.saffron} stopOpacity={0.28}/>
+            <stop offset="95%" stopColor={LW.saffron} stopOpacity={0}/>
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="4 8" stroke={CHART_THEME.grid} vertical={false} opacity={0.55}/>
+        <XAxis dataKey={xKey} tick={{fontSize:10,fill:CHART_THEME.axis}} angle={angle} textAnchor={angle!==0?"end":"middle"} interval={getAxisInterval(data.length, 8)} tickFormatter={value=>formatAxisLabel(value)} axisLine={false} tickLine={false}/>
+        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={formatCompactNumber} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={formatCompactNumber} contentStyle={cleanTooltipStyle} labelStyle={{color:CHART_THEME.tooltipText,fontSize:11}}/>
+        <Area type="monotone" dataKey={yKey} stroke={LW.saffron} strokeWidth={2.5} fill="url(#lwGrad)" dot={{fill:LW.saffron,r:data.length>24?0:3,strokeWidth:0}} activeDot={{r:5,fill:LW.saffron,stroke:LW.dark,strokeWidth:2}}/>
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -671,6 +953,59 @@ function SimpleAreaChart({ data, xKey, yKey }) {
 function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, sectionCol: sCol, valueCol: vCol, activeDateRange, isFiltered }) {
   if(!cards||!cards.length)return null;
   const accents=[LW.green,LW.dark,LW.saffron,"#417256","#034E34"];
+  const TOP_BADGES = ["1", "2", "3"];
+  const normalizeRankValue = (value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+  const isMeaninglessRankLabel = (item) => {
+    const label = String(item?.label ?? "").trim();
+    const value = normalizeRankValue(item?.value);
+    if (!label || value == null) return false;
+    const labelNumber = Number(label.replace(/,/g, ""));
+    return Number.isFinite(labelNumber) && Math.abs(labelNumber - value) < 0.0001;
+  };
+  const hasUsefulRankLabels = (ranked) => (
+    Array.isArray(ranked) && ranked.length > 0 && ranked.some(item => !isMeaninglessRankLabel(item))
+  );
+  const looksDateLike = (value) => {
+    if (value == null || value === "") return false;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return true;
+    const text = String(value).trim();
+    if (!text || /^\d+(\.\d+)?$/.test(text)) return false;
+    return !Number.isNaN(Date.parse(text));
+  };
+  const pickRankLabelColumn = (data, preferredCol, metricCol) => {
+    if (!Array.isArray(data) || !data.length) return preferredCol;
+    const headers = Object.keys(data[0] || {});
+    const candidates = headers.filter(header => header && header !== metricCol);
+    if (!candidates.length) return preferredCol;
+    const scoreColumn = (header) => {
+      const sample = data
+        .map(row => row?.[header])
+        .filter(value => value != null && String(value).trim() !== "")
+        .slice(0, 250);
+      if (!sample.length) return -999;
+      const uniqueCount = new Set(sample.map(value => String(value).trim())).size;
+      const numericCount = sample.filter(value => Number.isFinite(Number(String(value).replace(/,/g, "")))).length;
+      const dateCount = sample.filter(looksDateLike).length;
+      const lower = header.toLowerCase();
+      let score = 0;
+      if (header === preferredCol) score += 18;
+      if (dateCount / sample.length > 0.55) score += 32;
+      if (numericCount / sample.length < 0.45) score += 22;
+      if (uniqueCount > 1) score += 10;
+      if (uniqueCount > 1 && uniqueCount <= 80) score += 8;
+      if (/(name|employee|staff|agent|user|person|site|team|section|department|date|month|region|country|branch|category|client|project)/i.test(lower)) score += 14;
+      if (/(id|number|no\.|count|total|hours|minutes|links|ops|actual|plan|balance|completion|rate|percent|%)/i.test(lower)) score -= 14;
+      if (numericCount / sample.length > 0.8 && dateCount / sample.length < 0.45) score -= 24;
+      if (uniqueCount === 1) score -= 12;
+      return score;
+    };
+    return candidates
+      .map(header => ({ header, score: scoreColumn(header) }))
+      .sort((a, b) => b.score - a.score)[0]?.header || preferredCol;
+  };
   const MEDALS=["🥇","🥈","🥉"];
 
   const toRanked = (payload, labelCol, valueCol) => {
@@ -709,22 +1044,33 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
   const effectiveValueCol = vCol || analytics?.valueCol;
   const effectivePrimaryCol = pCol || analytics?.primaryCol;
   const effectiveSectionCol = sCol || "Section";
+  const displayPrimaryCol = pickRankLabelColumn(filteredData, effectivePrimaryCol, effectiveValueCol);
+  const displaySectionCol = pickRankLabelColumn(filteredData, effectiveSectionCol, effectiveValueCol);
+  const analyticsPrimaryRanked = analytics ? toRanked(analytics.primaryTotals, analytics.primaryCol, analytics.valueCol) : null;
+  const analyticsSectionRanked = analytics ? toRanked(analytics.sectionTotals, "Section", analytics.valueCol) : null;
+  const livePrimaryRanked = filteredData
+    ? buildLiveRanked(filteredData, displayPrimaryCol, effectiveValueCol, activeDateRange)
+    : null;
+  const liveSectionRanked = filteredData
+    ? buildLiveRanked(filteredData, displaySectionCol, effectiveValueCol, activeDateRange)
+    : null;
 
   const primaryRanked = isFiltered && filteredData
-    ? buildLiveRanked(filteredData, effectivePrimaryCol, effectiveValueCol, activeDateRange)
-    : analytics ? toRanked(analytics.primaryTotals, analytics.primaryCol, analytics.valueCol) : null;
+    ? livePrimaryRanked
+    : hasUsefulRankLabels(analyticsPrimaryRanked) ? analyticsPrimaryRanked : livePrimaryRanked;
 
   const sectionRanked = isFiltered && filteredData
-    ? buildLiveRanked(filteredData, effectiveSectionCol, effectiveValueCol, activeDateRange)
-    : analytics ? toRanked(analytics.sectionTotals, "Section", analytics.valueCol) : null;
+    ? liveSectionRanked
+    : hasUsefulRankLabels(analyticsSectionRanked) ? analyticsSectionRanked : liveSectionRanked;
 
   const RankCard = ({ title, ranked, accent }) => {
     if(!ranked||!ranked.length) return null;
     const top = ranked[0].value;
+    const displayedTotal = ranked.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
     return (
       <div style={{background:UI.surfaceElevated,borderRadius:16,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,fontFamily:"'Manrope',sans-serif"}}
-        onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(19,48,32,0.11)"}}
-        onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
+        onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 8px 24px rgba(19,48,32,0.11)"}}
+        onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 6px rgba(19,48,32,0.06)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div>
             <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.12em",textTransform:"uppercase",marginBottom:3}}>{title}</div>
@@ -736,20 +1082,85 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {ranked.map((item,i)=>{
             const pct = top>0?(item.value/top)*100:0;
+            const share = displayedTotal > 0 ? (Number(item.value) || 0) / displayedTotal * 100 : 0;
+            const gapFromTop = top - (Number(item.value) || 0);
             const isMedal=i<3;
             return (
-              <div key={i}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div
+                key={`${item.label}-${i}`}
+                className="rank-row"
+                tabIndex={0}
+                style={{
+                  position: "relative",
+                  padding: "6px 8px",
+                  margin: "0 -8px",
+                  borderRadius: 12,
+                  transition: "background 0.16s ease",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div className="rank-row-main" style={{display:"flex",alignItems:"center",gap:8}}>
                   <div style={{width:22,height:22,borderRadius:6,background:isMedal?accent:"rgba(19,48,32,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:isMedal?11:10,fontWeight:800,color:isMedal?"#fff":"#9cafa4",flexShrink:0}}>
-                    {isMedal?MEDALS[i]:i+1}
+                    {isMedal ? TOP_BADGES[i] : i + 1}
                   </div>
-                  <div style={{flex:1,fontSize:12,fontWeight:i===0?700:500,color:i===0?LW.dark:"#4a6358",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
+                  <div
+                    style={{flex:1,fontSize:12,fontWeight:i===0?700:500,color:i===0?LW.dark:"#4a6358",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"help"}}
+                    title={`${item.label} - ${formatNum(item.value,"number")}`}
+                  >
+                    {item.label}
+                  </div>
                   <div style={{fontSize:12,fontWeight:700,color:i===0?accent:LW.dark,flexShrink:0}}>{formatNum(item.value,"number")}</div>
                 </div>
                 <div style={{paddingLeft:30}}>
                   <div style={{height:3,borderRadius:999,background:"rgba(19,48,32,0.07)",overflow:"hidden",marginTop:3}}>
                     <div style={{height:"100%",width:`${Math.min(100,Math.max(2,pct))}%`,background:i===0?accent:"rgba(19,48,32,0.15)",borderRadius:999}}/>
                   </div>
+                </div>
+                <div
+                  className="rank-detail-popover"
+                  style={{
+                    position: "absolute",
+                    left: 36,
+                    right: 8,
+                    bottom: "calc(100% + 8px)",
+                    zIndex: 8,
+                    padding: "12px 13px",
+                    borderRadius: 14,
+                    background: "var(--color-surface-elevated)",
+                    border: `1px solid ${UI.border}`,
+                    boxShadow: "0 18px 40px rgba(0,0,0,0.22)",
+                    opacity: 0,
+                    transform: "translateY(4px)",
+                    pointerEvents: "none",
+                    transition: "opacity 0.14s ease, transform 0.14s ease",
+                  }}
+                >
+                  <div style={{fontSize:10,fontWeight:800,color:accent,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:5}}>
+                    Rank #{i + 1}
+                  </div>
+                  <div style={{fontSize:13,fontWeight:800,color:UI.text,lineHeight:1.25,marginBottom:9,wordBreak:"break-word"}}>
+                    {item.label}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:8}}>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:700,color:UI.textLight,textTransform:"uppercase",letterSpacing:"0.08em"}}>Value</div>
+                      <div style={{fontSize:12,fontWeight:800,color:UI.text}}>{formatNum(item.value,"number")}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:700,color:UI.textLight,textTransform:"uppercase",letterSpacing:"0.08em"}}>Top Share</div>
+                      <div style={{fontSize:12,fontWeight:800,color:UI.text}}>{pct.toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:700,color:UI.textLight,textTransform:"uppercase",letterSpacing:"0.08em"}}>List Share</div>
+                      <div style={{fontSize:12,fontWeight:800,color:UI.text}}>{share.toFixed(1)}%</div>
+                    </div>
+                  </div>
+                  {i > 0 && (
+                    <div style={{marginTop:9,fontSize:11,fontWeight:600,color:UI.textLight}}>
+                      {formatNum(gapFromTop,"number")} behind the top ranked item
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -762,8 +1173,8 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
   if(analytics && (primaryRanked||sectionRanked)) {
     return (
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16,marginBottom:24}}>
-        {primaryRanked && <RankCard title={`Top ${effectivePrimaryCol} by ${effectiveValueCol}`} ranked={primaryRanked} accent={accents[0]} />}
-        {sectionRanked && <RankCard title={`${effectiveValueCol} by Section`} ranked={sectionRanked} accent={accents[1]} />}
+        {primaryRanked && <RankCard title={`Top ${displayPrimaryCol || effectivePrimaryCol} by ${effectiveValueCol}`} ranked={primaryRanked} accent={accents[0]} />}
+        {sectionRanked && <RankCard title={`Top ${displaySectionCol || "Section"} by ${effectiveValueCol}`} ranked={sectionRanked} accent={accents[1]} />}
       </div>
     );
   }
@@ -773,9 +1184,9 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
       {cards.map((card,idx)=>{
         const accent=accents[idx%accents.length];
         return (
-          <div key={card.id||idx} style={{background:UI.surfaceElevated,borderRadius:14,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,transition:"transform 0.2s,box-shadow 0.2s"}}
-            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.24)"}}
-            onMouseLeave={e=>{e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="var(--color-shadow-soft)"}}>
+          <div key={card.id||idx} style={{background:UI.surfaceElevated,borderRadius:14,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,transition:"box-shadow 0.2s ease"}}
+            onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.24)"}}
+            onMouseLeave={e=>{e.currentTarget.style.boxShadow="var(--color-shadow-soft)"}}>
              <div style={{fontSize:10,fontWeight:700,color:"#9cafa4",letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{card.label}</div>
              <div style={{fontSize:30,fontWeight:800,color:accent,letterSpacing:"-0.03em",lineHeight:1}}>{formatNum(card.value,card.formatHint)}</div>
            </div>
@@ -787,21 +1198,52 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
 
 // ── Render a single chart/pivot by spec ───────────────────────────────────────
 
-function RenderChart({ chart, filteredData, onDrilldown }) {
+function RenderChart({ chart, filteredData }) {
   if (chart.type==="pivot") return <PivotTableRenderer data={chart.pivotData}/>;
-  if (chart.type==="bar") return <ClickableBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} onDrilldown={v=>onDrilldown&&onDrilldown(chart.xCol,v)}/>;
-  if (chart.type==="hbar") return <HorizontalBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} onDrilldown={v=>onDrilldown&&onDrilldown(chart.xCol,v)}/>;
+  if (chart.type==="bar") return <ClickableBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}}/>;
+  if (chart.type==="hbar") return <HorizontalBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}}/>;
   if (chart.type==="stacked") return <StackedBarChart data={chart.chartData}/>;
   if (chart.type==="line") return <LineChartRenderer data={filteredData} config={chart.config}/>;
   if (chart.type==="donut") return <DonutChartRenderer data={filteredData} config={chart.config}/>;
   return null;
 }
 
+// Fullscreen variant — measures container height and passes to chart components
+function FullscreenChartWrapper({ card }) {
+  const containerRef = useRef(null);
+  const [containerHeight, setContainerHeight] = useState(500);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerHeight(Math.floor(entry.contentRect.height));
+      }
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  if (!card) return null;
+
+  const renderWithHeight = (h) => {
+    if (!card.chart) return card.render;
+    const chart = card.chart;
+    if (chart.type === "bar") return <ClickableBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} height={h}/>;
+    if (chart.type === "hbar") return <HorizontalBarChart data={chart.chartData} config={{x:"name",y:"value"}} labels={{x:chart.xCol,y:chart.config?.y||"Value"}} height={h}/>;
+    return card.render;
+  };
+
+  return (
+    <div ref={containerRef} style={{ width: "100%", height: "100%", overflow: card.kind === "pivot" ? "auto" : "hidden" }}>
+      {renderWithHeight(containerHeight)}
+    </div>
+  );
+}
+
 function getChartWorkspaceDefault(card) {
-  if (card.kind === "pivot") return { span: 6, height: 460 };
-  if (card.kind === "wide_line") return { span: 12, height: 460 };
-  if (card.kind === "line") return { span: 12, height: 440 };
-  return { span: 6, height: 430 };
+  if (card.kind === "pivot") return { span: 6, height: 420 };
+  return { span: 4, height: 380 };
 }
 
 function getWorkspaceMetrics(width) {
@@ -818,31 +1260,47 @@ function getCardPixelWidth(span, workspaceWidth) {
 
 function buildChartLayouts(cards, previousLayouts, workspaceWidth) {
   const gap = 20;
-  const existingBottom = cards.reduce((maxBottom, card) => {
-    const prev = previousLayouts?.[card.id];
-    if (typeof prev?.x !== "number" || typeof prev?.y !== "number") return maxBottom;
-    return Math.max(maxBottom, prev.y + (prev.height ?? getChartWorkspaceDefault(card).height));
-  }, 0);
-  let nextStackY = existingBottom > 0 ? existingBottom + gap : 0;
+  const safeWidth = Math.max(workspaceWidth || 0, 360);
+  const defaultSpan = safeWidth >= 1500 ? 3 : safeWidth >= 980 ? 4 : safeWidth >= 640 ? 6 : 12;
+  const storedLayouts = cards
+    .map(card => previousLayouts?.[card.id])
+    .filter(layout => typeof layout?.x === "number" && typeof layout?.y === "number");
+  const hasManualLayout = storedLayouts.some(layout => Math.abs(layout.x) > 2);
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+
+  const getNextPackedPosition = (span, height) => {
+    const cardWidth = getCardPixelWidth(span, safeWidth);
+    if (cursorX > 0 && cursorX + cardWidth > safeWidth) {
+      cursorX = 0;
+      cursorY += rowHeight + gap;
+      rowHeight = 0;
+    }
+
+    const position = { x: cursorX, y: cursorY };
+    cursorX += cardWidth + gap;
+    rowHeight = Math.max(rowHeight, height);
+    return position;
+  };
 
   return cards.reduce((acc, card) => {
     const defaults = getChartWorkspaceDefault(card);
     const prev = previousLayouts?.[card.id] || {};
-    const span = prev.span ?? defaults.span;
+    const responsiveSpan = card.kind === "pivot" ? Math.max(defaultSpan, 6) : defaultSpan;
+    const span = hasManualLayout ? (prev.span ?? defaults.span) : responsiveSpan;
     const height = prev.height ?? defaults.height;
     const hasStoredPosition = typeof prev.x === "number" && typeof prev.y === "number";
+    const shouldPreservePosition = hasStoredPosition && hasManualLayout;
+    const packedPosition = shouldPreservePosition ? null : getNextPackedPosition(span, height);
 
     acc[card.id] = {
       span,
       height,
       hidden: prev.hidden ?? false,
-      x: hasStoredPosition ? prev.x : 0,
-      y: hasStoredPosition ? prev.y : nextStackY,
+      x: shouldPreservePosition ? prev.x : packedPosition.x,
+      y: shouldPreservePosition ? prev.y : packedPosition.y,
     };
-
-    if (!hasStoredPosition) {
-      nextStackY += height + gap;
-    }
 
     return acc;
   }, {});
@@ -897,25 +1355,19 @@ function WindowActionButton({ label, title, active = false, tone = "neutral", co
         justifyContent: "center",
         gap: 6,
         boxShadow: active ? `0 8px 16px ${theme.glow}` : "0 1px 2px rgba(19, 48, 32, 0.06)",
-        transition: "transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease",
+        transition: "box-shadow 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease",
       }}
       onMouseEnter={e => {
-        e.currentTarget.style.transform = "translateY(-1px)";
         e.currentTarget.style.boxShadow = `0 10px 18px ${theme.glow}`;
       }}
       onMouseLeave={e => {
-        e.currentTarget.style.transform = "translateY(0)";
         e.currentTarget.style.boxShadow = active ? `0 8px 16px ${theme.glow}` : "0 1px 2px rgba(19, 48, 32, 0.06)";
       }}
       onMouseDown={e => {
         e.stopPropagation();
-        e.currentTarget.style.transform = "translateY(1px) scale(0.98)";
       }}
       onPointerDown={e => {
         e.stopPropagation();
-      }}
-      onMouseUp={e => {
-        e.currentTarget.style.transform = "translateY(-1px)";
       }}
     >
       {label}
@@ -988,8 +1440,8 @@ function MacWindowControls({
             padding: 0,
             cursor: control.enabled ? "pointer" : "not-allowed",
             boxShadow: hovered && control.enabled ? "0 4px 10px rgba(0,0,0,0.14)" : "none",
-            transform: hovered && control.enabled ? "translateY(-1px)" : "translateY(0)",
-            transition: "transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease",
+            transform: "none",
+            transition: "box-shadow 0.16s ease, filter 0.16s ease",
             filter: control.enabled ? "saturate(1)" : "saturate(0.6)",
             fontSize: 8,
             fontWeight: 800,
@@ -1024,6 +1476,11 @@ function ChartWorkspaceCard({
   const borderColor = card.badge === "PINNED" ? LW.green : UI.border;
   const cardHeight = minimized ? 58 : layout.height;
   const cardWidth = getCardPixelWidth(layout.span, workspaceWidth);
+  const [renamingCard, setRenamingCard] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const renameInputRef = useRef(null);
+  const startRename = (e) => { e.stopPropagation(); if (!card.onRename) return; setRenameDraft(card.title); setRenamingCard(true); setTimeout(() => renameInputRef.current?.select(), 30); };
+  const commitRename = () => { const t = renameDraft.trim(); if (t && t !== card.title) card.onRename(t); setRenamingCard(false); };
 
   return (
     <div
@@ -1046,26 +1503,36 @@ function ChartWorkspaceCard({
         style={{
           height: cardHeight,
           minHeight: minimized ? 58 : 320,
-          background: UI.surfaceElevated,
-          borderRadius: 16,
+          background: `linear-gradient(145deg, ${UI.surfaceElevated} 0%, ${UI.surfaceSoft} 100%)`,
+          borderRadius: 22,
           display: "flex",
           flexDirection: "column",
-          boxShadow: isDragging ? "0 18px 32px rgba(4, 98, 65, 0.16)" : "var(--color-shadow-soft)",
-          border: `1.5px solid ${borderColor}`,
+          boxShadow: isDragging ? "0 28px 54px rgba(4, 98, 65, 0.22)" : "0 18px 46px rgba(19,48,32,0.12)",
+          border: `1px solid ${card.badge === "PINNED" ? "rgba(4,98,65,0.36)" : "rgba(255,255,255,0.16)"}`,
           position: "relative",
           overflow: "hidden",
         }}
       >
         <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "radial-gradient(circle at 14% 0%, rgba(255,179,71,0.14), transparent 30%), radial-gradient(circle at 90% 8%, rgba(16,185,129,0.12), transparent 28%)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
           onPointerDown={(event) => onDragStart(event, card.id)}
           style={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 14,
-            padding: "12px 16px",
-            background: "linear-gradient(180deg, rgba(19,48,32,0.04), rgba(19,48,32,0))",
-            borderBottom: `1px solid ${UI.border}`,
+            padding: "14px 18px",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
             cursor: locked ? "default" : isDragging ? "grabbing" : "grab",
             userSelect: "none",
             touchAction: "none",
@@ -1081,11 +1548,34 @@ function ChartWorkspaceCard({
               onToggleFullscreen={onToggleFullscreen}
             />
             <div style={{ minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 800, color: UI.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {card.title}
-                </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                {renamingCard ? (
+                  <input
+                    ref={renameInputRef}
+                    value={renameDraft}
+                    onChange={e => setRenameDraft(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={e => { if (e.key === "Enter") commitRename(); if (e.key === "Escape") setRenamingCard(false); }}
+                    onPointerDown={e => e.stopPropagation()}
+                    style={{ fontSize: 13, fontWeight: 800, color: UI.text, background: "transparent", border: "none", borderBottom: `2px solid ${LW.green}`, outline: "none", padding: "0 2px", width: 200, fontFamily: "inherit" }}
+                  />
+                ) : (
+                  <div style={{ fontSize: 14, fontWeight: 800, color: UI.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em" }}>
+                    {card.title}
+                  </div>
+                )}
                 {card.badge && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 100, fontWeight: 700, letterSpacing: "0.08em", background: card.badge === "PINNED" ? LW.green : card.badge === "CUSTOM" ? "#fff3dc" : LW.green, color: card.badge === "CUSTOM" ? "#c17110" : "#fff", flexShrink: 0 }}>{card.badge}</span>}
+                {card.onRename && !renamingCard && (
+                  <button
+                    onPointerDown={startRename}
+                    title="Rename chart"
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 3px", borderRadius: 5, color: "#9cafa4", fontSize: 13, lineHeight: 1, display: "flex", alignItems: "center", opacity: 0.7, flexShrink: 0 }}
+                    onMouseEnter={e => e.currentTarget.style.opacity = 1}
+                    onMouseLeave={e => e.currentTarget.style.opacity = 0.7}
+                  >
+                    <PencilLine className="h-[13px] w-[13px]" aria-hidden="true" />
+                  </button>
+                )}
               </div>
               {card.subtitle && <div style={{ fontSize: 11, color: "#9cafa4", marginTop: 2 }}>{card.subtitle}</div>}
             </div>
@@ -1128,6 +1618,7 @@ function ChartWorkspaceCard({
 
         <div
           style={{
+            position: "relative",
             flex: minimized ? "0 0 auto" : 1,
             minHeight: 0,
             overflow: "hidden",
@@ -1136,7 +1627,7 @@ function ChartWorkspaceCard({
             transition: "max-height 0.24s ease, opacity 0.2s ease",
           }}
         >
-          <div style={{ height: "100%", overflow: "auto", padding: 16 }}>
+          <div style={{ height: "100%", overflow: "auto", padding: "18px 18px 20px" }}>
             {children}
           </div>
         </div>
@@ -1158,11 +1649,7 @@ function ChartWorkspaceCard({
               padding: 0,
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <path d="M6 12L12 6" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
-              <path d="M9 14L14 9" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
-              <path d="M12 16L16 12" stroke="#9cafa4" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
+            <Grip className="h-[18px] w-[18px]" style={{ color: "#9cafa4" }} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -1172,7 +1659,7 @@ function ChartWorkspaceCard({
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 
-export default function Dashboard({ data, blueprint, fileId }) {
+export default function Dashboard({ data, blueprint, fileId, analysisSession = null, onAnalysisSessionExpired = null }) {
   const { headers, rows } = data;
 
   // filteredTables now persisted via usePins
@@ -1199,18 +1686,18 @@ export default function Dashboard({ data, blueprint, fileId }) {
   const { user } = useAuth();
   const { pinnedIds, customCharts: savedCustomCharts, filteredTables, loading: pinsLoading,
           togglePin, isPinned, addCustomChart, addAndPinChart, removeCustomChart, clearAllCustomCharts, renameCustomChart,
-          addFilteredTable, removeFilteredTable, renameFilteredTable, addAndPinTable, clearAllFilteredTables } = usePins(user?.uid, fileId||"default");
+          addFilteredTable, removeFilteredTable, updateFilteredTable, renameFilteredTable, addAndPinTable, clearAllFilteredTables } = usePins(user?.uid, fileId||"default");
 
   // customCharts from usePins is already seeded from localStorage on first render
   // and synced from Firestore in background — use directly
   const [sessionCharts, setCustomCharts] = useState([]);
 
 
-  // Object data
-  const objectData = useMemo(()=>
-    rows.map(row=>Object.fromEntries(headers.map((h,i)=>[h,row[i]]))).filter(row=>
-      !Object.values(row).some(v=>{ if(!v)return false; const s=String(v).toLowerCase().trim(); return s==="total"||s==="grand total"||s==="sub total"||s==="overall"||s.startsWith("total ")||s.endsWith(" total"); })
-    ), [headers,rows]);
+  const {
+    rows: objectData,
+    isMaterializing: isObjectDataMaterializing,
+    sourceRowCount,
+  } = useMaterializedObjectRows(headers, rows);
 
   const dateCol = useMemo(()=>detectDateColumn(headers,objectData,isWide,data.dateCols),[headers,objectData,isWide,data.dateCols]);
   const categoryColumns = useMemo(()=>detectCategoryColumns(headers,objectData,dateCol),[headers,objectData,dateCol]);
@@ -1228,11 +1715,14 @@ export default function Dashboard({ data, blueprint, fileId }) {
     Object.entries(filters.categories).forEach(([col,val])=>{ result=result.filter(row=>row[col]!=null&&String(row[col]).trim()===val); });
     return result;
   },[objectData,filters,dateCol]);
+  const hasLongFormatFilters = filters.dateFrom !== "all" || filters.dateTo !== "all" || Object.keys(filters.categories).length > 0;
 
-  const filteredRows = useMemo(()=>filteredData.map(row=>headers.map(h=>row[h]===undefined?null:row[h])),[filteredData,headers]);
   // Rebuild saved charts from Firestore — recompute chartData/pivotData from their spec
   // Must be after filteredData is defined
   const rebuiltSavedCharts = useMemo(() => {
+    if (activeView !== "charts") {
+      return savedCustomCharts;
+    }
     return savedCustomCharts.map(c => {
       if (c.type === "pivot" && c.xCol && !c.pivotData) {
         return { ...c, pivotData: generatePivot(filteredData, c.xCol, null, null, "sum") };
@@ -1242,7 +1732,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
       }
       return c;
     });
-  }, [savedCustomCharts, filteredData]);
+  }, [activeView, savedCustomCharts, filteredData]);
 
   // Merge session charts with rebuilt Firestore charts
   const allCustomCharts = [
@@ -1343,6 +1833,11 @@ export default function Dashboard({ data, blueprint, fileId }) {
   // Build a chart result from a spec, applying limit/sort/row-filters
   const buildChartResult = (spec, id) => {
     if (!spec) return null;
+    const validation = validateChartSpecForData(spec, filteredData, headers);
+    if (!validation.ok) {
+      console.warn("[chat-chart] Rejected invalid chart:", validation.reason, spec);
+      return null;
+    }
     let data = filteredData;
     if (spec.filters?.length) {
       data = data.filter(row => spec.filters.every(({ column, operator, value }) => {
@@ -1369,12 +1864,12 @@ export default function Dashboard({ data, blueprint, fileId }) {
     if (spec.type === "bar" || spec.type === "hbar") {
       return { id, type: spec.type, title: spec.title || "Chart", xCol, spec,
         config: { x: xCol, y: yCol },
-        chartData: groupForBar(data, xCol, yCol, limit || 20) };
+        chartData: groupForBar(data, xCol, yCol, limit || 20, spec?.aggregation || "sum") };
     }
     if (spec.type === "donut") {
       return { id, type: "donut", title: spec.title || "Chart", xCol, spec,
         config: { x: xCol, y: yCol, topN: limit || 10 },
-        chartData: groupForBar(data, xCol, yCol, limit || 10) };
+        chartData: groupForBar(data, xCol, yCol, limit || 10, spec?.aggregation || "sum") };
     }
     if (spec.type === "line") {
       return { id, type: "line", title: spec.title || "Chart", spec, config: { x: xCol, y: yCol } };
@@ -1383,18 +1878,6 @@ export default function Dashboard({ data, blueprint, fileId }) {
   };
 
   const handleChatResult = ({ chartSpec, filterSpec, action, targetId, updateChartId, deleteSpec, pinSpec, newChartSpecs, renameSpec, tab, modifyChartSpec, tableActionSpec }) => {
-    if (action === "delete_table" && deleteTableSpec) {
-      if (deleteTableSpec.deleteAll) {
-        clearAllFilteredTables();
-      } else {
-        const match = filteredTables.find(t =>
-          t.title?.toLowerCase() === deleteTableSpec.targetTitle?.toLowerCase()
-        );
-        if (match) removeFilteredTable(match.id);
-      }
-      return;
-    }
-
     if (action === "rename" && renameSpec) {
       const match = allCustomCharts.find(c =>
         c.title?.toLowerCase() === renameSpec.targetTitle?.toLowerCase()
@@ -1424,22 +1907,52 @@ export default function Dashboard({ data, blueprint, fileId }) {
     }
 
     if (action === "table_action" && tableActionSpec) {
-      const { action: act, targetTitle, newTitle } = tableActionSpec;
+      const { action: act, targetTitle, newTitle, sort_col, sort_dir, limit, filter: addFilter, filter_column } = tableActionSpec;
+      const findTable = (title) => filteredTables.find(t => t.title?.toLowerCase() === title?.toLowerCase());
+
       if (act === "deleteAll") {
         clearAllFilteredTables();
       } else if (act === "delete") {
-        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        const match = findTable(targetTitle);
         if (match) removeFilteredTable(match.id);
       } else if (act === "pinAll") {
-        filteredTables.forEach(t => {
-          if (!isPinned(String(t.id))) addAndPinTable(t);
-        });
+        filteredTables.forEach(t => { if (!isPinned(String(t.id))) addAndPinTable(t); });
+      } else if (act === "unpinAll") {
+        filteredTables.forEach(t => { if (isPinned(String(t.id))) togglePin(String(t.id)); });
       } else if (act === "pin") {
-        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        const match = findTable(targetTitle);
         if (match && !isPinned(String(match.id))) addAndPinTable(match);
       } else if (act === "rename") {
-        const match = filteredTables.find(t => t.title?.toLowerCase() === targetTitle?.toLowerCase());
+        const match = findTable(targetTitle);
         if (match) renameFilteredTable(match.id, newTitle);
+      } else if (act === "sort") {
+        // Update table's sort_col + sort_dir in filteredTables state
+        const match = findTable(targetTitle);
+        if (match) {
+          const updated = { ...match, sort_col, sort_dir: sort_dir || "asc" };
+          updateFilteredTable(updated);
+        }
+      } else if (act === "limit") {
+        const match = findTable(targetTitle);
+        if (match) {
+          const updated = { ...match, limit };
+          updateFilteredTable(updated);
+        }
+      } else if (act === "add_filter") {
+        const match = findTable(targetTitle);
+        if (match && addFilter?.column) {
+          const existingFilters = match.filters || [];
+          // Replace filter for same column, or append
+          const newFilters = [...existingFilters.filter(f => f.column !== addFilter.column), addFilter];
+          const updated = { ...match, filters: newFilters };
+          updateFilteredTable(updated);
+        }
+      } else if (act === "remove_filter") {
+        const match = findTable(targetTitle);
+        if (match && filter_column) {
+          const updated = { ...match, filters: (match.filters || []).filter(f => f.column !== filter_column) };
+          updateFilteredTable(updated);
+        }
       }
       return;
     }
@@ -1500,13 +2013,17 @@ export default function Dashboard({ data, blueprint, fileId }) {
     } else if (chartSpec) {
       const modifyId = targetId || updateChartId || (action === "modify" ? chartSpec.targetId : null);
       if (modifyId) {
+        let updatedAny = false;
         setCustomCharts(prev => prev.map(c => {
           if (String(c.id) !== String(modifyId)) return c;
-          return buildChartResult(chartSpec, c.id) || c;
+          const updated = buildChartResult(chartSpec, c.id);
+          if (updated) updatedAny = true;
+          return updated || c;
         }));
         const updated = buildChartResult(chartSpec, modifyId);
         if (updated) addCustomChart(updated);
         setActiveView("charts");
+        return updatedAny || Boolean(updated);
       } else {
         const id = chartSpec._chatId || Date.now();
         const result = buildChartResult(chartSpec, id);
@@ -1518,7 +2035,9 @@ export default function Dashboard({ data, blueprint, fileId }) {
             window.__pendingCharts[String(id)] = result;
           }
           setActiveView("charts");
+          return true;
         }
+        return false;
       }
     }
   };
@@ -1526,6 +2045,13 @@ export default function Dashboard({ data, blueprint, fileId }) {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(chartWorkspaceStorageKey) || "{}");
+      if (saved.version !== CHART_WORKSPACE_LAYOUT_VERSION) {
+        setChartOrder([]);
+        setChartLayouts({});
+        setLockedCharts({});
+        setMinimizedCharts({});
+        return;
+      }
       setChartOrder(Array.isArray(saved.order) ? saved.order : []);
       setChartLayouts(saved.layouts && typeof saved.layouts === "object" ? saved.layouts : {});
       setLockedCharts(saved.lockedCharts && typeof saved.lockedCharts === "object" ? saved.lockedCharts : {});
@@ -1580,7 +2106,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
       id: `custom-${chart.id}`,
       kind: chart.type === "pivot" ? "pivot" : chart.type,
       title: chart.title,
-      badge: isPinned(String(chart.id)) ? "PINNED" : "CUSTOM",
+      badge: isPinned(String(chart.id)) ? "PINNED" : null,
       pinned: isPinned(String(chart.id)),
       onPin: () => {
         if (isPinned(String(chart.id))) togglePin(String(chart.id));
@@ -1591,6 +2117,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
       onHide: () => setChartHidden(`custom-${chart.id}`, true),
       isFullscreen: fullscreenChartId === `custom-${chart.id}`,
       render: <RenderChart chart={chart} filteredData={filteredData} />,
+      chart: chart,
     })),
     ...(isWide && isPinned("wide_line") && periodData.length > 1 ? [{
       id: "auto-wide-line",
@@ -1764,6 +2291,7 @@ export default function Dashboard({ data, blueprint, fileId }) {
   useEffect(() => {
     try {
       localStorage.setItem(chartWorkspaceStorageKey, JSON.stringify({
+        version: CHART_WORKSPACE_LAYOUT_VERSION,
         order: chartOrder,
         layouts: chartLayouts,
         lockedCharts,
@@ -1853,8 +2381,9 @@ export default function Dashboard({ data, blueprint, fileId }) {
       const dx = moveEvent.clientX - state.startX;
       const dy = moveEvent.clientY - state.startY;
       const colWidth = Math.max(state.workspaceWidth / 12, 1);
-      const span = Math.max(4, Math.min(12, Math.round((state.startSpan * colWidth + dx) / colWidth)));
-      const height = Math.max(320, Math.min(760, state.startHeight + dy));
+      const minSpan = state.workspaceWidth >= 1500 ? 3 : 4;
+      const span = Math.max(minSpan, Math.min(12, Math.round((state.startSpan * colWidth + dx) / colWidth)));
+      const height = Math.max(300, Math.min(760, state.startHeight + dy));
       setChartLayouts(prev => ({
         ...prev,
         [cardId]: {
@@ -1877,8 +2406,16 @@ export default function Dashboard({ data, blueprint, fileId }) {
   };
 
   return (
-    <div style={{ padding: "48px 32px 80px", maxWidth: 1280, width: "100%", margin: "0 auto", fontFamily: "'Manrope',sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
+    <div style={{ padding: "48px 40px 80px", width: "100%", fontFamily: "'Manrope',sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+        .rank-row:hover .rank-detail-popover,
+        .rank-row:focus .rank-detail-popover,
+        .rank-row:focus-within .rank-detail-popover {
+          opacity: 1 !important;
+          transform: translateY(0) !important;
+        }
+      `}</style>
 
       {aiGenerated&&datasetSummary&&<AIBanner summary={datasetSummary}/>}
       <DashboardNav activeView={activeView} setActiveView={setActiveView} pinnedCount={validPinnedIds.length} filteredTableCount={filteredTables.length}/>
@@ -1907,6 +2444,53 @@ export default function Dashboard({ data, blueprint, fileId }) {
               />
           }
 
+          {isObjectDataMaterializing && (
+            <Section style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:420, padding:40 }}>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16, textAlign:"center", width:"100%", maxWidth:760 }}>
+                <div
+                  style={{
+                    width:62,
+                    height:62,
+                    borderRadius:"50%",
+                    border:`4px solid ${UI.border}`,
+                    borderTopColor:LW.green,
+                    animation:"lifesightsSpin 0.9s linear infinite",
+                  }}
+                />
+                <div style={{ fontSize:22, fontWeight:800, color:UI.text }}>
+                  Loading workbook dashboard
+                </div>
+                <div style={{ fontSize:14, color:UI.textLight, lineHeight:1.7, maxWidth:640 }}>
+                  We&apos;re preparing the full workbook first so large files open smoothly without freezing the dashboard.
+                </div>
+                <div style={{ width:"100%", maxWidth:520, display:"flex", flexDirection:"column", gap:8 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontWeight:700, color:UI.textLight }}>
+                    <span>Materializing rows</span>
+                    <span>{objectData.length.toLocaleString()} / {sourceRowCount.toLocaleString()}</span>
+                  </div>
+                  <div style={{ height:12, borderRadius:999, background:UI.border, overflow:"hidden" }}>
+                    <div
+                      style={{
+                        height:"100%",
+                        width:`${Math.max(6, Math.min(100, sourceRowCount ? (objectData.length / sourceRowCount) * 100 : 0))}%`,
+                        borderRadius:999,
+                        background:`linear-gradient(90deg, ${LW.green} 0%, ${LW.saffron} 100%)`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <style>{`
+                  @keyframes lifesightsSpin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                  }
+                `}</style>
+              </div>
+            </Section>
+          )}
+
+          {!isObjectDataMaterializing && (
+            <>
           {isWide&&blueprint.cards?.length>0&&<StaticSummaryCards
             cards={blueprint.cards}
             analytics={analytics}
@@ -1917,9 +2501,9 @@ export default function Dashboard({ data, blueprint, fileId }) {
             activeDateRange={activeDateRange}
             isFiltered={wideFilters.section!=="all"||wideFilters.name!=="all"||isDateFiltered}
           />}
-          {!isWide&&<SummaryCards data={filteredData} cards={blueprint.cards}/>}
+          {!isWide&&!isObjectDataMaterializing&&<SummaryCards data={filteredData} cards={blueprint.cards} isPreview={false}/>}
 
-          {!isWide&&dateCol&&dateOptions.length>=2&&(
+          {!isWide&&!isObjectDataMaterializing&&dateCol&&dateOptions.length>=2&&(
             <div style={{marginBottom:20}}>
               <button onClick={()=>setShowCompare(v=>!v)} style={{padding:"8px 16px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",border:`1px solid ${showCompare?LW.green:UI.border}`,background:showCompare?LW.green:UI.surface,color:showCompare?"#fff":UI.text,boxShadow:"var(--color-shadow-soft)"}}>
                 {showCompare?"▲ Hide Comparison":"⚖️ Compare Periods"}
@@ -1927,12 +2511,12 @@ export default function Dashboard({ data, blueprint, fileId }) {
             </div>
           )}
 
-          {showCompare&&dateCol&&dateOptions.length>=2&&(
+          {showCompare&&!isObjectDataMaterializing&&dateCol&&dateOptions.length>=2&&(
             <CompareCards blueprint={blueprint} objectData={objectData} dateCol={dateCol} dateOptions={dateOptions} isWide={isWide}/>
           )}
 
           {/* AI filtered tables from chatbot — bottom of summary */}
-          {filteredTables.map(table => {
+          {!isObjectDataMaterializing&&filteredTables.map(table => {
             const applyTableFilter = () => {
               return objectData.filter(row =>
                 (table.filters||[]).every(({ column, operator, value }) => {
@@ -1954,16 +2538,30 @@ export default function Dashboard({ data, blueprint, fileId }) {
               );
             };
             const displayCols = (table.columns||[]).filter(c => headers.includes(c));
-            const matchedRows = applyTableFilter();
-            const displayRows = matchedRows.map(row => displayCols.map(col => row[col] === undefined ? null : row[col]));
+            let matchedRows = applyTableFilter();
+            // Sort if table has sort config
+            if (table.sort_col && displayCols.includes(table.sort_col)) {
+              const col = table.sort_col;
+              const dir = table.sort_dir === "asc" ? 1 : -1;
+              matchedRows = [...matchedRows].sort((a, b) => {
+                const av = a[col], bv = b[col];
+                const an = parseFloat(String(av).replace(/,/g, "")), bn = parseFloat(String(bv).replace(/,/g, ""));
+                if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir;
+                return String(av||"").localeCompare(String(bv||"")) * dir;
+              });
+            }
+            // Limit rows if set
+            const limitedRows = table.limit ? matchedRows.slice(0, table.limit) : matchedRows;
+            const displayRows = limitedRows.map(row => displayCols.map(col => row[col] === undefined ? null : row[col]));
             return (
               <Section key={table.id}>
                 <SectionHeader
                   title={table.title}
-                  subtitle={`${matchedRows.length} row${matchedRows.length !== 1 ? "s" : ""} · AI filtered`}
+                  subtitle={`${limitedRows.length}${table.limit && matchedRows.length > table.limit ? ` of ${matchedRows.length}` : ""} row${limitedRows.length !== 1 ? "s" : ""}${table.sort_col ? ` · sorted by ${table.sort_col} ${table.sort_dir||"desc"}` : ""} · AI filtered`}
                   badge="AI FILTER"
                   onPin={() => togglePin(String(table.id))}
                   pinned={isPinned(String(table.id))}
+                  onRename={newTitle => renameFilteredTable(table.id, newTitle)}
                   onRemove={() => removeFilteredTable(table.id)}
                 />
                 <DataTable headers={displayCols} rows={displayRows}/>
@@ -1978,17 +2576,17 @@ export default function Dashboard({ data, blueprint, fileId }) {
           }}>
             <SectionHeader
               title="Data Table"
-              subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
+              subtitle={`${(isWide ? wideFilteredData : hasLongFormatFilters ? filteredData : rows).length.toLocaleString()} of ${(isWide ? objectData.length : rows.length).toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&hasLongFormatFilters?" · filtered":""}${!isWide&&isObjectDataMaterializing?" · summaries loading":""}`}
               badge="RAW DATA"
             />
             <DataTable
               headers={isWide ? wideVisibleHeaders : headers}
-              rows={isWide
-                ? wideFilteredData.map(row => wideVisibleHeaders.map(h => row[h] === undefined ? null : row[h]))
-                : filteredRows
-              }
+              displayHeaderRows={isWide ? null : data.displayHeaderRows}
+              rows={isWide ? wideFilteredData : hasLongFormatFilters ? filteredData : rows}
             />
           </Section>
+            </>
+          )}
 
         </>
       )}
@@ -2020,8 +2618,8 @@ export default function Dashboard({ data, blueprint, fileId }) {
               const id=Date.now(); let result;
               const spec=config; // save full config as spec for Firestore rebuild
               if(config.outputType==="pivot")result={id,type:"pivot",title:config.title,xCol:config.rowGroup,spec,pivotData:generatePivot(filteredData,config.rowGroup,config.columnGroup,config.metric,config.aggregation)};
-              else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
-              else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN)};
+              else if(config.outputType==="bar")result={id,type:"bar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN,config.aggregation)};
+              else if(config.outputType==="hbar")result={id,type:"hbar",title:config.title,xCol:config.rowGroup,spec,config:{x:config.rowGroup,y:config.metric},chartData:groupForBar(filteredData,config.rowGroup,config.metric,config.topN,config.aggregation)};
               else if(config.outputType==="line")result={id,type:"line",title:config.title,spec,config:{x:config.rowGroup,y:config.metric}};
               else if(config.outputType==="donut")result={id,type:"donut",title:config.title,spec,config:{x:config.rowGroup,y:config.metric,topN:config.topN}};
               if(result) {
@@ -2037,15 +2635,31 @@ export default function Dashboard({ data, blueprint, fileId }) {
                 Hidden Charts
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {hiddenChartCards.map(card => (
-                  <button
-                    key={card.id}
-                    onClick={() => setChartHidden(card.id, false)}
-                    style={{ padding: "8px 12px", borderRadius: 999, border: `1px solid ${UI.border}`, background: UI.surface, color: UI.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                  >
-                    Show {card.title}
-                  </button>
-                ))}
+                {hiddenChartCards.map(card => {
+                  const pinned = card.pinned;
+                  return (
+                    <div key={card.id} style={{ display: "flex", alignItems: "center", borderRadius: 999, border: `1px solid ${UI.border}`, background: UI.surface, overflow: "hidden" }}>
+                      <button
+                        onClick={() => setChartHidden(card.id, false)}
+                        style={{ padding: "8px 12px", background: "none", border: "none", color: UI.text, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                      >
+                        Show {card.title}
+                      </button>
+                      {card.onPin && (
+                        <>
+                          <div style={{ width: 1, height: 20, background: UI.border }} />
+                          <button
+                            onClick={card.onPin}
+                            title={pinned ? "Unpin" : "Pin chart"}
+                            style={{ padding: "8px 10px", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: pinned ? LW.green : "#9cafa4", display: "flex", alignItems: "center" }}
+                          >
+                            {pinned ? "📌" : "📍"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -2103,9 +2717,10 @@ export default function Dashboard({ data, blueprint, fileId }) {
             const fullscreenCard = chartCards.find(card => card.id === fullscreenChartId);
             if (!fullscreenCard) return null;
             return (
-              <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(6, 16, 12, 0.64)", backdropFilter: "blur(8px)", padding: 24, display: "flex", alignItems: "stretch", justifyContent: "center" }}>
-                <div style={{ width: "min(1400px, 100%)", height: "100%", background: UI.surfaceElevated, borderRadius: 20, border: `1px solid ${UI.border}`, boxShadow: "0 24px 60px rgba(0,0,0,0.24)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "16px 20px", borderBottom: `1px solid ${UI.border}`, background: "linear-gradient(180deg, rgba(19,48,32,0.04), rgba(19,48,32,0))" }}>
+              <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(6, 16, 12, 0.72)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+                <div style={{ width: "min(1800px, 96%)", height: "calc(100vh - 48px)", background: UI.surfaceElevated, borderRadius: 20, border: `1px solid ${UI.border}`, boxShadow: "0 24px 60px rgba(0,0,0,0.32)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${UI.border}`, flexShrink: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={{ width: 10, height: 10, borderRadius: 999, background: "#ef4444" }} />
@@ -2116,12 +2731,15 @@ export default function Dashboard({ data, blueprint, fileId }) {
                         {fullscreenCard.title}
                       </div>
                     </div>
-                    <button onClick={() => setFullscreenChartId(null)} style={{ background: "none", border: `1px solid ${UI.border}`, borderRadius: 10, padding: "6px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: UI.text }}>
+                    <button onClick={() => setFullscreenChartId(null)} style={{ background: "none", border: `1px solid ${UI.border}`, borderRadius: 10, padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 700, color: UI.text }}>
                       Close fullscreen
                     </button>
                   </div>
-                  <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 20 }}>
-                    {fullscreenCard.render}
+                  {/* Chart — fills remaining height */}
+                  <div style={{ flex: 1, minHeight: 0, padding: "24px 32px", display: "flex", flexDirection: "column" }}>
+                    <div style={{ flex: 1, minHeight: 0 }}>
+                      <FullscreenChartWrapper card={fullscreenCard} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2130,8 +2748,17 @@ export default function Dashboard({ data, blueprint, fileId }) {
         </>
       )}
 
-      <DataChatbot headers={headers} rows={filteredRows} blueprint={blueprint} onResult={handleChatResult} customCharts={allCustomCharts.map(c=>({...c, pinned: isPinned(String(c.id))}))} filteredTables={filteredTables.map(t=>({...t, pinned: isPinned(String(t.id))}))}/>
+      <DataChatbot
+        headers={headers}
+        rows={analysisSession?.sessionId ? EMPTY_CHAT_ROWS : rows}
+        columnContexts={data.columnContexts || {}}
+        blueprint={blueprint}
+        analysisSession={analysisSession}
+        onAnalysisSessionExpired={onAnalysisSessionExpired}
+        onResult={handleChatResult}
+        customCharts={allCustomCharts.map(c=>({...c, pinned: isPinned(String(c.id))}))}
+        filteredTables={filteredTables.map(t=>({...t, pinned: isPinned(String(t.id))}))}
+      />
     </div>
   );
 }
-

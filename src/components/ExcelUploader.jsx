@@ -1,4 +1,14 @@
 import { useState, useRef } from "react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  FolderSearch,
+  LayoutDashboard,
+  LoaderCircle,
+  Sparkles,
+} from "lucide-react";
+import excelFileIcon from "../assets/icons/excel-file-icon.png";
 
 export default function ExcelUploader({ onDataReady, compact = false }) {
   const [file, setFile] = useState(null);
@@ -9,7 +19,7 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
   const [transformNote, setTransformNote] = useState(null);
   const fileInputRef = useRef(null);
 
-  const host = 'https://daily-headcount-ai-backend.onrender.com';
+  const host = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
   const handleFileUpload = async (uploadedFile) => {
     if (!uploadedFile) return;
     setFile(uploadedFile);
@@ -76,7 +86,7 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
           onClick={() => fileInputRef.current?.click()}
           className="flex items-center gap-2 px-4 py-1.5 bg-white text-emerald-800 rounded-lg text-sm font-bold hover:bg-emerald-50 transition-colors cursor-pointer border-2 border-transparent hover:border-emerald-300 shrink-0"
         >
-          <span>📁</span>
+          <FolderSearch className="h-4 w-4" aria-hidden="true" />
           <span>{file ? file.name : "Choose File"}</span>
         </button>
         <input
@@ -115,7 +125,10 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
                     : "bg-white text-emerald-800 hover:bg-emerald-50 cursor-pointer"
                 }`}
               >
-                {loading ? "Loading..." : "Load Sheet →"}
+                <span className="inline-flex items-center gap-1.5">
+                  {loading ? "Loading..." : "Load Sheet"}
+                  {!loading && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+                </span>
               </button>
             </div>
           </>
@@ -124,41 +137,31 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
         {/* Loading spinner */}
         {loading && (
           <div className="flex items-center gap-2 text-emerald-300 text-xs">
-            <svg
-              className="animate-spin h-3.5 w-3.5"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8v8z"
-              />
-            </svg>
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
             Analyzing with AI...
           </div>
         )}
 
         {/* Transform note */}
         {transformNote && !loading && (
-          <span className="text-emerald-300 text-xs">✨ {transformNote}</span>
+          <span className="text-emerald-300 text-xs inline-flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+            {transformNote}
+          </span>
         )}
 
         {/* Error */}
-        {error && <span className="text-red-300 text-xs">⚠️ {error}</span>}
+        {error && (
+          <span className="text-red-300 text-xs inline-flex items-center gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+            {error}
+          </span>
+        )}
 
         {/* Current file info badge */}
         {file && !loading && sheets.length > 0 && (
           <div className="ml-auto flex items-center gap-2 text-emerald-300 text-xs shrink-0">
-            <span className="text-emerald-400">✓</span>
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden="true" />
             <span>{file.name}</span>
             {sheets.length > 1 && (
               <span className="bg-emerald-700 px-1.5 py-0.5 rounded text-xs">
@@ -176,9 +179,11 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-12 w-full max-w-md">
         <div className="text-center mb-9">
-          <div className="text-5xl mb-3">📊</div>
+          <div className="mb-3 flex justify-center">
+            <LayoutDashboard className="h-12 w-12 text-emerald-700" aria-hidden="true" />
+          </div>
           <h2 className="text-2xl font-extrabold text-emerald-800 m-0">
-            Excel Dashboard
+            LifeSights
           </h2>
           <p className="text-gray-400 text-sm mt-1">
             Upload a spreadsheet to auto-generate your dashboard
@@ -194,7 +199,9 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
           />
           {file ? (
             <>
-              <div className="text-3xl mb-2">📄</div>
+              <div className="mb-2 flex justify-center">
+                <img src={excelFileIcon} alt="Excel file" className="h-8 w-8" style={{ objectFit: "contain" }} />
+              </div>
               <div className="font-semibold text-emerald-700 text-sm">
                 {file.name}
               </div>
@@ -204,7 +211,9 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
             </>
           ) : (
             <>
-              <div className="text-3xl mb-2">📁</div>
+              <div className="mb-2 flex justify-center">
+                <FolderSearch className="h-8 w-8 text-gray-600" aria-hidden="true" />
+              </div>
               <div className="font-semibold text-gray-600 text-sm">
                 Click to upload Excel file
               </div>
@@ -238,19 +247,28 @@ export default function ExcelUploader({ onDataReady, compact = false }) {
             disabled={loading}
             className={`w-full py-3 rounded-lg text-white font-bold text-base transition-colors ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-emerald-700 hover:bg-emerald-800 cursor-pointer"}`}
           >
-            {loading ? "Processing..." : "Generate Dashboard →"}
+            <span className="inline-flex items-center gap-1.5">
+              {loading ? "Processing..." : "Generate Dashboard"}
+              {!loading && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+            </span>
           </button>
         )}
 
         {transformNote && (
           <div className="mt-4 p-3 bg-emerald-50 border-l-4 border-emerald-600 rounded-lg text-sm text-emerald-700">
-            ✨ <strong>Auto-transformed:</strong> {transformNote}
+            <div className="inline-flex items-center gap-2">
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+              <span><strong>Auto-transformed:</strong> {transformNote}</span>
+            </div>
           </div>
         )}
 
         {error && (
           <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-lg text-sm text-red-700">
-            ⚠️ {error}
+            <div className="inline-flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              <span>{error}</span>
+            </div>
           </div>
         )}
 

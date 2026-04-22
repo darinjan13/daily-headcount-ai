@@ -37,7 +37,7 @@
   --color-pin-accent-bg: rgba(4, 98, 65, 0.1);
   --color-badge-custom-bg: rgba(255, 179, 71, 0.18);
   --color-badge-custom-text: #8A5A00;
-  --sidebar-width: 320px;
+  --sidebar-width: 360px;
   --sidebar-peek: 22px;
   --sidebar-offset: var(--sidebar-peek);
 
@@ -177,7 +177,6 @@ button {
 button:hover {
   background-color: var(--color-saffron);
   color: var(--color-dark-serpent);
-  transform: translateY(-2px);
   box-shadow: 0 8px 16px rgba(255, 179, 71, 0.2);
 }
 
@@ -261,6 +260,8 @@ button:disabled {
   width: 60px;
   height: 34px;
   flex-shrink: 0;
+  line-height: 0;
+  vertical-align: middle;
 }
 
 .theme-switch-input {
@@ -288,7 +289,9 @@ button:disabled {
   left: 4px;
   bottom: 3px;
   background-color: #ffd84d;
-  transition: 0.4s;
+  transform: translateX(0) rotate(0deg);
+  transform-origin: center;
+  transition: transform 0.6s ease-in-out, background-color 0.4s ease;
 }
 
 .theme-switch-input:checked + .theme-switch-slider {
@@ -301,9 +304,8 @@ button:disabled {
 }
 
 .theme-switch-input:checked + .theme-switch-slider .theme-switch-sun-moon {
-  transform: translateX(26px);
+  transform: translateX(26px) rotate(180deg);
   background-color: #fff;
-  animation: theme-rotate-center 0.6s ease-in-out both;
 }
 
 .theme-moon-dot {
@@ -508,12 +510,80 @@ button:disabled {
   transform: translateX(0);
 }
 
+.ui-sidebar-toggle,
+.ui-sidebar-backdrop {
+  display: none;
+}
+
+.ui-sidebar-toggle {
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  box-shadow: var(--color-shadow-soft);
+  flex: 0 0 auto;
+}
+
+.ui-sidebar-toggle svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+  color: inherit;
+  stroke: currentColor;
+  flex: 0 0 auto;
+}
+
+.ui-auto-hide-sidebar.is-open {
+  transform: translateX(0);
+}
+
 @media (max-width: 900px) {
   :root {
-    --sidebar-offset: var(--sidebar-width);
+    --sidebar-offset: 0px;
+  }
+  .ui-sidebar-toggle {
+    display: inline-flex;
+  }
+  .ui-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(6, 24, 17, 0.36);
+    backdrop-filter: blur(3px);
+  }
+  .ui-sidebar-backdrop.is-open {
+    display: block;
   }
   .ui-auto-hide-sidebar {
-    transform: none;
+    transform: translateX(-105%) !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: min(88vw, 390px) !important;
+    height: 100vh !important;
+    z-index: 120 !important;
+    border-right: 1px solid var(--color-border) !important;
+    border-bottom: none !important;
+    overflow-y: auto !important;
+    box-shadow: 18px 0 48px rgba(6, 24, 17, 0.18);
+  }
+  .ui-auto-hide-sidebar:hover,
+  .ui-auto-hide-sidebar:focus-within {
+    transform: translateX(-105%) !important;
+  }
+  .ui-auto-hide-sidebar.is-open {
+    transform: translateX(0) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --sidebar-width: 100vw;
+    --sidebar-peek: 0px;
   }
 }
 
@@ -526,9 +596,9 @@ button:disabled {
 
 :root[data-theme="dark"] .login-glass-card {
   background:
-    radial-gradient(120% 90% at 5% 10%, rgba(255, 195, 112, 0.12), transparent 60%),
-    radial-gradient(90% 70% at 95% 0%, rgba(4, 98, 65, 0.25), transparent 65%),
-    linear-gradient(145deg, rgba(22, 38, 30, 0.85), rgba(30, 49, 40, 0.7));
+    radial-gradient(120% 90% at 5% 10%, rgba(245, 238, 219, 0.72), transparent 60%),
+    radial-gradient(90% 70% at 95% 0%, rgba(4, 98, 65, 0.14), transparent 65%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(249, 247, 247, 0.66));
 }
 
 .login-google-wave-btn {
@@ -548,7 +618,6 @@ button:disabled {
 }
 
 .login-google-wave-btn:hover {
-  transform: translateY(-1px);
   box-shadow: 0 18px 32px rgba(19, 48, 32, 0.32);
 }
 
@@ -686,5 +755,4 @@ img[alt*="icon"],
 .glass-card:hover {
   box-shadow: var(--color-shadow-strong);
   border: 1px solid rgba(255, 179, 71, 0.3);
-  transform: translateY(-2px);
 }
