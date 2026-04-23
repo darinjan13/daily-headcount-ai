@@ -24,29 +24,43 @@ function pickFirstHeader(headers, patterns) {
   return headers.find((h) => patterns.some((pattern) => pattern.test(h))) || null;
 }
 
-function buildCompactHeaders(headers, nameHeader, statusHeader) {
-  const priorityGroups = [
-    [/job|task|project|campaign|work/i],
-    [/valid duration|duration|time/i],
-    [/rework/i],
-    [/record|ticket|case|id/i],
-    [/start date|finish date|date/i],
-  ];
+function parseMetricNumber(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const raw = String(value).replace(/,/g, "").trim();
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-  const picked = [];
-  const excluded = new Set([nameHeader, statusHeader].filter(Boolean));
+function formatMetric(value) {
+  if (!Number.isFinite(value)) return "0";
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded)
+    ? rounded.toLocaleString()
+    : rounded.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
 
-  priorityGroups.forEach((group) => {
-    const match = headers.find((h) => !excluded.has(h) && group.some((pattern) => pattern.test(h)));
-    if (match && !picked.includes(match)) picked.push(match);
-  });
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return "0%";
+  return `${value.toFixed(1)}%`;
+}
 
-  headers.forEach((h) => {
-    if (!excluded.has(h) && !picked.includes(h)) picked.push(h);
-  });
+function normalizeDateValue(cell) {
+  const text = cellToText(cell).trim();
+  if (!text || text === "-") return { key: "no-date", label: "No date", sortValue: Number.POSITIVE_INFINITY };
 
-  // Keep cards intentionally short: only the most relevant fields at a glance.
-  return picked.slice(0, 4);
+  const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    const stamp = Date.parse(isoMatch[1]);
+    return { key: isoMatch[1], label: isoMatch[1], sortValue: Number.isNaN(stamp) ? Number.POSITIVE_INFINITY : stamp };
+  }
+
+  const parsed = Date.parse(text);
+  if (!Number.isNaN(parsed)) {
+    const normalized = new Date(parsed).toISOString().slice(0, 10);
+    return { key: normalized, label: normalized, sortValue: parsed };
+  }
+
+  return { key: `text:${text}`, label: text, sortValue: Number.POSITIVE_INFINITY };
 }
 
 function getStatusStyle(value) {
@@ -84,7 +98,7 @@ export default function DataTable({ headers = [], rows = [] }) {
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [hiddenRows, setHiddenRows] = useState(new Set());
   const [viewMode, setViewMode] = useState("table"); // "table" or "cards"
-  const [detailRow, setDetailRow] = useState(null);
+  const [detailOperator, setDetailOperator] = useState(null);
 
   useEffect(() => {
     setVisibleCols(headers);
@@ -92,21 +106,21 @@ export default function DataTable({ headers = [], rows = [] }) {
     setSelectedRows(new Set());
     setHiddenRows(new Set());
     setPage(0);
-    setDetailRow(null);
+    setDetailOperator(null);
   }, [headers]);
 
   useEffect(() => {
-    if (viewMode !== "cards") setDetailRow(null);
+    if (viewMode !== "cards") setDetailOperator(null);
   }, [viewMode]);
 
   useEffect(() => {
-    if (!detailRow) return undefined;
+    if (!detailOperator) return undefined;
     const onEscape = (event) => {
-      if (event.key === "Escape") setDetailRow(null);
+      if (event.key === "Escape") setDetailOperator(null);
     };
     window.addEventListener("keydown", onEscape);
     return () => window.removeEventListener("keydown", onEscape);
-  }, [detailRow]);
+  }, [detailOperator]);
 
   const normalizedRows = useMemo(() => {
     if (!rows || rows.length === 0) return [];
@@ -168,22 +182,152 @@ export default function DataTable({ headers = [], rows = [] }) {
   }, [working, search, sortCol, sortDir, headers, columnFilters, hiddenRows]);
 
   const visibleHeaders = useMemo(() => headers.filter((h) => visibleCols.includes(h)), [headers, visibleCols]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const tablePageRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  const operatorHeader = useMemo(
+    () =>
+      pickFirstHeader(headers, [/operator|employee|worker|staff|name/i]) ||
+      pickFirstHeader(headers, [/user[\s_-]?id|user/i]) ||
+      headers[0] ||
+      null,
+    [headers],
+  );
+  const statusHeader = useMemo(() => pickFirstHeader(headers, [/status|state|valid|invalid|finished|complete/i]), [headers]);
+  const dateHeader = useMemo(() => pickFirstHeader(headers, [/start date|finish date|date|day/i]), [headers]);
+  const validDurationHeader = useMemo(() => pickFirstHeader(headers, [/valid duration/i]), [headers]);
+  const annotationHeader = useMemo(() => pickFirstHeader(headers, [/annotation time|annotation/i]), [headers]);
+  const reworkHeader = useMemo(() => pickFirstHeader(headers, [/rework/i]), [headers]);
+  const recordHeader = useMemo(() => pickFirstHeader(headers, [/record id|record number|record/i]), [headers]);
+
+  const operatorCards = useMemo(() => {
+    if (!normalizedRows.length) return [];
+
+    const operatorIndex = operatorHeader ? headers.indexOf(operatorHeader) : -1;
+    const statusIndex = statusHeader ? headers.indexOf(statusHeader) : -1;
+    const dateIndex = dateHeader ? headers.indexOf(dateHeader) : -1;
+    const validDurationIndex = validDurationHeader ? headers.indexOf(validDurationHeader) : -1;
+    const annotationIndex = annotationHeader ? headers.indexOf(annotationHeader) : -1;
+    const reworkIndex = reworkHeader ? headers.indexOf(reworkHeader) : -1;
+    const recordIndex = recordHeader ? headers.indexOf(recordHeader) : -1;
+
+    const byOperator = new Map();
+
+    normalizedRows.forEach((row, index) => {
+      const operatorRaw = operatorIndex >= 0 ? cellToText(row[operatorIndex]).trim() : "";
+      const operatorName = operatorRaw && operatorRaw !== "-" ? operatorRaw : `Unassigned (${index + 1})`;
+
+      if (!byOperator.has(operatorName)) {
+        byOperator.set(operatorName, {
+          operator: operatorName,
+          totalRows: 0,
+          finishedRows: 0,
+          invalidRows: 0,
+          totalValidDuration: 0,
+          totalAnnotation: 0,
+          totalRework: 0,
+          recordIds: new Set(),
+          dailyMap: new Map(),
+        });
+      }
+
+      const current = byOperator.get(operatorName);
+      current.totalRows += 1;
+
+      current.totalValidDuration += validDurationIndex >= 0 ? parseMetricNumber(row[validDurationIndex]) : 0;
+      current.totalAnnotation += annotationIndex >= 0 ? parseMetricNumber(row[annotationIndex]) : 0;
+      current.totalRework += reworkIndex >= 0 ? parseMetricNumber(row[reworkIndex]) : 0;
+
+      if (recordIndex >= 0) {
+        const recordValue = cellToText(row[recordIndex]).trim();
+        if (recordValue && recordValue !== "-") current.recordIds.add(recordValue);
+      }
+
+      const statusText = statusIndex >= 0 ? cellToText(row[statusIndex]).toLowerCase() : "";
+      const isFinished = statusText.includes("finished") || statusText.includes("complete") || statusText.includes("valid");
+      const isInvalid = statusText.includes("invalid") || statusText.includes("fail") || statusText.includes("error");
+      if (isFinished) current.finishedRows += 1;
+      if (isInvalid) current.invalidRows += 1;
+
+      const normalizedDate = dateIndex >= 0 ? normalizeDateValue(row[dateIndex]) : normalizeDateValue(null);
+      if (!current.dailyMap.has(normalizedDate.key)) {
+        current.dailyMap.set(normalizedDate.key, {
+          key: normalizedDate.key,
+          label: normalizedDate.label,
+          sortValue: normalizedDate.sortValue,
+          rows: 0,
+          finishedRows: 0,
+          invalidRows: 0,
+          validDuration: 0,
+          annotation: 0,
+          rework: 0,
+        });
+      }
+
+      const day = current.dailyMap.get(normalizedDate.key);
+      day.rows += 1;
+      day.validDuration += validDurationIndex >= 0 ? parseMetricNumber(row[validDurationIndex]) : 0;
+      day.annotation += annotationIndex >= 0 ? parseMetricNumber(row[annotationIndex]) : 0;
+      day.rework += reworkIndex >= 0 ? parseMetricNumber(row[reworkIndex]) : 0;
+      if (isFinished) day.finishedRows += 1;
+      if (isInvalid) day.invalidRows += 1;
+    });
+
+    return Array.from(byOperator.values())
+      .map((operator) => {
+        const dailyStats = Array.from(operator.dailyMap.values()).sort((a, b) => {
+          if (Number.isFinite(a.sortValue) && Number.isFinite(b.sortValue)) return a.sortValue - b.sortValue;
+          if (Number.isFinite(a.sortValue)) return -1;
+          if (Number.isFinite(b.sortValue)) return 1;
+          return a.label.localeCompare(b.label);
+        });
+        const completionRate = operator.totalRows ? (operator.finishedRows / operator.totalRows) * 100 : 0;
+
+        return {
+          operator: operator.operator,
+          totalRows: operator.totalRows,
+          finishedRows: operator.finishedRows,
+          invalidRows: operator.invalidRows,
+          totalValidDuration: operator.totalValidDuration,
+          totalAnnotation: operator.totalAnnotation,
+          totalRework: operator.totalRework,
+          uniqueRecords: operator.recordIds.size,
+          activeDays: dailyStats.length,
+          completionRate,
+          dailyStats,
+        };
+      })
+      .sort((a, b) => {
+        if (b.totalRows !== a.totalRows) return b.totalRows - a.totalRows;
+        return a.operator.localeCompare(b.operator);
+      });
+  }, [
+    normalizedRows,
+    headers,
+    operatorHeader,
+    statusHeader,
+    dateHeader,
+    validDurationHeader,
+    annotationHeader,
+    reworkHeader,
+    recordHeader,
+  ]);
+
+  const cardSearchResults = useMemo(() => {
+    if (!search.trim()) return operatorCards;
+    const query = search.trim().toLowerCase();
+    return operatorCards.filter((item) => item.operator.toLowerCase().includes(query));
+  }, [operatorCards, search]);
+
+  const cardPageRows = cardSearchResults.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = Math.max(
+    1,
+    Math.ceil((viewMode === "cards" ? cardSearchResults.length : filtered.length) / pageSize),
+  );
   const goTo = (p) => setPage(Math.max(0, Math.min(totalPages - 1, p)));
 
-  const nameHeader = useMemo(
-    () => pickFirstHeader(visibleHeaders, [/operator|employee|worker|staff|name/i]) || visibleHeaders[0] || null,
-    [visibleHeaders],
-  );
-  const statusHeader = useMemo(
-    () => pickFirstHeader(visibleHeaders, [/status|state|valid|invalid/i]),
-    [visibleHeaders],
-  );
-  const compactHeaders = useMemo(
-    () => buildCompactHeaders(visibleHeaders, nameHeader, statusHeader),
-    [visibleHeaders, nameHeader, statusHeader],
-  );
+  useEffect(() => {
+    if (page > totalPages - 1) setPage(totalPages - 1);
+  }, [page, totalPages]);
 
   const toggleRowSelection = (idx) => {
     setSelectedRows((prev) => {
@@ -197,7 +341,7 @@ export default function DataTable({ headers = [], rows = [] }) {
   const selectPageRows = (checked) => {
     setSelectedRows((prev) => {
       const next = new Set(prev);
-      pageRows.forEach(({ idx }) => {
+      tablePageRows.forEach(({ idx }) => {
         if (checked) next.add(idx);
         else next.delete(idx);
       });
@@ -280,12 +424,24 @@ export default function DataTable({ headers = [], rows = [] }) {
           </div>
 
           <span style={{ fontSize: 12, color: BRAND.muted, fontWeight: 600 }}>
-            {filtered.length.toLocaleString()} of {working.length.toLocaleString()} rows | {visibleHeaders.length} / {headers.length} columns
-            {search && filtered.length !== working.length && (
-              <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>| filtered</span>
-            )}
-            {hiddenRows.size > 0 && (
-              <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>| {hiddenRows.size} hidden</span>
+            {viewMode === "table" ? (
+              <>
+                {filtered.length.toLocaleString()} of {working.length.toLocaleString()} rows | {visibleHeaders.length} / {headers.length} columns
+                {search && filtered.length !== working.length && (
+                  <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>| filtered</span>
+                )}
+                {hiddenRows.size > 0 && (
+                  <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>| {hiddenRows.size} hidden</span>
+                )}
+              </>
+            ) : (
+              <>
+                {cardSearchResults.length.toLocaleString()} of {operatorCards.length.toLocaleString()} operators |{" "}
+                {normalizedRows.length.toLocaleString()} project rows aggregated
+                {search && cardSearchResults.length !== operatorCards.length && (
+                  <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>| filtered</span>
+                )}
+              </>
             )}
           </span>
         </div>
@@ -300,7 +456,7 @@ export default function DataTable({ headers = [], rows = [] }) {
               }}
               onFocus={() => setSearchFocus(true)}
               onBlur={() => setSearchFocus(false)}
-              placeholder="Search all columns..."
+              placeholder={viewMode === "table" ? "Search all columns..." : "Search operator..."}
               style={{
                 paddingLeft: 12,
                 paddingRight: 32,
@@ -366,83 +522,87 @@ export default function DataTable({ headers = [], rows = [] }) {
             </select>
           </label>
 
-          <div style={{ position: "relative" }}>
-            <details style={{ cursor: "pointer", userSelect: "none" }}>
-              <summary
+          {viewMode === "table" && (
+            <>
+              <div style={{ position: "relative" }}>
+                <details style={{ cursor: "pointer", userSelect: "none" }}>
+                  <summary
+                    style={{
+                      listStyle: "none",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: BRAND.dark,
+                      padding: "6px 10px",
+                      border: `1.5px solid ${BRAND.border}`,
+                      borderRadius: 8,
+                      background: BRAND.elevated,
+                    }}
+                  >
+                    Columns ({visibleHeaders.length}/{headers.length})
+                  </summary>
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      zIndex: 10,
+                      background: BRAND.elevated,
+                      border: `1px solid ${BRAND.border}`,
+                      borderRadius: 10,
+                      padding: 10,
+                      marginTop: 6,
+                      boxShadow: "var(--color-shadow-soft)",
+                      maxHeight: 220,
+                      overflow: "auto",
+                    }}
+                  >
+                    {headers.map((col) => (
+                      <label
+                        key={col}
+                        style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: BRAND.dark, marginBottom: 6 }}
+                      >
+                        <input type="checkbox" checked={visibleCols.includes(col)} onChange={() => toggleVisibleCol(col)} />
+                        {col}
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              </div>
+
+              <button
+                onClick={hideSelected}
+                disabled={!selectedRows.size}
                 style={{
-                  listStyle: "none",
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  border: `1px solid ${BRAND.border}`,
+                  background: selectedRows.size ? BRAND.green : BRAND.elevated,
+                  color: selectedRows.size ? "#fff" : BRAND.muted,
                   fontSize: 12,
                   fontWeight: 700,
-                  color: BRAND.dark,
-                  padding: "6px 10px",
-                  border: `1.5px solid ${BRAND.border}`,
-                  borderRadius: 8,
-                  background: BRAND.elevated,
+                  cursor: selectedRows.size ? "pointer" : "not-allowed",
                 }}
               >
-                Columns ({visibleHeaders.length}/{headers.length})
-              </summary>
-              <div
+                Hide selected
+              </button>
+
+              <button
+                onClick={clearHidden}
+                disabled={!hiddenRows.size}
                 style={{
-                  position: "absolute",
-                  right: 0,
-                  zIndex: 10,
-                  background: BRAND.elevated,
+                  padding: "7px 12px",
+                  borderRadius: 8,
                   border: `1px solid ${BRAND.border}`,
-                  borderRadius: 10,
-                  padding: 10,
-                  marginTop: 6,
-                  boxShadow: "var(--color-shadow-soft)",
-                  maxHeight: 220,
-                  overflow: "auto",
+                  background: hiddenRows.size ? BRAND.elevated : BRAND.soft,
+                  color: hiddenRows.size ? BRAND.dark : BRAND.muted,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: hiddenRows.size ? "pointer" : "not-allowed",
                 }}
               >
-                {headers.map((col) => (
-                  <label
-                    key={col}
-                    style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: BRAND.dark, marginBottom: 6 }}
-                  >
-                    <input type="checkbox" checked={visibleCols.includes(col)} onChange={() => toggleVisibleCol(col)} />
-                    {col}
-                  </label>
-                ))}
-              </div>
-            </details>
-          </div>
-
-          <button
-            onClick={hideSelected}
-            disabled={!selectedRows.size}
-            style={{
-              padding: "7px 12px",
-              borderRadius: 8,
-              border: `1px solid ${BRAND.border}`,
-              background: selectedRows.size ? BRAND.green : BRAND.elevated,
-              color: selectedRows.size ? "#fff" : BRAND.muted,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: selectedRows.size ? "pointer" : "not-allowed",
-            }}
-          >
-            Hide selected
-          </button>
-
-          <button
-            onClick={clearHidden}
-            disabled={!hiddenRows.size}
-            style={{
-              padding: "7px 12px",
-              borderRadius: 8,
-              border: `1px solid ${BRAND.border}`,
-              background: hiddenRows.size ? BRAND.elevated : BRAND.soft,
-              color: hiddenRows.size ? BRAND.dark : BRAND.muted,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: hiddenRows.size ? "pointer" : "not-allowed",
-            }}
-          >
-            Unhide all
-          </button>
+                Unhide all
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -464,7 +624,7 @@ export default function DataTable({ headers = [], rows = [] }) {
                   <input
                     type="checkbox"
                     aria-label="Select page rows"
-                    checked={pageRows.length > 0 && pageRows.every(({ idx }) => selectedRows.has(idx))}
+                    checked={tablePageRows.length > 0 && tablePageRows.every(({ idx }) => selectedRows.has(idx))}
                     onChange={(e) => selectPageRows(e.target.checked)}
                   />
                 </th>
@@ -529,7 +689,7 @@ export default function DataTable({ headers = [], rows = [] }) {
               </tr>
             </thead>
             <tbody>
-              {pageRows.length === 0 ? (
+              {tablePageRows.length === 0 ? (
                 <tr>
                   <td
                     colSpan={visibleHeaders.length + 1}
@@ -541,7 +701,7 @@ export default function DataTable({ headers = [], rows = [] }) {
                   </td>
                 </tr>
               ) : (
-                pageRows.map(({ row, idx }, i) => {
+                tablePageRows.map(({ row, idx }, i) => {
                   const isSelected = selectedRows.has(idx);
                   return (
                     <tr
@@ -588,7 +748,10 @@ export default function DataTable({ headers = [], rows = [] }) {
       {/* Card View */}
       {viewMode === "cards" && (
         <div>
-          {pageRows.length === 0 ? (
+          <div style={{ marginBottom: 10, fontSize: 12, color: BRAND.muted, fontWeight: 600 }}>
+            Operator cards show totals across all project rows.
+          </div>
+          {cardPageRows.length === 0 ? (
             <div
               style={{
                 textAlign: "center",
@@ -601,221 +764,153 @@ export default function DataTable({ headers = [], rows = [] }) {
                 boxShadow: "var(--color-shadow-soft)",
               }}
             >
-              {search || Object.values(columnFilters).some((v) => v) ? "No results match your filters" : "No data available"}
+              {search ? "No operators match your search" : "No operator stats available"}
             </div>
           ) : (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                <label
-                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: BRAND.muted, fontWeight: 600, cursor: "pointer" }}
-                >
-                  <input
-                    type="checkbox"
-                    aria-label="Select page rows"
-                    checked={pageRows.length > 0 && pageRows.every(({ idx }) => selectedRows.has(idx))}
-                    onChange={(e) => selectPageRows(e.target.checked)}
-                  />
-                  Select all on page
-                </label>
-              </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(265px, 1fr))",
+                gridAutoFlow: "row dense",
+                gap: 12,
+              }}
+            >
+              {cardPageRows.map((item, i) => {
+                const cardNumber = page * pageSize + i + 1;
+                const qualityStatus = item.invalidRows > 0 ? `${item.invalidRows} invalid` : "No invalid rows";
+                const qualityStyle = getStatusStyle(item.invalidRows > 0 ? "invalid" : "finished");
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))",
-                  gridAutoFlow: "row dense",
-                  gap: 12,
-                }}
-              >
-                {pageRows.map(({ row, idx }, i) => {
-                  const isSelected = selectedRows.has(idx);
-                  const rowNumber = page * pageSize + i + 1;
-                  const nameValue = nameHeader ? cellToText(row[headers.indexOf(nameHeader)]) : `Row ${rowNumber}`;
-                  const statusValue = statusHeader ? cellToText(row[headers.indexOf(statusHeader)]) : "";
-                  const statusStyle = getStatusStyle(statusValue);
-
-                  return (
+                return (
+                  <div
+                    key={`operator-card-${item.operator}-${cardNumber}`}
+                    style={{
+                      background: BRAND.white,
+                      border: `1px solid ${BRAND.border}`,
+                      borderLeft: `4px solid ${BRAND.green}`,
+                      borderRadius: 12,
+                      padding: 0,
+                      boxShadow: "var(--color-shadow-soft)",
+                      transition: "box-shadow 0.2s ease, transform 0.15s ease",
+                      overflow: "hidden",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--color-shadow-strong)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--color-shadow-soft)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}
+                  >
                     <div
-                      key={`card-${idx}-${i}`}
                       style={{
-                        background: BRAND.white,
-                        border: `1px solid ${isSelected ? BRAND.green : BRAND.border}`,
-                        borderLeft: `4px solid ${BRAND.green}`,
-                        borderRadius: 12,
-                        padding: 0,
-                        boxShadow: "var(--color-shadow-soft)",
-                        transition: "box-shadow 0.2s ease, transform 0.15s ease, border-color 0.18s ease",
-                        cursor: "default",
-                        overflow: "hidden",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.boxShadow = "var(--color-shadow-strong)";
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.boxShadow = "var(--color-shadow-soft)";
-                        e.currentTarget.style.transform = "translateY(0)";
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        padding: "9px 10px",
+                        background: BRAND.soft,
+                        borderBottom: `1px solid ${BRAND.border}`,
                       }}
                     >
-                      {/* Compact operator-first header */}
-                      <div
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: BRAND.muted,
+                            letterSpacing: "0.05em",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Operator
+                        </div>
+                        <div
+                          title={item.operator}
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: BRAND.dark,
+                            marginTop: 2,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {item.operator}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setDetailOperator(item)}
+                        title="Expand full operator details"
+                        aria-label={`Expand details for ${item.operator}`}
                         style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          justifyContent: "space-between",
-                          gap: 8,
-                          padding: "9px 10px",
-                          background: BRAND.soft,
-                          borderBottom: `1px solid ${BRAND.border}`,
+                          height: 24,
+                          borderRadius: 7,
+                          border: `1px solid rgba(255, 179, 71, 0.7)`,
+                          background: BRAND.saffron,
+                          color: BRAND.dark,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                          padding: "0 8px",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: "0.03em",
+                          textTransform: "uppercase",
                         }}
                       >
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 700,
-                              color: BRAND.muted,
-                              letterSpacing: "0.05em",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            Operator
-                          </div>
-                          <div
-                            title={nameValue}
-                            style={{
-                              fontSize: 14,
-                              fontWeight: 700,
-                              color: BRAND.dark,
-                              marginTop: 2,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {nameValue}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 1 }}>
-                          <button
-                            onClick={() => setDetailRow({ idx, row, rowNumber, nameValue })}
-                            title="Expand full details"
-                            aria-label={`Expand details for row ${rowNumber}`}
-                            style={{
-                              height: 24,
-                              borderRadius: 7,
-                              border: `1px solid rgba(255, 179, 71, 0.7)`,
-                              background: BRAND.saffron,
-                              color: BRAND.dark,
-                              cursor: "pointer",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              gap: 4,
-                              padding: "0 8px",
-                              fontSize: 10,
-                              fontWeight: 700,
-                              letterSpacing: "0.03em",
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M8 3H3v5" strokeLinecap="round" strokeLinejoin="round" />
-                              <path d="M16 3h5v5" strokeLinecap="round" strokeLinejoin="round" />
-                              <path d="M3 16v5h5" strokeLinecap="round" strokeLinejoin="round" />
-                              <path d="M21 16v5h-5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            Expand
-                          </button>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleRowSelection(idx)}
-                            style={{ cursor: "pointer" }}
-                            aria-label={`Select row ${rowNumber}`}
-                          />
-                        </div>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M8 3H3v5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M16 3h5v5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M3 16v5h5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M21 16v5h-5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Expand
+                      </button>
+                    </div>
+
+                    <div style={{ padding: "8px 10px 10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <span
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: 999,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            whiteSpace: "nowrap",
+                            ...qualityStyle,
+                          }}
+                        >
+                          {qualityStatus}
+                        </span>
+                        <span style={{ fontSize: 10, color: BRAND.muted, fontWeight: 700 }}>Completion {formatPercent(item.completionRate)}</span>
                       </div>
 
-                      <div style={{ padding: "7px 10px 9px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", gap: 8, marginBottom: 7 }}>
-                          <span
-                            style={{
-                              padding: "3px 8px",
-                              borderRadius: 999,
-                              fontSize: 10,
-                              fontWeight: 700,
-                              whiteSpace: "nowrap",
-                              ...statusStyle,
-                            }}
-                          >
-                            {statusValue || "Status n/a"}
-                          </span>
-                        </div>
-
-                        {/* Compact summary metrics */}
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
-                          {compactHeaders.map((h) => {
-                            const val = cellToText(row[headers.indexOf(h)]);
-                            return (
-                              <div
-                                key={`${idx}-${h}`}
-                                style={{
-                                  border: `1px solid ${BRAND.border}`,
-                                  borderRadius: 8,
-                                  background: BRAND.elevated,
-                                  padding: "6px 7px",
-                                  minWidth: 0,
-                                }}
-                              >
-                                <div
-                                  title={h}
-                                  style={{
-                                    fontSize: 9,
-                                    fontWeight: 700,
-                                    color: BRAND.muted,
-                                    textTransform: "uppercase",
-                                    letterSpacing: "0.04em",
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                  }}
-                                >
-                                  {h}
-                                </div>
-                                <div
-                                  title={val}
-                                  style={{
-                                    marginTop: 3,
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: BRAND.dark,
-                                    whiteSpace: "nowrap",
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                  }}
-                                >
-                                  {val}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+                        <MetricTile label="Total rows" value={formatMetric(item.totalRows)} />
+                        <MetricTile label="Active days" value={formatMetric(item.activeDays)} />
+                        <MetricTile label={validDurationHeader || "Valid duration"} value={formatMetric(item.totalValidDuration)} />
+                        <MetricTile label={annotationHeader || "Annotation time"} value={formatMetric(item.totalAnnotation)} />
+                        <MetricTile label={reworkHeader || "Rework time"} value={formatMetric(item.totalRework)} />
+                        <MetricTile label={recordHeader || "Unique records"} value={formatMetric(item.uniqueRecords)} />
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
 
       {/* Full detail drawer */}
-      {detailRow && (
+      {detailOperator && (
         <div
-          onClick={() => setDetailRow(null)}
+          onClick={() => setDetailOperator(null)}
           style={{
             position: "fixed",
             inset: 0,
@@ -828,7 +923,7 @@ export default function DataTable({ headers = [], rows = [] }) {
           <aside
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: "min(440px, 100vw)",
+              width: "min(620px, 100vw)",
               height: "100%",
               background: BRAND.white,
               borderLeft: `1px solid ${BRAND.border}`,
@@ -850,10 +945,10 @@ export default function DataTable({ headers = [], rows = [] }) {
             >
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 11, color: BRAND.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  Full work details
+                  Operator project details
                 </div>
                 <div
-                  title={detailRow.nameValue}
+                  title={detailOperator.operator}
                   style={{
                     fontSize: 18,
                     fontWeight: 700,
@@ -864,12 +959,14 @@ export default function DataTable({ headers = [], rows = [] }) {
                     textOverflow: "ellipsis",
                   }}
                 >
-                  {detailRow.nameValue}
+                  {detailOperator.operator}
                 </div>
-                <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 2 }}>Row {detailRow.rowNumber}</div>
+                <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 2 }}>
+                  {formatMetric(detailOperator.totalRows)} rows across {formatMetric(detailOperator.activeDays)} day(s)
+                </div>
               </div>
               <button
-                onClick={() => setDetailRow(null)}
+                onClick={() => setDetailOperator(null)}
                 style={{
                   width: 32,
                   height: 32,
@@ -894,35 +991,66 @@ export default function DataTable({ headers = [], rows = [] }) {
             </div>
 
             <div style={{ padding: 12, overflowY: "auto", flex: 1 }}>
-              <div style={{ display: "grid", gap: 8 }}>
-                {headers.map((h) => {
-                  const val = cellToText(detailRow.row[headers.indexOf(h)]);
-                  return (
-                    <div
-                      key={`detail-${h}`}
-                      style={{
-                        border: `1px solid ${BRAND.border}`,
-                        borderRadius: 10,
-                        background: BRAND.elevated,
-                        padding: "8px 10px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: BRAND.muted,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
-                          marginBottom: 4,
-                        }}
-                      >
-                        {h}
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.dark, wordBreak: "break-word" }}>{val}</div>
-                    </div>
-                  );
-                })}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
+                <MetricTile label="Total rows" value={formatMetric(detailOperator.totalRows)} />
+                <MetricTile label="Completed rows" value={formatMetric(detailOperator.finishedRows)} />
+                <MetricTile label="Invalid rows" value={formatMetric(detailOperator.invalidRows)} />
+                <MetricTile label={validDurationHeader || "Valid duration"} value={formatMetric(detailOperator.totalValidDuration)} />
+                <MetricTile label={annotationHeader || "Annotation time"} value={formatMetric(detailOperator.totalAnnotation)} />
+                <MetricTile label={reworkHeader || "Rework time"} value={formatMetric(detailOperator.totalRework)} />
+                <MetricTile label={recordHeader || "Unique records"} value={formatMetric(detailOperator.uniqueRecords)} />
+                <MetricTile label="Active days" value={formatMetric(detailOperator.activeDays)} />
+                <MetricTile label="Completion rate" value={formatPercent(detailOperator.completionRate)} />
+              </div>
+
+              <div
+                style={{
+                  border: `1px solid ${BRAND.border}`,
+                  borderRadius: 10,
+                  background: BRAND.elevated,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    borderBottom: `1px solid ${BRAND.border}`,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: BRAND.dark,
+                    background: BRAND.soft,
+                  }}
+                >
+                  Daily breakdown
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: BRAND.soft }}>
+                        <th style={dailyTableHeadStyle}>Date</th>
+                        <th style={dailyTableHeadStyle}>Rows</th>
+                        <th style={dailyTableHeadStyle}>Completed</th>
+                        <th style={dailyTableHeadStyle}>Invalid</th>
+                        <th style={dailyTableHeadStyle}>{validDurationHeader || "Valid duration"}</th>
+                        <th style={dailyTableHeadStyle}>{annotationHeader || "Annotation time"}</th>
+                        <th style={dailyTableHeadStyle}>{reworkHeader || "Rework time"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailOperator.dailyStats.map((day) => (
+                        <tr key={`daily-${detailOperator.operator}-${day.key}`}>
+                          <td style={dailyTableCellStyle}>{day.label}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.rows)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.finishedRows)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.invalidRows)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.validDuration)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.annotation)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.rework)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </aside>
@@ -960,6 +1088,66 @@ export default function DataTable({ headers = [], rows = [] }) {
           </span>
         </div>
       )}
+    </div>
+  );
+}
+
+const dailyTableHeadStyle = {
+  textAlign: "left",
+  padding: "8px 10px",
+  borderBottom: `1px solid ${BRAND.border}`,
+  color: BRAND.dark,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const dailyTableCellStyle = {
+  padding: "8px 10px",
+  borderBottom: `1px solid ${BRAND.border}`,
+  color: BRAND.dark,
+  whiteSpace: "nowrap",
+};
+
+function MetricTile({ label, value }) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${BRAND.border}`,
+        borderRadius: 8,
+        background: BRAND.elevated,
+        padding: "6px 7px",
+        minWidth: 0,
+      }}
+    >
+      <div
+        title={label}
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          color: BRAND.muted,
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        title={value}
+        style={{
+          marginTop: 3,
+          fontSize: 12,
+          fontWeight: 700,
+          color: BRAND.dark,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
