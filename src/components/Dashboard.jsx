@@ -31,8 +31,55 @@ const CHART_THEME = {
   tooltipBg: "var(--color-surface-elevated)",
   tooltipText: "var(--color-text)",
 };
-const CHART_COLORS = ["#046241","#059669","#10b981","#34d399","#6ee7b7","#a7f3d0","#FFB347","#f97316","#3b82f6","#8b5cf6"];
+const CHART_COLORS = ["#0f9d71","#12c48b","#7be3b3","#ffb347","#f97316","#3b82f6","#8b5cf6","#0b6b4a"];
+const PREMIUM_GRADIENTS = [
+  ["#0f9d71", "#06452f"],
+  ["#12c48b", "#046241"],
+  ["#7be3b3", "#0f9d71"],
+  ["#ffca6e", "#f59e0b"],
+  ["#fb923c", "#c2410c"],
+  ["#60a5fa", "#2563eb"],
+  ["#a78bfa", "#7c3aed"],
+  ["#34d399", "#065f46"],
+];
 const CMP = { a:"#046241", b:"#FFB347" };
+const EMPTY_CHAT_ROWS = [];
+const CHART_WORKSPACE_LAYOUT_VERSION = 2;
+const LARGE_ROW_MATERIALIZE_THRESHOLD = 25000;
+const ROW_MATERIALIZE_CHUNK_SIZE = 12000;
+
+function getAxisInterval(length, maxTicks = 8) {
+  if (!length || length <= maxTicks) return 0;
+  return Math.max(0, Math.ceil(length / maxTicks) - 1);
+}
+
+function formatCompactNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return value;
+  if (Math.abs(number) >= 10000) {
+    return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(number);
+  }
+  return number.toLocaleString();
+}
+
+function formatAxisLabel(value, maxLength = 14) {
+  const raw = value == null ? "" : String(value);
+  const parsed = new Date(raw);
+  const label = !Number.isNaN(parsed.getTime()) && /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(raw)
+    ? parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : raw;
+  return label.length > maxLength ? `${label.slice(0, maxLength - 1)}…` : label;
+}
+
+const cleanTooltipStyle = {
+  borderRadius: 14,
+  border: "1px solid rgba(255,255,255,0.18)",
+  fontSize: 12,
+  background: CHART_THEME.tooltipBg,
+  color: CHART_THEME.tooltipText,
+  boxShadow: "0 18px 44px rgba(0,0,0,0.22)",
+  backdropFilter: "blur(14px)",
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -236,6 +283,88 @@ function isSummaryRowValue(value) {
     text.startsWith("total ") ||
     text.endsWith(" total")
   );
+}
+
+function rowToObject(headers, row) {
+  const record = {};
+  let isSummaryRow = false;
+
+  for (let index = 0; index < headers.length; index += 1) {
+    const header = headers[index];
+    const value = row?.[index];
+    record[header] = value;
+    if (!isSummaryRow && isSummaryRowValue(value)) {
+      isSummaryRow = true;
+    }
+  }
+
+  return isSummaryRow ? null : record;
+}
+
+function useMaterializedObjectRows(headers, rows) {
+  const [state, setState] = useState({
+    rows: [],
+    isMaterializing: false,
+    sourceRowCount: 0,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!rows?.length || !headers?.length) {
+      setState({ rows: [], isMaterializing: false, sourceRowCount: 0 });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const sourceRowCount = rows.length;
+
+    if (sourceRowCount <= LARGE_ROW_MATERIALIZE_THRESHOLD) {
+      const materialized = [];
+      for (const row of rows) {
+        const record = rowToObject(headers, row);
+        if (record) materialized.push(record);
+      }
+      if (!cancelled) {
+        setState({ rows: materialized, isMaterializing: false, sourceRowCount });
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const materialized = [];
+    setState({ rows: [], isMaterializing: true, sourceRowCount });
+
+    const processChunk = (startIndex) => {
+      if (cancelled) return;
+      const endIndex = Math.min(startIndex + ROW_MATERIALIZE_CHUNK_SIZE, sourceRowCount);
+
+      for (let index = startIndex; index < endIndex; index += 1) {
+        const record = rowToObject(headers, rows[index]);
+        if (record) materialized.push(record);
+      }
+
+      if (cancelled) return;
+
+      if (endIndex >= sourceRowCount) {
+        setState({ rows: materialized.slice(), isMaterializing: false, sourceRowCount });
+        return;
+      }
+
+      setState({ rows: materialized.slice(), isMaterializing: true, sourceRowCount });
+      window.setTimeout(() => processChunk(endIndex), 0);
+    };
+
+    window.setTimeout(() => processChunk(0), 0);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [headers, rows]);
+
+  return state;
 }
 function formatWeekLabel(dateKey) {
   const { start, end } = getWeekRange(dateKey);
@@ -711,15 +840,36 @@ function ClickableBarChart({ data, config, labels, height = 320 }) {
   const xKey=config?.x||"name", yKey=config?.y||"value";
   const xLabel = labels?.x || xKey;
   const yLabel = labels?.y || yKey;
+  const interval = getAxisInterval(data.length, 8);
+  const angled = data.length > 8;
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}} style={{cursor:"default"}}>
-        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
-        <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0} label={undefined}/>
-        <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
-        <Tooltip formatter={(v,_)=>[v.toLocaleString(), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        <Bar dataKey={yKey} radius={[4,4,0,0]} cursor="default" isAnimationActive={false} activeBar={false}>
-          {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
+      <BarChart data={data} margin={{top:12,right:18,left:4,bottom:angled?44:20}} style={{cursor:"default"}}>
+        <defs>
+          {PREMIUM_GRADIENTS.map(([start, end], index) => (
+            <linearGradient key={index} id={`premiumBar${index}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={start} stopOpacity={0.98}/>
+              <stop offset="100%" stopColor={end} stopOpacity={0.88}/>
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="4 8" stroke={CHART_THEME.grid} vertical={false} opacity={0.55}/>
+        <XAxis
+          dataKey={xKey}
+          tick={{fontSize:10,fill:CHART_THEME.axis}}
+          angle={angled?-28:0}
+          textAnchor={angled?"end":"middle"}
+          interval={interval}
+          minTickGap={18}
+          tickFormatter={value=>formatAxisLabel(value)}
+          axisLine={false}
+          tickLine={false}
+          label={undefined}
+        />
+        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={formatCompactNumber} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={(v,_)=>[formatCompactNumber(v), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={cleanTooltipStyle} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
+        <Bar dataKey={yKey} radius={[8,8,0,0]} maxBarSize={38} cursor="default" isAnimationActive={false} activeBar={false}>
+          {data.map((_,i)=><Cell key={i} fill={`url(#premiumBar${i%PREMIUM_GRADIENTS.length})`}/>)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -733,13 +883,21 @@ function HorizontalBarChart({ data, config, labels, height }) {
   const autoHeight = height || Math.max(260, data.length * 34);
   return (
     <ResponsiveContainer width="100%" height={autoHeight}>
-      <BarChart data={data} layout="vertical" margin={{top:5,right:40,left:120,bottom:5}}>
-        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} horizontal={false}/>
-        <XAxis type="number" tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
-        <YAxis type="category" dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} width={110}/>
-        <Tooltip formatter={(v,_)=>[v.toLocaleString(), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        <Bar dataKey={yKey} radius={[0,4,4,0]} cursor="default" isAnimationActive={false} activeBar={false}>
-          {data.map((_,i)=><Cell key={i} fill={CHART_COLORS[i%CHART_COLORS.length]}/>)}
+      <BarChart data={data} layout="vertical" margin={{top:8,right:24,left:118,bottom:8}}>
+        <defs>
+          {PREMIUM_GRADIENTS.map(([start, end], index) => (
+            <linearGradient key={index} id={`premiumHBar${index}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={end} stopOpacity={0.9}/>
+              <stop offset="100%" stopColor={start} stopOpacity={0.98}/>
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="4 8" stroke={CHART_THEME.grid} horizontal={false} opacity={0.55}/>
+        <XAxis type="number" tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={formatCompactNumber} axisLine={false} tickLine={false}/>
+        <YAxis type="category" dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={value=>formatAxisLabel(value, 18)} width={112} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={(v,_)=>[formatCompactNumber(v), yLabel]} labelFormatter={l=>`${xLabel}: ${l}`} contentStyle={cleanTooltipStyle} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
+        <Bar dataKey={yKey} radius={[0,8,8,0]} maxBarSize={24} cursor="default" isAnimationActive={false} activeBar={false}>
+          {data.map((_,i)=><Cell key={i} fill={`url(#premiumHBar${i%PREMIUM_GRADIENTS.length})`}/>)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -749,30 +907,44 @@ function HorizontalBarChart({ data, config, labels, height }) {
 function StackedBarChart({ data }) {
   if (!data||!data.length) return <p style={{color:"#9cafa4",fontSize:13}}>No data.</p>;
   const stackKeys=Object.keys(data[0]).filter(k=>k!=="name");
+  const angled = data.length > 8;
   return (
     <ResponsiveContainer width="100%" height={320}>
-      <BarChart data={data} margin={{top:5,right:20,left:10,bottom:60}}>
-        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
-        <XAxis dataKey="name" tick={{fontSize:11,fill:CHART_THEME.axis}} angle={-35} textAnchor="end" interval={0}/>
-        <YAxis tick={{fontSize:12,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:8,border:`1px solid ${CHART_THEME.tooltipBorder}`,fontSize:13,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText}} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
-        {stackKeys.map((k,i)=><Bar key={k} dataKey={k} stackId="a" fill={CHART_COLORS[i%CHART_COLORS.length]} radius={i===stackKeys.length-1?[4,4,0,0]:[0,0,0,0]} activeBar={false} isAnimationActive={false}/>)}
+      <BarChart data={data} margin={{top:12,right:18,left:4,bottom:angled?44:20}}>
+        <defs>
+          {PREMIUM_GRADIENTS.map(([start, end], index) => (
+            <linearGradient key={index} id={`premiumStack${index}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={start} stopOpacity={0.98}/>
+              <stop offset="100%" stopColor={end} stopOpacity={0.88}/>
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="4 8" stroke={CHART_THEME.grid} vertical={false} opacity={0.55}/>
+        <XAxis dataKey="name" tick={{fontSize:10,fill:CHART_THEME.axis}} angle={angled?-28:0} textAnchor={angled?"end":"middle"} interval={getAxisInterval(data.length, 8)} tickFormatter={value=>formatAxisLabel(value)} axisLine={false} tickLine={false}/>
+        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={formatCompactNumber} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={formatCompactNumber} contentStyle={cleanTooltipStyle} labelStyle={{color:CHART_THEME.tooltipText}} itemStyle={{color:CHART_THEME.tooltipText}}/>
+        {stackKeys.map((k,i)=><Bar key={k} dataKey={k} stackId="a" fill={`url(#premiumStack${i%PREMIUM_GRADIENTS.length})`} radius={i===stackKeys.length-1?[8,8,0,0]:[0,0,0,0]} activeBar={false} isAnimationActive={false}/>)}
       </BarChart>
     </ResponsiveContainer>
   );
 }
 
 function SimpleAreaChart({ data, xKey, yKey }) {
-  const angle=data.length>14?-45:0, mb=angle!==0?60:10;
+  const angle=data.length>12?-24:0, mb=angle!==0?42:16;
   return (
     <ResponsiveContainer width="100%" height={340}>
-      <AreaChart data={data} margin={{top:8,right:20,left:10,bottom:mb}}>
-        <defs><linearGradient id="lwGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={LW.green} stopOpacity={0.15}/><stop offset="95%" stopColor={LW.green} stopOpacity={0}/></linearGradient></defs>
-        <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} vertical={false}/>
-        <XAxis dataKey={xKey} tick={{fontSize:11,fill:CHART_THEME.axis}} angle={angle} textAnchor={angle!==0?"end":"middle"} interval={data.length>30?Math.floor(data.length/15):0} axisLine={false} tickLine={false}/>
-        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={v=>v.toLocaleString()} axisLine={false} tickLine={false}/>
-        <Tooltip formatter={v=>v.toLocaleString()} contentStyle={{borderRadius:10,border:`1px solid ${CHART_THEME.tooltipBorder}`,background:CHART_THEME.tooltipBg,color:CHART_THEME.tooltipText,fontSize:13}} labelStyle={{color:CHART_THEME.tooltipText,fontSize:11}}/>
-        <Area type="monotone" dataKey={yKey} stroke={LW.green} strokeWidth={2.5} fill="url(#lwGrad)" dot={{fill:LW.green,r:data.length>30?0:4,strokeWidth:0}} activeDot={{r:6,fill:LW.saffron,stroke:LW.dark,strokeWidth:2}}/>
+      <AreaChart data={data} margin={{top:14,right:20,left:4,bottom:mb}}>
+        <defs>
+          <linearGradient id="lwGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={LW.saffron} stopOpacity={0.28}/>
+            <stop offset="95%" stopColor={LW.saffron} stopOpacity={0}/>
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="4 8" stroke={CHART_THEME.grid} vertical={false} opacity={0.55}/>
+        <XAxis dataKey={xKey} tick={{fontSize:10,fill:CHART_THEME.axis}} angle={angle} textAnchor={angle!==0?"end":"middle"} interval={getAxisInterval(data.length, 8)} tickFormatter={value=>formatAxisLabel(value)} axisLine={false} tickLine={false}/>
+        <YAxis tick={{fontSize:11,fill:CHART_THEME.axis}} tickFormatter={formatCompactNumber} axisLine={false} tickLine={false}/>
+        <Tooltip formatter={formatCompactNumber} contentStyle={cleanTooltipStyle} labelStyle={{color:CHART_THEME.tooltipText,fontSize:11}}/>
+        <Area type="monotone" dataKey={yKey} stroke={LW.saffron} strokeWidth={2.5} fill="url(#lwGrad)" dot={{fill:LW.saffron,r:data.length>24?0:3,strokeWidth:0}} activeDot={{r:5,fill:LW.saffron,stroke:LW.dark,strokeWidth:2}}/>
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -781,6 +953,59 @@ function SimpleAreaChart({ data, xKey, yKey }) {
 function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, sectionCol: sCol, valueCol: vCol, activeDateRange, isFiltered }) {
   if(!cards||!cards.length)return null;
   const accents=[LW.green,LW.dark,LW.saffron,"#417256","#034E34"];
+  const TOP_BADGES = ["1", "2", "3"];
+  const normalizeRankValue = (value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+  const isMeaninglessRankLabel = (item) => {
+    const label = String(item?.label ?? "").trim();
+    const value = normalizeRankValue(item?.value);
+    if (!label || value == null) return false;
+    const labelNumber = Number(label.replace(/,/g, ""));
+    return Number.isFinite(labelNumber) && Math.abs(labelNumber - value) < 0.0001;
+  };
+  const hasUsefulRankLabels = (ranked) => (
+    Array.isArray(ranked) && ranked.length > 0 && ranked.some(item => !isMeaninglessRankLabel(item))
+  );
+  const looksDateLike = (value) => {
+    if (value == null || value === "") return false;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return true;
+    const text = String(value).trim();
+    if (!text || /^\d+(\.\d+)?$/.test(text)) return false;
+    return !Number.isNaN(Date.parse(text));
+  };
+  const pickRankLabelColumn = (data, preferredCol, metricCol) => {
+    if (!Array.isArray(data) || !data.length) return preferredCol;
+    const headers = Object.keys(data[0] || {});
+    const candidates = headers.filter(header => header && header !== metricCol);
+    if (!candidates.length) return preferredCol;
+    const scoreColumn = (header) => {
+      const sample = data
+        .map(row => row?.[header])
+        .filter(value => value != null && String(value).trim() !== "")
+        .slice(0, 250);
+      if (!sample.length) return -999;
+      const uniqueCount = new Set(sample.map(value => String(value).trim())).size;
+      const numericCount = sample.filter(value => Number.isFinite(Number(String(value).replace(/,/g, "")))).length;
+      const dateCount = sample.filter(looksDateLike).length;
+      const lower = header.toLowerCase();
+      let score = 0;
+      if (header === preferredCol) score += 18;
+      if (dateCount / sample.length > 0.55) score += 32;
+      if (numericCount / sample.length < 0.45) score += 22;
+      if (uniqueCount > 1) score += 10;
+      if (uniqueCount > 1 && uniqueCount <= 80) score += 8;
+      if (/(name|employee|staff|agent|user|person|site|team|section|department|date|month|region|country|branch|category|client|project)/i.test(lower)) score += 14;
+      if (/(id|number|no\.|count|total|hours|minutes|links|ops|actual|plan|balance|completion|rate|percent|%)/i.test(lower)) score -= 14;
+      if (numericCount / sample.length > 0.8 && dateCount / sample.length < 0.45) score -= 24;
+      if (uniqueCount === 1) score -= 12;
+      return score;
+    };
+    return candidates
+      .map(header => ({ header, score: scoreColumn(header) }))
+      .sort((a, b) => b.score - a.score)[0]?.header || preferredCol;
+  };
   const MEDALS=["🥇","🥈","🥉"];
 
   const toRanked = (payload, labelCol, valueCol) => {
@@ -819,18 +1044,29 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
   const effectiveValueCol = vCol || analytics?.valueCol;
   const effectivePrimaryCol = pCol || analytics?.primaryCol;
   const effectiveSectionCol = sCol || "Section";
+  const displayPrimaryCol = pickRankLabelColumn(filteredData, effectivePrimaryCol, effectiveValueCol);
+  const displaySectionCol = pickRankLabelColumn(filteredData, effectiveSectionCol, effectiveValueCol);
+  const analyticsPrimaryRanked = analytics ? toRanked(analytics.primaryTotals, analytics.primaryCol, analytics.valueCol) : null;
+  const analyticsSectionRanked = analytics ? toRanked(analytics.sectionTotals, "Section", analytics.valueCol) : null;
+  const livePrimaryRanked = filteredData
+    ? buildLiveRanked(filteredData, displayPrimaryCol, effectiveValueCol, activeDateRange)
+    : null;
+  const liveSectionRanked = filteredData
+    ? buildLiveRanked(filteredData, displaySectionCol, effectiveValueCol, activeDateRange)
+    : null;
 
   const primaryRanked = isFiltered && filteredData
-    ? buildLiveRanked(filteredData, effectivePrimaryCol, effectiveValueCol, activeDateRange)
-    : analytics ? toRanked(analytics.primaryTotals, analytics.primaryCol, analytics.valueCol) : null;
+    ? livePrimaryRanked
+    : hasUsefulRankLabels(analyticsPrimaryRanked) ? analyticsPrimaryRanked : livePrimaryRanked;
 
   const sectionRanked = isFiltered && filteredData
-    ? buildLiveRanked(filteredData, effectiveSectionCol, effectiveValueCol, activeDateRange)
-    : analytics ? toRanked(analytics.sectionTotals, "Section", analytics.valueCol) : null;
+    ? liveSectionRanked
+    : hasUsefulRankLabels(analyticsSectionRanked) ? analyticsSectionRanked : liveSectionRanked;
 
   const RankCard = ({ title, ranked, accent }) => {
     if(!ranked||!ranked.length) return null;
     const top = ranked[0].value;
+    const displayedTotal = ranked.reduce((sum, item) => sum + (Number(item.value) || 0), 0);
     return (
       <div style={{background:UI.surfaceElevated,borderRadius:16,padding:"20px 22px",borderLeft:`4px solid ${accent}`,boxShadow:"var(--color-shadow-soft)",border:`1px solid ${UI.border}`,fontFamily:"'Manrope',sans-serif"}}
         onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 8px 24px rgba(19,48,32,0.11)"}}
@@ -846,20 +1082,85 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {ranked.map((item,i)=>{
             const pct = top>0?(item.value/top)*100:0;
+            const share = displayedTotal > 0 ? (Number(item.value) || 0) / displayedTotal * 100 : 0;
+            const gapFromTop = top - (Number(item.value) || 0);
             const isMedal=i<3;
             return (
-              <div key={i}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div
+                key={`${item.label}-${i}`}
+                className="rank-row"
+                tabIndex={0}
+                style={{
+                  position: "relative",
+                  padding: "6px 8px",
+                  margin: "0 -8px",
+                  borderRadius: 12,
+                  transition: "background 0.16s ease",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              >
+                <div className="rank-row-main" style={{display:"flex",alignItems:"center",gap:8}}>
                   <div style={{width:22,height:22,borderRadius:6,background:isMedal?accent:"rgba(19,48,32,0.06)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:isMedal?11:10,fontWeight:800,color:isMedal?"#fff":"#9cafa4",flexShrink:0}}>
-                    {isMedal?MEDALS[i]:i+1}
+                    {isMedal ? TOP_BADGES[i] : i + 1}
                   </div>
-                  <div style={{flex:1,fontSize:12,fontWeight:i===0?700:500,color:i===0?LW.dark:"#4a6358",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.label}</div>
+                  <div
+                    style={{flex:1,fontSize:12,fontWeight:i===0?700:500,color:i===0?LW.dark:"#4a6358",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",cursor:"help"}}
+                    title={`${item.label} - ${formatNum(item.value,"number")}`}
+                  >
+                    {item.label}
+                  </div>
                   <div style={{fontSize:12,fontWeight:700,color:i===0?accent:LW.dark,flexShrink:0}}>{formatNum(item.value,"number")}</div>
                 </div>
                 <div style={{paddingLeft:30}}>
                   <div style={{height:3,borderRadius:999,background:"rgba(19,48,32,0.07)",overflow:"hidden",marginTop:3}}>
                     <div style={{height:"100%",width:`${Math.min(100,Math.max(2,pct))}%`,background:i===0?accent:"rgba(19,48,32,0.15)",borderRadius:999}}/>
                   </div>
+                </div>
+                <div
+                  className="rank-detail-popover"
+                  style={{
+                    position: "absolute",
+                    left: 36,
+                    right: 8,
+                    bottom: "calc(100% + 8px)",
+                    zIndex: 8,
+                    padding: "12px 13px",
+                    borderRadius: 14,
+                    background: "var(--color-surface-elevated)",
+                    border: `1px solid ${UI.border}`,
+                    boxShadow: "0 18px 40px rgba(0,0,0,0.22)",
+                    opacity: 0,
+                    transform: "translateY(4px)",
+                    pointerEvents: "none",
+                    transition: "opacity 0.14s ease, transform 0.14s ease",
+                  }}
+                >
+                  <div style={{fontSize:10,fontWeight:800,color:accent,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:5}}>
+                    Rank #{i + 1}
+                  </div>
+                  <div style={{fontSize:13,fontWeight:800,color:UI.text,lineHeight:1.25,marginBottom:9,wordBreak:"break-word"}}>
+                    {item.label}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3, minmax(0, 1fr))",gap:8}}>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:700,color:UI.textLight,textTransform:"uppercase",letterSpacing:"0.08em"}}>Value</div>
+                      <div style={{fontSize:12,fontWeight:800,color:UI.text}}>{formatNum(item.value,"number")}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:700,color:UI.textLight,textTransform:"uppercase",letterSpacing:"0.08em"}}>Top Share</div>
+                      <div style={{fontSize:12,fontWeight:800,color:UI.text}}>{pct.toFixed(1)}%</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:700,color:UI.textLight,textTransform:"uppercase",letterSpacing:"0.08em"}}>List Share</div>
+                      <div style={{fontSize:12,fontWeight:800,color:UI.text}}>{share.toFixed(1)}%</div>
+                    </div>
+                  </div>
+                  {i > 0 && (
+                    <div style={{marginTop:9,fontSize:11,fontWeight:600,color:UI.textLight}}>
+                      {formatNum(gapFromTop,"number")} behind the top ranked item
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -872,8 +1173,8 @@ function StaticSummaryCards({ cards, analytics, filteredData, primaryCol: pCol, 
   if(analytics && (primaryRanked||sectionRanked)) {
     return (
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:16,marginBottom:24}}>
-        {primaryRanked && <RankCard title={`Top ${effectivePrimaryCol} by ${effectiveValueCol}`} ranked={primaryRanked} accent={accents[0]} />}
-        {sectionRanked && <RankCard title={`${effectiveValueCol} by Section`} ranked={sectionRanked} accent={accents[1]} />}
+        {primaryRanked && <RankCard title={`Top ${displayPrimaryCol || effectivePrimaryCol} by ${effectiveValueCol}`} ranked={primaryRanked} accent={accents[0]} />}
+        {sectionRanked && <RankCard title={`Top ${displaySectionCol || "Section"} by ${effectiveValueCol}`} ranked={sectionRanked} accent={accents[1]} />}
       </div>
     );
   }
@@ -941,10 +1242,8 @@ function FullscreenChartWrapper({ card }) {
 }
 
 function getChartWorkspaceDefault(card) {
-  if (card.kind === "pivot") return { span: 6, height: 460 };
-  if (card.kind === "wide_line") return { span: 12, height: 460 };
-  if (card.kind === "line") return { span: 12, height: 440 };
-  return { span: 6, height: 430 };
+  if (card.kind === "pivot") return { span: 6, height: 420 };
+  return { span: 4, height: 380 };
 }
 
 function getWorkspaceMetrics(width) {
@@ -962,6 +1261,7 @@ function getCardPixelWidth(span, workspaceWidth) {
 function buildChartLayouts(cards, previousLayouts, workspaceWidth) {
   const gap = 20;
   const safeWidth = Math.max(workspaceWidth || 0, 360);
+  const defaultSpan = safeWidth >= 1500 ? 3 : safeWidth >= 980 ? 4 : safeWidth >= 640 ? 6 : 12;
   const storedLayouts = cards
     .map(card => previousLayouts?.[card.id])
     .filter(layout => typeof layout?.x === "number" && typeof layout?.y === "number");
@@ -987,7 +1287,8 @@ function buildChartLayouts(cards, previousLayouts, workspaceWidth) {
   return cards.reduce((acc, card) => {
     const defaults = getChartWorkspaceDefault(card);
     const prev = previousLayouts?.[card.id] || {};
-    const span = prev.span ?? defaults.span;
+    const responsiveSpan = card.kind === "pivot" ? Math.max(defaultSpan, 6) : defaultSpan;
+    const span = hasManualLayout ? (prev.span ?? defaults.span) : responsiveSpan;
     const height = prev.height ?? defaults.height;
     const hasStoredPosition = typeof prev.x === "number" && typeof prev.y === "number";
     const shouldPreservePosition = hasStoredPosition && hasManualLayout;
@@ -1202,26 +1503,36 @@ function ChartWorkspaceCard({
         style={{
           height: cardHeight,
           minHeight: minimized ? 58 : 320,
-          background: UI.surfaceElevated,
-          borderRadius: 16,
+          background: `linear-gradient(145deg, ${UI.surfaceElevated} 0%, ${UI.surfaceSoft} 100%)`,
+          borderRadius: 22,
           display: "flex",
           flexDirection: "column",
-          boxShadow: isDragging ? "0 18px 32px rgba(4, 98, 65, 0.16)" : "var(--color-shadow-soft)",
-          border: `1.5px solid ${borderColor}`,
+          boxShadow: isDragging ? "0 28px 54px rgba(4, 98, 65, 0.22)" : "0 18px 46px rgba(19,48,32,0.12)",
+          border: `1px solid ${card.badge === "PINNED" ? "rgba(4,98,65,0.36)" : "rgba(255,255,255,0.16)"}`,
           position: "relative",
           overflow: "hidden",
         }}
       >
         <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "radial-gradient(circle at 14% 0%, rgba(255,179,71,0.14), transparent 30%), radial-gradient(circle at 90% 8%, rgba(16,185,129,0.12), transparent 28%)",
+            pointerEvents: "none",
+          }}
+        />
+        <div
           onPointerDown={(event) => onDragStart(event, card.id)}
           style={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             gap: 14,
-            padding: "12px 16px",
-            background: "linear-gradient(180deg, rgba(19,48,32,0.04), rgba(19,48,32,0))",
-            borderBottom: `1px solid ${UI.border}`,
+            padding: "14px 18px",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+            borderBottom: "1px solid rgba(255,255,255,0.1)",
             cursor: locked ? "default" : isDragging ? "grabbing" : "grab",
             userSelect: "none",
             touchAction: "none",
@@ -1249,7 +1560,7 @@ function ChartWorkspaceCard({
                     style={{ fontSize: 13, fontWeight: 800, color: UI.text, background: "transparent", border: "none", borderBottom: `2px solid ${LW.green}`, outline: "none", padding: "0 2px", width: 200, fontFamily: "inherit" }}
                   />
                 ) : (
-                  <div style={{ fontSize: 14, fontWeight: 800, color: UI.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: UI.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.01em" }}>
                     {card.title}
                   </div>
                 )}
@@ -1307,6 +1618,7 @@ function ChartWorkspaceCard({
 
         <div
           style={{
+            position: "relative",
             flex: minimized ? "0 0 auto" : 1,
             minHeight: 0,
             overflow: "hidden",
@@ -1315,7 +1627,7 @@ function ChartWorkspaceCard({
             transition: "max-height 0.24s ease, opacity 0.2s ease",
           }}
         >
-          <div style={{ height: "100%", overflow: "auto", padding: 16 }}>
+          <div style={{ height: "100%", overflow: "auto", padding: "18px 18px 20px" }}>
             {children}
           </div>
         </div>
@@ -1381,31 +1693,11 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
   const [sessionCharts, setCustomCharts] = useState([]);
 
 
-  // Object data
-  const objectData = useMemo(() => {
-    if (!rows?.length || !headers?.length) return [];
-
-    const output = [];
-    for (const row of rows) {
-      const record = {};
-      let isSummaryRow = false;
-
-      for (let index = 0; index < headers.length; index += 1) {
-        const header = headers[index];
-        const value = row?.[index];
-        record[header] = value;
-        if (!isSummaryRow && isSummaryRowValue(value)) {
-          isSummaryRow = true;
-        }
-      }
-
-      if (!isSummaryRow) {
-        output.push(record);
-      }
-    }
-
-    return output;
-  }, [headers, rows]);
+  const {
+    rows: objectData,
+    isMaterializing: isObjectDataMaterializing,
+    sourceRowCount,
+  } = useMaterializedObjectRows(headers, rows);
 
   const dateCol = useMemo(()=>detectDateColumn(headers,objectData,isWide,data.dateCols),[headers,objectData,isWide,data.dateCols]);
   const categoryColumns = useMemo(()=>detectCategoryColumns(headers,objectData,dateCol),[headers,objectData,dateCol]);
@@ -1423,6 +1715,7 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
     Object.entries(filters.categories).forEach(([col,val])=>{ result=result.filter(row=>row[col]!=null&&String(row[col]).trim()===val); });
     return result;
   },[objectData,filters,dateCol]);
+  const hasLongFormatFilters = filters.dateFrom !== "all" || filters.dateTo !== "all" || Object.keys(filters.categories).length > 0;
 
   // Rebuild saved charts from Firestore — recompute chartData/pivotData from their spec
   // Must be after filteredData is defined
@@ -1752,6 +2045,13 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(chartWorkspaceStorageKey) || "{}");
+      if (saved.version !== CHART_WORKSPACE_LAYOUT_VERSION) {
+        setChartOrder([]);
+        setChartLayouts({});
+        setLockedCharts({});
+        setMinimizedCharts({});
+        return;
+      }
       setChartOrder(Array.isArray(saved.order) ? saved.order : []);
       setChartLayouts(saved.layouts && typeof saved.layouts === "object" ? saved.layouts : {});
       setLockedCharts(saved.lockedCharts && typeof saved.lockedCharts === "object" ? saved.lockedCharts : {});
@@ -1991,6 +2291,7 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
   useEffect(() => {
     try {
       localStorage.setItem(chartWorkspaceStorageKey, JSON.stringify({
+        version: CHART_WORKSPACE_LAYOUT_VERSION,
         order: chartOrder,
         layouts: chartLayouts,
         lockedCharts,
@@ -2080,8 +2381,9 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
       const dx = moveEvent.clientX - state.startX;
       const dy = moveEvent.clientY - state.startY;
       const colWidth = Math.max(state.workspaceWidth / 12, 1);
-      const span = Math.max(4, Math.min(12, Math.round((state.startSpan * colWidth + dx) / colWidth)));
-      const height = Math.max(320, Math.min(760, state.startHeight + dy));
+      const minSpan = state.workspaceWidth >= 1500 ? 3 : 4;
+      const span = Math.max(minSpan, Math.min(12, Math.round((state.startSpan * colWidth + dx) / colWidth)));
+      const height = Math.max(300, Math.min(760, state.startHeight + dy));
       setChartLayouts(prev => ({
         ...prev,
         [cardId]: {
@@ -2105,7 +2407,15 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
 
   return (
     <div style={{ padding: "48px 40px 80px", width: "100%", fontFamily: "'Manrope',sans-serif" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');`}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+        .rank-row:hover .rank-detail-popover,
+        .rank-row:focus .rank-detail-popover,
+        .rank-row:focus-within .rank-detail-popover {
+          opacity: 1 !important;
+          transform: translateY(0) !important;
+        }
+      `}</style>
 
       {aiGenerated&&datasetSummary&&<AIBanner summary={datasetSummary}/>}
       <DashboardNav activeView={activeView} setActiveView={setActiveView} pinnedCount={validPinnedIds.length} filteredTableCount={filteredTables.length}/>
@@ -2134,6 +2444,53 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
               />
           }
 
+          {isObjectDataMaterializing && (
+            <Section style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:420, padding:40 }}>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:16, textAlign:"center", width:"100%", maxWidth:760 }}>
+                <div
+                  style={{
+                    width:62,
+                    height:62,
+                    borderRadius:"50%",
+                    border:`4px solid ${UI.border}`,
+                    borderTopColor:LW.green,
+                    animation:"lifesightsSpin 0.9s linear infinite",
+                  }}
+                />
+                <div style={{ fontSize:22, fontWeight:800, color:UI.text }}>
+                  Loading workbook dashboard
+                </div>
+                <div style={{ fontSize:14, color:UI.textLight, lineHeight:1.7, maxWidth:640 }}>
+                  We&apos;re preparing the full workbook first so large files open smoothly without freezing the dashboard.
+                </div>
+                <div style={{ width:"100%", maxWidth:520, display:"flex", flexDirection:"column", gap:8 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontWeight:700, color:UI.textLight }}>
+                    <span>Materializing rows</span>
+                    <span>{objectData.length.toLocaleString()} / {sourceRowCount.toLocaleString()}</span>
+                  </div>
+                  <div style={{ height:12, borderRadius:999, background:UI.border, overflow:"hidden" }}>
+                    <div
+                      style={{
+                        height:"100%",
+                        width:`${Math.max(6, Math.min(100, sourceRowCount ? (objectData.length / sourceRowCount) * 100 : 0))}%`,
+                        borderRadius:999,
+                        background:`linear-gradient(90deg, ${LW.green} 0%, ${LW.saffron} 100%)`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <style>{`
+                  @keyframes lifesightsSpin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                  }
+                `}</style>
+              </div>
+            </Section>
+          )}
+
+          {!isObjectDataMaterializing && (
+            <>
           {isWide&&blueprint.cards?.length>0&&<StaticSummaryCards
             cards={blueprint.cards}
             analytics={analytics}
@@ -2144,9 +2501,9 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
             activeDateRange={activeDateRange}
             isFiltered={wideFilters.section!=="all"||wideFilters.name!=="all"||isDateFiltered}
           />}
-          {!isWide&&<SummaryCards data={filteredData} cards={blueprint.cards}/>}
+          {!isWide&&!isObjectDataMaterializing&&<SummaryCards data={filteredData} cards={blueprint.cards} isPreview={false}/>}
 
-          {!isWide&&dateCol&&dateOptions.length>=2&&(
+          {!isWide&&!isObjectDataMaterializing&&dateCol&&dateOptions.length>=2&&(
             <div style={{marginBottom:20}}>
               <button onClick={()=>setShowCompare(v=>!v)} style={{padding:"8px 16px",borderRadius:10,fontSize:12,fontWeight:700,cursor:"pointer",border:`1px solid ${showCompare?LW.green:UI.border}`,background:showCompare?LW.green:UI.surface,color:showCompare?"#fff":UI.text,boxShadow:"var(--color-shadow-soft)"}}>
                 {showCompare?"▲ Hide Comparison":"⚖️ Compare Periods"}
@@ -2154,12 +2511,12 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
             </div>
           )}
 
-          {showCompare&&dateCol&&dateOptions.length>=2&&(
+          {showCompare&&!isObjectDataMaterializing&&dateCol&&dateOptions.length>=2&&(
             <CompareCards blueprint={blueprint} objectData={objectData} dateCol={dateCol} dateOptions={dateOptions} isWide={isWide}/>
           )}
 
           {/* AI filtered tables from chatbot — bottom of summary */}
-          {filteredTables.map(table => {
+          {!isObjectDataMaterializing&&filteredTables.map(table => {
             const applyTableFilter = () => {
               return objectData.filter(row =>
                 (table.filters||[]).every(({ column, operator, value }) => {
@@ -2219,15 +2576,17 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
           }}>
             <SectionHeader
               title="Data Table"
-              subtitle={`${(isWide ? wideFilteredData : filteredData).length.toLocaleString()} of ${objectData.length.toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&(Object.keys(filters.categories).length>0||filters.date!=="all")?" · filtered":""}`}
+              subtitle={`${(isWide ? wideFilteredData : hasLongFormatFilters ? filteredData : rows).length.toLocaleString()} of ${(isWide ? objectData.length : rows.length).toLocaleString()} rows · ${(isWide ? wideVisibleHeaders : headers).length} columns${isWide&&isDateFiltered?(activeDateRange.length===1?` · ${activeDateRange[0]}`:(dateFrom!=="all"&&dateTo!=="all"?` · ${dateFrom} → ${dateTo}`:dateFrom!=="all"?` · From ${dateFrom}`:` · To ${dateTo}`)):""}${!isWide&&hasLongFormatFilters?" · filtered":""}${!isWide&&isObjectDataMaterializing?" · summaries loading":""}`}
               badge="RAW DATA"
             />
             <DataTable
               headers={isWide ? wideVisibleHeaders : headers}
               displayHeaderRows={isWide ? null : data.displayHeaderRows}
-              rows={isWide ? wideFilteredData : filteredData}
+              rows={isWide ? wideFilteredData : hasLongFormatFilters ? filteredData : rows}
             />
           </Section>
+            </>
+          )}
 
         </>
       )}
@@ -2391,7 +2750,7 @@ export default function Dashboard({ data, blueprint, fileId, analysisSession = n
 
       <DataChatbot
         headers={headers}
-        rows={analysisSession?.sessionId ? [] : rows}
+        rows={analysisSession?.sessionId ? EMPTY_CHAT_ROWS : rows}
         columnContexts={data.columnContexts || {}}
         blueprint={blueprint}
         analysisSession={analysisSession}

@@ -8,6 +8,7 @@ import BackgroundAnalysisDock from "./BackgroundAnalysisDock";
 import BackgroundAnalysisToasts from "./BackgroundAnalysisToasts";
 import Dashboard from "./Dashboard";
 import Sidebar from "./Sidebar";
+import { resolveSummaryCards } from "./SummaryCards";
 import { ChevronUp, LoaderCircle, Menu, X } from "lucide-react";
 import lifewoodIconSquared from "../assets/branding/lifewood-icon-squared.png";
 import { getAnalysisResultCache, setAnalysisResultCache } from "../utils/analysisResultCache";
@@ -15,6 +16,19 @@ import { makeAnalysisRequestKey } from "../utils/analysisRequestKey";
 import { getCurrentWorkbookCache, setCurrentWorkbookCache } from "../utils/workbookCache";
 
 const HOST = import.meta.env.VITE_API_URL || "https://daily-headcount-ai-backend.onrender.com";
+
+function normalizeTableDataRows(tableData) {
+  const headers = Array.isArray(tableData?.headers) ? tableData.headers : [];
+  const rows = Array.isArray(tableData?.rows) ? tableData.rows : [];
+  if (!headers.length || !rows.length) return [];
+  return rows.map((row) => {
+    const record = {};
+    headers.forEach((header, index) => {
+      record[header] = row?.[index];
+    });
+    return record;
+  });
+}
 
 export default function DashboardPage() {
   const location = useLocation();
@@ -577,6 +591,23 @@ export default function DashboardPage() {
     return refreshed?.analysisSession || null;
   };
 
+  const refreshKpiCards = () => {
+    if (!import.meta.env.DEV || !data || !blueprint || !activeTabId) return;
+    const objectRows = normalizeTableDataRows(data);
+    if (!objectRows.length) return;
+    const nextCards = resolveSummaryCards(objectRows, blueprint.cards || []);
+    const nextBlueprint = {
+      ...blueprint,
+      cards: nextCards,
+      kpiCardsRefreshedAtMs: Date.now(),
+    };
+    setBlueprint(nextBlueprint);
+    updateAnalysisTab(activeTabId, {
+      blueprint: nextBlueprint,
+    });
+    setRefreshKey((key) => key + 1);
+  };
+
   const handleSelectAnalysisTab = (tabId) => {
     if (!tabId || tabId === activeTabId || switching || tabSwitching || hydratingTabId) return;
     const targetTab = tabs.find((tab) => tab.id === tabId);
@@ -800,6 +831,24 @@ export default function DashboardPage() {
             </div>
 
             <div className="dashboard-topbar-actions flex items-center gap-3 shrink-0" style={{ position: "absolute", right: 32 }}>
+              {import.meta.env.DEV && data && blueprint && (
+                <button
+                  type="button"
+                  onClick={refreshKpiCards}
+                  disabled={isDashboardBusy}
+                  className="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase tracking-wide"
+                  style={{
+                    border: "1px solid var(--color-border)",
+                    color: "var(--color-text)",
+                    backgroundColor: "var(--color-surface-elevated)",
+                    opacity: isDashboardBusy ? 0.6 : 1,
+                    cursor: isDashboardBusy ? "not-allowed" : "pointer",
+                  }}
+                  title="Development only: regenerate KPI cards from the current loaded data"
+                >
+                  Refresh KPI
+                </button>
+              )}
               <ThemeToggle />
             </div>
 

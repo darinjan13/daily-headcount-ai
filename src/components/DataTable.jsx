@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from "react";
-import { X } from "lucide-react";
 
 const BRAND = {
   dark: "var(--color-text)",
@@ -12,146 +11,131 @@ const BRAND = {
   soft: "var(--color-surface-soft)",
 };
 
-const PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 25];
+// Denser presets so users can see more cards per page by default.
+const PAGE_SIZE_OPTIONS = [8, 12, 16, 20, 24, 32];
 
-function buildMergedHeaderGrid(rows) {
-  if (!Array.isArray(rows) || !rows.length) return [];
-
-  const width = Math.max(...rows.map(row => row.length));
-  const normalizedRows = rows.map(row =>
-    Array.from({ length: width }, (_, index) => row?.[index] || "")
-  );
-  const covered = normalizedRows.map(() => Array(width).fill(false));
-
-  return normalizedRows.map((row, rowIndex) => {
-    const cells = [];
-
-    for (let colIndex = 0; colIndex < width; colIndex += 1) {
-      if (covered[rowIndex][colIndex]) continue;
-
-      const value = row[colIndex] || "";
-      let colSpan = 1;
-
-      while (
-        colIndex + colSpan < width &&
-        row[colIndex + colSpan] === value &&
-        !covered[rowIndex][colIndex + colSpan]
-      ) {
-        colSpan += 1;
-      }
-
-      let rowSpan = 1;
-      if (value) {
-        while (rowIndex + rowSpan < normalizedRows.length) {
-          let canSpanDown = true;
-          for (let i = colIndex; i < colIndex + colSpan; i += 1) {
-            if (normalizedRows[rowIndex + rowSpan][i] !== value) {
-              canSpanDown = false;
-              break;
-            }
-          }
-          if (!canSpanDown) break;
-          rowSpan += 1;
-        }
-      }
-
-      for (let r = rowIndex; r < rowIndex + rowSpan; r += 1) {
-        for (let c = colIndex; c < colIndex + colSpan; c += 1) {
-          if (r !== rowIndex || c !== colIndex) covered[r][c] = true;
-        }
-      }
-
-      cells.push({ value, colSpan, rowSpan, start: colIndex });
-    }
-
-    return cells;
-  });
+function cellToText(cell) {
+  if (cell === null || cell === undefined || cell === "") return "-";
+  if (typeof cell === "object") return String(cell);
+  return String(cell);
 }
 
-function getGroupedHeaderStyle(rowIndex, hasValue) {
-  if (!hasValue) {
+function pickFirstHeader(headers, patterns) {
+  return headers.find((h) => patterns.some((pattern) => pattern.test(h))) || null;
+}
+
+function parseMetricNumber(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const raw = String(value).replace(/,/g, "").trim();
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatMetric(value) {
+  if (!Number.isFinite(value)) return "0";
+  const rounded = Math.round(value * 100) / 100;
+  return Number.isInteger(rounded)
+    ? rounded.toLocaleString()
+    : rounded.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function formatPercent(value) {
+  if (!Number.isFinite(value)) return "0%";
+  return `${value.toFixed(1)}%`;
+}
+
+function normalizeDateValue(cell) {
+  const text = cellToText(cell).trim();
+  if (!text || text === "-") return { key: "no-date", label: "No date", sortValue: Number.POSITIVE_INFINITY };
+
+  const isoMatch = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoMatch) {
+    const stamp = Date.parse(isoMatch[1]);
+    return { key: isoMatch[1], label: isoMatch[1], sortValue: Number.isNaN(stamp) ? Number.POSITIVE_INFINITY : stamp };
+  }
+
+  const parsed = Date.parse(text);
+  if (!Number.isNaN(parsed)) {
+    const normalized = new Date(parsed).toISOString().slice(0, 10);
+    return { key: normalized, label: normalized, sortValue: parsed };
+  }
+
+  return { key: `text:${text}`, label: text, sortValue: Number.POSITIVE_INFINITY };
+}
+
+function getStatusStyle(value) {
+  const text = String(value || "").toLowerCase();
+  if (text.includes("finished") || text.includes("valid") || text.includes("complete")) {
     return {
-      background: BRAND.elevated,
-      color: BRAND.muted,
-      borderRight: `1px solid ${BRAND.border}`,
-      borderBottom: `1px solid ${BRAND.border}`,
+      color: "#0f5132",
+      background: "rgba(4, 98, 65, 0.14)",
+      border: "1px solid rgba(4, 98, 65, 0.32)",
     };
   }
-
-  const palette = [
-    {
-      background: "var(--color-dark-serpent)",
-      color: "#FFFFFF",
-      borderRight: "1px solid rgba(255,255,255,0.08)",
-      borderBottom: "1px solid rgba(255,255,255,0.14)",
-    },
-    {
-      background: "rgba(4, 98, 65, 0.92)",
-      color: "#FFFFFF",
-      borderRight: "1px solid rgba(255,255,255,0.08)",
-      borderBottom: "1px solid rgba(255,255,255,0.12)",
-    },
-    {
-      background: "rgba(10, 122, 84, 0.88)",
-      color: "#FFFFFF",
-      borderRight: "1px solid rgba(255,255,255,0.08)",
-      borderBottom: "1px solid rgba(255,255,255,0.12)",
-    },
-  ];
-
-  return palette[Math.min(rowIndex, palette.length - 1)];
-}
-
-function getPageNumbers(current, total) {
-  if (total <= 7) {
-    return Array.from({ length: total }, (_, index) => index);
+  if (text.includes("invalid") || text.includes("fail") || text.includes("error")) {
+    return {
+      color: "#8a5a00",
+      background: "rgba(255, 179, 71, 0.18)",
+      border: "1px solid rgba(255, 179, 71, 0.4)",
+    };
   }
-
-  const pages = [0];
-  const start = Math.max(1, current - 1);
-  const end = Math.min(total - 2, current + 1);
-
-  if (start > 1) pages.push("...");
-  for (let page = start; page <= end; page += 1) pages.push(page);
-  if (end < total - 2) pages.push("...");
-
-  pages.push(total - 1);
-  return pages;
+  return {
+    color: BRAND.dark,
+    background: BRAND.soft,
+    border: `1px solid ${BRAND.border}`,
+  };
 }
 
-export default function DataTable({ headers = [], rows = [], displayHeaderRows = null }) {
+export default function DataTable({ headers = [], rows = [] }) {
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(12);
   const [search, setSearch] = useState("");
+  const [columnFilters, setColumnFilters] = useState({});
   const [visibleCols, setVisibleCols] = useState(headers);
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("asc");
   const [searchFocus, setSearchFocus] = useState(false);
   const [selectedRows, setSelectedRows] = useState(new Set());
   const [hiddenRows, setHiddenRows] = useState(new Set());
+  const [viewMode, setViewMode] = useState("table"); // "table" or "cards"
+  const [detailOperator, setDetailOperator] = useState(null);
 
   useEffect(() => {
     setVisibleCols(headers);
+    setColumnFilters({});
     setSelectedRows(new Set());
     setHiddenRows(new Set());
     setPage(0);
+    setDetailOperator(null);
   }, [headers]);
 
-  const firstRow = rows?.[0];
-  const rowMode = Array.isArray(firstRow) ? "array" : (firstRow && typeof firstRow === "object" ? "object" : "scalar");
-  const hasActiveFilters =
-    Boolean(search.trim()) ||
-    sortCol !== null ||
-    hiddenRows.size > 0;
+  useEffect(() => {
+    if (viewMode !== "cards") setDetailOperator(null);
+  }, [viewMode]);
 
-  const getCellValue = (row, header, index) => {
-    if (rowMode === "array") return row?.[index];
-    if (rowMode === "object") return row?.[header] ?? null;
-    return index === 0 ? row : null;
-  };
+  useEffect(() => {
+    if (!detailOperator) return undefined;
+    const onEscape = (event) => {
+      if (event.key === "Escape") setDetailOperator(null);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [detailOperator]);
+
+  const normalizedRows = useMemo(() => {
+    if (!rows || rows.length === 0) return [];
+    const first = rows[0];
+    if (Array.isArray(first)) return rows;
+    if (typeof first === "object" && first !== null) {
+      return rows.map((row) => headers.map((h) => row[h] ?? null));
+    }
+    return rows.map((row) => [row]);
+  }, [rows, headers]);
+
+  const working = useMemo(() => normalizedRows.map((row, idx) => ({ row, idx })), [normalizedRows]);
 
   const handleSort = (col) => {
-    if (sortCol === col) setSortDir(direction => (direction === "asc" ? "desc" : "asc"));
+    if (sortCol === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
       setSortCol(col);
       setSortDir("asc");
@@ -159,69 +143,194 @@ export default function DataTable({ headers = [], rows = [], displayHeaderRows =
     setPage(0);
   };
 
-  const visibleHeaders = useMemo(() => headers.filter(header => visibleCols.includes(header)), [headers, visibleCols]);
-  const visibleHeaderIndices = useMemo(() => visibleHeaders.map(header => headers.indexOf(header)), [headers, visibleHeaders]);
-  const visibleDisplayHeaderRows = useMemo(() => {
-    if (!Array.isArray(displayHeaderRows) || displayHeaderRows.length <= 1) return null;
-    return displayHeaderRows.map(row => visibleHeaderIndices.map(index => row?.[index] || ""));
-  }, [displayHeaderRows, visibleHeaderIndices]);
-  const visibleLeafHeaderLabels = visibleDisplayHeaderRows?.[visibleDisplayHeaderRows.length - 1] || null;
-  const parentHeaderCells = useMemo(() => {
-    if (!visibleDisplayHeaderRows) return null;
-    return buildMergedHeaderGrid(visibleDisplayHeaderRows.slice(0, -1));
-  }, [visibleDisplayHeaderRows]);
-
-  const filteredEntries = useMemo(() => {
-    if (!rows?.length) return [];
-
-    if (!hasActiveFilters) {
-      const start = page * pageSize;
-      const end = start + pageSize;
-      return rows.slice(start, end).map((row, offset) => ({ row, idx: start + offset }));
-    }
-
-    let result = rows.map((row, idx) => ({ row, idx }));
+  const filtered = useMemo(() => {
+    let result = working;
 
     if (hiddenRows.size) {
-      result = result.filter(entry => !hiddenRows.has(entry.idx));
+      result = result.filter((r) => !hiddenRows.has(r.idx));
     }
 
+    Object.entries(columnFilters).forEach(([col, val]) => {
+      if (!val?.trim()) return;
+      const idx = headers.indexOf(col);
+      if (idx === -1) return;
+      const q = val.trim().toLowerCase();
+      result = result.filter(({ row }) => String(row[idx] ?? "").toLowerCase().includes(q));
+    });
+
     if (search.trim()) {
-      const query = search.trim().toLowerCase();
+      const q = search.trim().toLowerCase();
       result = result.filter(({ row }) =>
-        headers.some((header, index) => {
-          const cell = getCellValue(row, header, index);
-          return cell !== null && cell !== undefined && String(cell).toLowerCase().includes(query);
-        })
+        row.some((cell) => cell !== null && cell !== undefined && String(cell).toLowerCase().includes(q)),
       );
     }
 
     if (sortCol !== null) {
-      const index = headers.indexOf(sortCol);
+      const idx = headers.indexOf(sortCol);
       result = [...result].sort((a, b) => {
-        const aValue = getCellValue(a.row, sortCol, index);
-        const bValue = getCellValue(b.row, sortCol, index);
-        const aNumber = Number(aValue);
-        const bNumber = Number(bValue);
-        const isNumeric = !isNaN(aNumber) && !isNaN(bNumber) && aValue !== null && bValue !== null;
-        const comparison = isNumeric
-          ? aNumber - bNumber
-          : String(aValue ?? "").localeCompare(String(bValue ?? ""));
-        return sortDir === "asc" ? comparison : -comparison;
+        const av = a.row[idx];
+        const bv = b.row[idx];
+        const an = Number(av);
+        const bn = Number(bv);
+        const isNum = !isNaN(an) && !isNaN(bn) && av !== null && bv !== null;
+        const cmp = isNum ? an - bn : String(av ?? "").localeCompare(String(bv ?? ""));
+        return sortDir === "asc" ? cmp : -cmp;
       });
     }
 
     return result;
-  }, [rows, hasActiveFilters, page, pageSize, search, sortCol, sortDir, headers, hiddenRows]);
+  }, [working, search, sortCol, sortDir, headers, columnFilters, hiddenRows]);
 
-  const totalRows = rows?.length || 0;
-  const filteredCount = hasActiveFilters ? filteredEntries.length : Math.max(totalRows - hiddenRows.size, 0);
-  const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
-  const pageRows = hasActiveFilters ? filteredEntries.slice(page * pageSize, (page + 1) * pageSize) : filteredEntries;
-  const goTo = (targetPage) => setPage(Math.max(0, Math.min(totalPages - 1, targetPage)));
+  const visibleHeaders = useMemo(() => headers.filter((h) => visibleCols.includes(h)), [headers, visibleCols]);
+  const tablePageRows = filtered.slice(page * pageSize, (page + 1) * pageSize);
+
+  const operatorHeader = useMemo(
+    () =>
+      pickFirstHeader(headers, [/operator|employee|worker|staff|name/i]) ||
+      pickFirstHeader(headers, [/user[\s_-]?id|user/i]) ||
+      headers[0] ||
+      null,
+    [headers],
+  );
+  const statusHeader = useMemo(() => pickFirstHeader(headers, [/status|state|valid|invalid|finished|complete/i]), [headers]);
+  const dateHeader = useMemo(() => pickFirstHeader(headers, [/start date|finish date|date|day/i]), [headers]);
+  const validDurationHeader = useMemo(() => pickFirstHeader(headers, [/valid duration/i]), [headers]);
+  const annotationHeader = useMemo(() => pickFirstHeader(headers, [/annotation time|annotation/i]), [headers]);
+  const reworkHeader = useMemo(() => pickFirstHeader(headers, [/rework/i]), [headers]);
+  const recordHeader = useMemo(() => pickFirstHeader(headers, [/record id|record number|record/i]), [headers]);
+
+  const operatorCards = useMemo(() => {
+    if (!normalizedRows.length) return [];
+
+    const operatorIndex = operatorHeader ? headers.indexOf(operatorHeader) : -1;
+    const statusIndex = statusHeader ? headers.indexOf(statusHeader) : -1;
+    const dateIndex = dateHeader ? headers.indexOf(dateHeader) : -1;
+    const validDurationIndex = validDurationHeader ? headers.indexOf(validDurationHeader) : -1;
+    const annotationIndex = annotationHeader ? headers.indexOf(annotationHeader) : -1;
+    const reworkIndex = reworkHeader ? headers.indexOf(reworkHeader) : -1;
+    const recordIndex = recordHeader ? headers.indexOf(recordHeader) : -1;
+
+    const byOperator = new Map();
+
+    normalizedRows.forEach((row, index) => {
+      const operatorRaw = operatorIndex >= 0 ? cellToText(row[operatorIndex]).trim() : "";
+      const operatorName = operatorRaw && operatorRaw !== "-" ? operatorRaw : `Unassigned (${index + 1})`;
+
+      if (!byOperator.has(operatorName)) {
+        byOperator.set(operatorName, {
+          operator: operatorName,
+          totalRows: 0,
+          finishedRows: 0,
+          invalidRows: 0,
+          totalValidDuration: 0,
+          totalAnnotation: 0,
+          totalRework: 0,
+          recordIds: new Set(),
+          dailyMap: new Map(),
+        });
+      }
+
+      const current = byOperator.get(operatorName);
+      current.totalRows += 1;
+
+      current.totalValidDuration += validDurationIndex >= 0 ? parseMetricNumber(row[validDurationIndex]) : 0;
+      current.totalAnnotation += annotationIndex >= 0 ? parseMetricNumber(row[annotationIndex]) : 0;
+      current.totalRework += reworkIndex >= 0 ? parseMetricNumber(row[reworkIndex]) : 0;
+
+      if (recordIndex >= 0) {
+        const recordValue = cellToText(row[recordIndex]).trim();
+        if (recordValue && recordValue !== "-") current.recordIds.add(recordValue);
+      }
+
+      const statusText = statusIndex >= 0 ? cellToText(row[statusIndex]).toLowerCase() : "";
+      const isFinished = statusText.includes("finished") || statusText.includes("complete") || statusText.includes("valid");
+      const isInvalid = statusText.includes("invalid") || statusText.includes("fail") || statusText.includes("error");
+      if (isFinished) current.finishedRows += 1;
+      if (isInvalid) current.invalidRows += 1;
+
+      const normalizedDate = dateIndex >= 0 ? normalizeDateValue(row[dateIndex]) : normalizeDateValue(null);
+      if (!current.dailyMap.has(normalizedDate.key)) {
+        current.dailyMap.set(normalizedDate.key, {
+          key: normalizedDate.key,
+          label: normalizedDate.label,
+          sortValue: normalizedDate.sortValue,
+          rows: 0,
+          finishedRows: 0,
+          invalidRows: 0,
+          validDuration: 0,
+          annotation: 0,
+          rework: 0,
+        });
+      }
+
+      const day = current.dailyMap.get(normalizedDate.key);
+      day.rows += 1;
+      day.validDuration += validDurationIndex >= 0 ? parseMetricNumber(row[validDurationIndex]) : 0;
+      day.annotation += annotationIndex >= 0 ? parseMetricNumber(row[annotationIndex]) : 0;
+      day.rework += reworkIndex >= 0 ? parseMetricNumber(row[reworkIndex]) : 0;
+      if (isFinished) day.finishedRows += 1;
+      if (isInvalid) day.invalidRows += 1;
+    });
+
+    return Array.from(byOperator.values())
+      .map((operator) => {
+        const dailyStats = Array.from(operator.dailyMap.values()).sort((a, b) => {
+          if (Number.isFinite(a.sortValue) && Number.isFinite(b.sortValue)) return a.sortValue - b.sortValue;
+          if (Number.isFinite(a.sortValue)) return -1;
+          if (Number.isFinite(b.sortValue)) return 1;
+          return a.label.localeCompare(b.label);
+        });
+        const completionRate = operator.totalRows ? (operator.finishedRows / operator.totalRows) * 100 : 0;
+
+        return {
+          operator: operator.operator,
+          totalRows: operator.totalRows,
+          finishedRows: operator.finishedRows,
+          invalidRows: operator.invalidRows,
+          totalValidDuration: operator.totalValidDuration,
+          totalAnnotation: operator.totalAnnotation,
+          totalRework: operator.totalRework,
+          uniqueRecords: operator.recordIds.size,
+          activeDays: dailyStats.length,
+          completionRate,
+          dailyStats,
+        };
+      })
+      .sort((a, b) => {
+        if (b.totalRows !== a.totalRows) return b.totalRows - a.totalRows;
+        return a.operator.localeCompare(b.operator);
+      });
+  }, [
+    normalizedRows,
+    headers,
+    operatorHeader,
+    statusHeader,
+    dateHeader,
+    validDurationHeader,
+    annotationHeader,
+    reworkHeader,
+    recordHeader,
+  ]);
+
+  const cardSearchResults = useMemo(() => {
+    if (!search.trim()) return operatorCards;
+    const query = search.trim().toLowerCase();
+    return operatorCards.filter((item) => item.operator.toLowerCase().includes(query));
+  }, [operatorCards, search]);
+
+  const cardPageRows = cardSearchResults.slice(page * pageSize, (page + 1) * pageSize);
+  const totalPages = Math.max(
+    1,
+    Math.ceil((viewMode === "cards" ? cardSearchResults.length : filtered.length) / pageSize),
+  );
+  const goTo = (p) => setPage(Math.max(0, Math.min(totalPages - 1, p)));
+
+  useEffect(() => {
+    if (page > totalPages - 1) setPage(totalPages - 1);
+  }, [page, totalPages]);
 
   const toggleRowSelection = (idx) => {
-    setSelectedRows(prev => {
+    setSelectedRows((prev) => {
       const next = new Set(prev);
       if (next.has(idx)) next.delete(idx);
       else next.add(idx);
@@ -230,9 +339,9 @@ export default function DataTable({ headers = [], rows = [], displayHeaderRows =
   };
 
   const selectPageRows = (checked) => {
-    setSelectedRows(prev => {
+    setSelectedRows((prev) => {
       const next = new Set(prev);
-      pageRows.forEach(({ idx }) => {
+      tablePageRows.forEach(({ idx }) => {
         if (checked) next.add(idx);
         else next.delete(idx);
       });
@@ -242,7 +351,7 @@ export default function DataTable({ headers = [], rows = [], displayHeaderRows =
 
   const hideSelected = () => {
     if (!selectedRows.size) return;
-    setHiddenRows(prev => new Set([...prev, ...selectedRows]));
+    setHiddenRows((prev) => new Set([...prev, ...selectedRows]));
     setSelectedRows(new Set());
     setPage(0);
   };
@@ -253,30 +362,103 @@ export default function DataTable({ headers = [], rows = [], displayHeaderRows =
     setPage(0);
   };
 
-  const toggleVisibleCol = (column) => {
-    setVisibleCols(prev => (prev.includes(column) ? prev.filter(col => col !== column) : [...prev, column]));
+  const toggleVisibleCol = (col) => {
+    setVisibleCols((prev) => (prev.includes(col) ? prev.filter((c) => c !== col) : [...prev, col]));
     setPage(0);
   };
 
   return (
     <div style={{ fontFamily: "'Manrope', sans-serif" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 12, color: BRAND.muted, fontWeight: 600 }}>
-          {filteredCount.toLocaleString()} of {totalRows.toLocaleString()} rows · {visibleHeaders.length} / {headers.length} columns
-          {hasActiveFilters && filteredCount !== totalRows && <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>· filtered</span>}
-          {hiddenRows.size > 0 && <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>· {hiddenRows.size} hidden</span>}
-        </span>
+      {/* Toolbar */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12,
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "inline-flex", borderRadius: 10, border: `1.5px solid ${BRAND.border}`, overflow: "hidden" }}>
+            <button
+              onClick={() => setViewMode("table")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "7px 14px",
+                fontSize: 12,
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                background: viewMode === "table" ? BRAND.green : BRAND.elevated,
+                color: viewMode === "table" ? "#FFFFFF" : BRAND.muted,
+                borderRadius: 0,
+                transition: "all 0.18s ease",
+                borderRight: `1px solid ${BRAND.border}`,
+              }}
+            >
+              Table
+            </button>
+            <button
+              onClick={() => setViewMode("cards")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                padding: "7px 14px",
+                fontSize: 12,
+                fontWeight: 700,
+                border: "none",
+                cursor: "pointer",
+                background: viewMode === "cards" ? BRAND.green : BRAND.elevated,
+                color: viewMode === "cards" ? "#FFFFFF" : BRAND.muted,
+                borderRadius: 0,
+                transition: "all 0.18s ease",
+              }}
+            >
+              Cards
+            </button>
+          </div>
+
+          <span style={{ fontSize: 12, color: BRAND.muted, fontWeight: 600 }}>
+            {viewMode === "table" ? (
+              <>
+                {filtered.length.toLocaleString()} of {working.length.toLocaleString()} rows | {visibleHeaders.length} / {headers.length} columns
+                {search && filtered.length !== working.length && (
+                  <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>| filtered</span>
+                )}
+                {hiddenRows.size > 0 && (
+                  <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>| {hiddenRows.size} hidden</span>
+                )}
+              </>
+            ) : (
+              <>
+                {cardSearchResults.length.toLocaleString()} of {operatorCards.length.toLocaleString()} operators |{" "}
+                {normalizedRows.length.toLocaleString()} project rows aggregated
+                {search && cardSearchResults.length !== operatorCards.length && (
+                  <span style={{ color: BRAND.saffron, marginLeft: 6, fontWeight: 700 }}>| filtered</span>
+                )}
+              </>
+            )}
+          </span>
+        </div>
+
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ position: "relative" }}>
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 13, pointerEvents: "none", color: BRAND.muted }}>🔍</span>
             <input
               value={search}
-              onChange={(event) => { setSearch(event.target.value); setPage(0); }}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
               onFocus={() => setSearchFocus(true)}
               onBlur={() => setSearchFocus(false)}
-              placeholder="Search all columns..."
+              placeholder={viewMode === "table" ? "Search all columns..." : "Search operator..."}
               style={{
-                paddingLeft: 34,
+                paddingLeft: 12,
                 paddingRight: 32,
                 paddingTop: 8,
                 paddingBottom: 8,
@@ -293,7 +475,10 @@ export default function DataTable({ headers = [], rows = [], displayHeaderRows =
             />
             {search && (
               <button
-                onClick={() => { setSearch(""); setPage(0); }}
+                onClick={() => {
+                  setSearch("");
+                  setPage(0);
+                }}
                 style={{
                   position: "absolute",
                   right: 10,
@@ -306,178 +491,663 @@ export default function DataTable({ headers = [], rows = [], displayHeaderRows =
                   fontSize: 13,
                   padding: 0,
                 }}
-                aria-label="Clear search"
               >
-                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                x
               </button>
             )}
           </div>
+
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: BRAND.muted, fontWeight: 600 }}>
             Page size
             <select
               value={pageSize}
-              onChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }}
-              style={{ padding: "6px 10px", borderRadius: 8, border: `1.5px solid ${BRAND.border}`, background: BRAND.elevated, color: BRAND.dark, fontWeight: 600 }}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(0);
+              }}
+              style={{
+                padding: "6px 10px",
+                borderRadius: 8,
+                border: `1.5px solid ${BRAND.border}`,
+                background: BRAND.elevated,
+                color: BRAND.dark,
+                fontWeight: 600,
+              }}
             >
-              {PAGE_SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </select>
           </label>
-          <div style={{ position: "relative" }}>
-            <details style={{ cursor: "pointer", userSelect: "none" }}>
-              <summary style={{ listStyle: "none", fontSize: 12, fontWeight: 700, color: BRAND.dark, padding: "6px 10px", border: `1.5px solid ${BRAND.border}`, borderRadius: 8, background: BRAND.elevated }}>
-                Columns ({visibleHeaders.length}/{headers.length})
-              </summary>
-              <div style={{ position: "absolute", right: 0, zIndex: 10, background: BRAND.elevated, border: `1px solid ${BRAND.border}`, borderRadius: 10, padding: 10, marginTop: 6, boxShadow: "var(--color-shadow-soft)", maxHeight: 220, overflow: "auto" }}>
-                {headers.map(column => (
-                  <label key={column} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: BRAND.dark, marginBottom: 6 }}>
-                    <input type="checkbox" checked={visibleCols.includes(column)} onChange={() => toggleVisibleCol(column)} />
-                    {column}
-                  </label>
-                ))}
+
+          {viewMode === "table" && (
+            <>
+              <div style={{ position: "relative" }}>
+                <details style={{ cursor: "pointer", userSelect: "none" }}>
+                  <summary
+                    style={{
+                      listStyle: "none",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: BRAND.dark,
+                      padding: "6px 10px",
+                      border: `1.5px solid ${BRAND.border}`,
+                      borderRadius: 8,
+                      background: BRAND.elevated,
+                    }}
+                  >
+                    Columns ({visibleHeaders.length}/{headers.length})
+                  </summary>
+                  <div
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      zIndex: 10,
+                      background: BRAND.elevated,
+                      border: `1px solid ${BRAND.border}`,
+                      borderRadius: 10,
+                      padding: 10,
+                      marginTop: 6,
+                      boxShadow: "var(--color-shadow-soft)",
+                      maxHeight: 220,
+                      overflow: "auto",
+                    }}
+                  >
+                    {headers.map((col) => (
+                      <label
+                        key={col}
+                        style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: BRAND.dark, marginBottom: 6 }}
+                      >
+                        <input type="checkbox" checked={visibleCols.includes(col)} onChange={() => toggleVisibleCol(col)} />
+                        {col}
+                      </label>
+                    ))}
+                  </div>
+                </details>
               </div>
-            </details>
-          </div>
-          <button onClick={hideSelected} disabled={!selectedRows.size} style={{ padding: "7px 12px", borderRadius: 8, border: `1px solid ${BRAND.border}`, background: selectedRows.size ? BRAND.green : BRAND.elevated, color: selectedRows.size ? "#fff" : BRAND.muted, fontSize: 12, fontWeight: 700, cursor: selectedRows.size ? "pointer" : "not-allowed" }}>Hide selected</button>
-          <button onClick={clearHidden} disabled={!hiddenRows.size} style={{ padding: "7px 12px", borderRadius: 8, border: `1px solid ${BRAND.border}`, background: hiddenRows.size ? BRAND.elevated : BRAND.soft, color: hiddenRows.size ? BRAND.dark : BRAND.muted, fontSize: 12, fontWeight: 700, cursor: hiddenRows.size ? "pointer" : "not-allowed" }}>Unhide all</button>
+
+              <button
+                onClick={hideSelected}
+                disabled={!selectedRows.size}
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  border: `1px solid ${BRAND.border}`,
+                  background: selectedRows.size ? BRAND.green : BRAND.elevated,
+                  color: selectedRows.size ? "#fff" : BRAND.muted,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: selectedRows.size ? "pointer" : "not-allowed",
+                }}
+              >
+                Hide selected
+              </button>
+
+              <button
+                onClick={clearHidden}
+                disabled={!hiddenRows.size}
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: 8,
+                  border: `1px solid ${BRAND.border}`,
+                  background: hiddenRows.size ? BRAND.elevated : BRAND.soft,
+                  color: hiddenRows.size ? BRAND.dark : BRAND.muted,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: hiddenRows.size ? "pointer" : "not-allowed",
+                }}
+              >
+                Unhide all
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div style={{ overflowX: "auto", borderRadius: 14, boxShadow: "var(--color-shadow-soft)", border: `1px solid ${BRAND.border}`, background: BRAND.elevated }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-          <thead>
-            {parentHeaderCells?.map((headerRow, rowIdx) => (
-              <tr key={`display-header-${rowIdx}`}>
-                {rowIdx === 0 && (
-                  <th
-                    rowSpan={parentHeaderCells.length + 1}
-                    style={{
-                      width: 36,
-                      background: BRAND.green,
-                      borderRight: "1px solid rgba(255,255,255,0.08)",
-                      borderBottom: "1px solid rgba(255,255,255,0.12)",
-                      verticalAlign: "middle",
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      aria-label="Select page rows"
-                      checked={pageRows.length > 0 && pageRows.every(({ idx }) => selectedRows.has(idx))}
-                      onChange={(event) => selectPageRows(event.target.checked)}
-                    />
-                  </th>
-                )}
-                {headerRow.map(span => (
-                  <th
-                    key={`${rowIdx}-${span.start}-${span.value || "blank"}`}
-                    colSpan={span.colSpan}
-                    rowSpan={span.rowSpan}
-                    style={{
-                      ...getGroupedHeaderStyle(rowIdx, Boolean(span.value)),
-                      padding: span.value ? "9px 14px" : "4px 8px",
-                      textAlign: "center",
-                      fontWeight: 800,
-                      fontSize: rowIdx === 0 ? 11 : 10,
-                      whiteSpace: "nowrap",
-                      letterSpacing: "0.04em",
-                      verticalAlign: "middle",
-                    }}
-                  >
-                    {span.value}
-                  </th>
-                ))}
-              </tr>
-            ))}
-            <tr>
-              {!parentHeaderCells && (
+      {/* Table View */}
+      {viewMode === "table" && (
+        <div
+          style={{
+            overflowX: "auto",
+            borderRadius: 14,
+            boxShadow: "var(--color-shadow-soft)",
+            border: `1px solid ${BRAND.border}`,
+            background: BRAND.elevated,
+          }}
+        >
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr>
                 <th style={{ width: 36, background: BRAND.green }}>
                   <input
                     type="checkbox"
                     aria-label="Select page rows"
-                    checked={pageRows.length > 0 && pageRows.every(({ idx }) => selectedRows.has(idx))}
-                    onChange={(event) => selectPageRows(event.target.checked)}
+                    checked={tablePageRows.length > 0 && tablePageRows.every(({ idx }) => selectedRows.has(idx))}
+                    onChange={(e) => selectPageRows(e.target.checked)}
                   />
                 </th>
-              )}
-              {visibleHeaders.map((header, headerIdx) => (
-                <th
-                  key={header}
-                  onClick={() => handleSort(header)}
-                  style={{
-                    background: BRAND.green,
-                    color: "#FFFFFF",
-                    padding: "11px 14px",
-                    textAlign: "left",
-                    fontWeight: 700,
-                    fontSize: 11,
-                    whiteSpace: "nowrap",
-                    cursor: "pointer",
-                    letterSpacing: "0.04em",
-                    borderRight: "1px solid rgba(255,255,255,0.08)",
-                    userSelect: "none",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={event => { event.currentTarget.style.background = "var(--color-dark-serpent)"; }}
-                  onMouseLeave={event => { event.currentTarget.style.background = BRAND.green; }}
-                >
-                  {visibleLeafHeaderLabels?.[headerIdx] || header}
-                  <span style={{ marginLeft: 6, fontSize: 9, opacity: sortCol === header ? 1 : 0.3 }}>
-                    {sortCol === header ? (sortDir === "asc" ? "▲" : "▼") : "▲"}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.length === 0 ? (
-              <tr>
-                <td colSpan={visibleHeaders.length + 1} style={{ textAlign: "center", padding: "40px 0", color: BRAND.muted, fontSize: 13 }}>
-                  {search ? "No results match your search" : "No data available"}
-                </td>
+                {visibleHeaders.map((h) => (
+                  <th
+                    key={h}
+                    onClick={() => handleSort(h)}
+                    style={{
+                      background: BRAND.green,
+                      color: "#FFFFFF",
+                      padding: "11px 14px",
+                      textAlign: "left",
+                      fontWeight: 700,
+                      fontSize: 11,
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                      letterSpacing: "0.04em",
+                      borderRight: "1px solid rgba(255,255,255,0.08)",
+                      userSelect: "none",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "var(--color-dark-serpent)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = BRAND.green;
+                    }}
+                  >
+                    {h}
+                    <span style={{ marginLeft: 6, fontSize: 9, opacity: sortCol === h ? 1 : 0.3 }}>
+                      {sortCol === h ? (sortDir === "asc" ? "^" : "v") : "^"}
+                    </span>
+                  </th>
+                ))}
               </tr>
-            ) : pageRows.map(({ row, idx }, rowIndex) => {
-              const isSelected = selectedRows.has(idx);
-              return (
-                <tr
-                  key={`${idx}-${rowIndex}`}
-                  style={{ background: rowIndex % 2 === 0 ? BRAND.white : BRAND.soft, transition: "background 0.1s" }}
-                  onMouseEnter={event => { event.currentTarget.style.background = "var(--color-chip-bg)"; }}
-                  onMouseLeave={event => { event.currentTarget.style.background = rowIndex % 2 === 0 ? BRAND.white : BRAND.soft; }}
-                >
-                  <td style={{ padding: "9px 10px", borderBottom: `1px solid ${BRAND.border}`, textAlign: "center" }}>
-                    <input type="checkbox" checked={isSelected} onChange={() => toggleRowSelection(idx)} />
+              <tr>
+                <th style={{ background: BRAND.elevated }} />
+                {visibleHeaders.map((h) => (
+                  <th
+                    key={`${h}-filter`}
+                    style={{ background: BRAND.elevated, padding: "6px 10px", borderBottom: `1px solid ${BRAND.border}` }}
+                  >
+                    <input
+                      value={columnFilters[h] || ""}
+                      onChange={(e) => {
+                        setColumnFilters((prev) => ({ ...prev, [h]: e.target.value }));
+                        setPage(0);
+                      }}
+                      placeholder={`Filter ${h}`}
+                      style={{
+                        width: "100%",
+                        padding: "6px 8px",
+                        borderRadius: 8,
+                        border: `1px solid ${BRAND.border}`,
+                        fontSize: 11,
+                        background: BRAND.white,
+                        color: BRAND.dark,
+                      }}
+                    />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tablePageRows.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={visibleHeaders.length + 1}
+                    style={{ textAlign: "center", padding: "40px 0", color: BRAND.muted, fontSize: 13 }}
+                  >
+                    {search || Object.values(columnFilters).some((v) => v)
+                      ? "No results match your filters"
+                      : "No data available"}
                   </td>
-                  {visibleHeaders.map((header, columnIndex) => {
-                    const sourceIndex = headers.indexOf(header);
-                    const cell = getCellValue(row, header, sourceIndex);
-                    return (
-                      <td key={`${columnIndex}-${header}`} style={{ padding: "9px 14px", borderBottom: `1px solid ${BRAND.border}`, borderRight: `1px solid ${BRAND.border}`, color: BRAND.dark, whiteSpace: "nowrap", fontWeight: 400 }}>
-                        {cell === null || cell === undefined ? "" : typeof cell === "object" ? String(cell) : cell}
-                      </td>
-                    );
-                  })}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {totalPages > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, marginTop: 16, flexWrap: "wrap" }}>
-          <PagBtn onClick={() => goTo(0)} disabled={page === 0}>«</PagBtn>
-          <PagBtn onClick={() => goTo(page - 1)} disabled={page === 0}>‹</PagBtn>
-          {getPageNumbers(page, totalPages).map((pageNumber, index) =>
-            pageNumber === "..." ? (
-              <span key={index} style={{ color: BRAND.muted, padding: "0 2px" }}>…</span>
-            ) : (
-              <PagBtn key={index} onClick={() => goTo(pageNumber)} active={pageNumber === page}>{pageNumber + 1}</PagBtn>
-            )
-          )}
-          <PagBtn onClick={() => goTo(page + 1)} disabled={page === totalPages - 1}>›</PagBtn>
-          <PagBtn onClick={() => goTo(totalPages - 1)} disabled={page === totalPages - 1}>»</PagBtn>
-          <span style={{ fontSize: 11, color: BRAND.muted, marginLeft: 6, fontWeight: 600 }}>Page {page + 1} of {totalPages}</span>
+              ) : (
+                tablePageRows.map(({ row, idx }, i) => {
+                  const isSelected = selectedRows.has(idx);
+                  return (
+                    <tr
+                      key={`${idx}-${i}`}
+                      style={{ background: i % 2 === 0 ? BRAND.white : BRAND.soft, transition: "background 0.1s" }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--color-chip-bg)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = i % 2 === 0 ? BRAND.white : BRAND.soft;
+                      }}
+                    >
+                      <td style={{ padding: "9px 10px", borderBottom: `1px solid ${BRAND.border}`, textAlign: "center" }}>
+                        <input type="checkbox" checked={isSelected} onChange={() => toggleRowSelection(idx)} />
+                      </td>
+                      {visibleHeaders.map((h, j) => {
+                        const colIdx = headers.indexOf(h);
+                        const cell = row[colIdx];
+                        return (
+                          <td
+                            key={`${j}-${h}`}
+                            style={{
+                              padding: "9px 14px",
+                              borderBottom: `1px solid ${BRAND.border}`,
+                              borderRight: `1px solid ${BRAND.border}`,
+                              color: BRAND.dark,
+                              whiteSpace: "nowrap",
+                              fontWeight: 400,
+                            }}
+                          >
+                            {cell === null || cell === undefined ? "" : typeof cell === "object" ? String(cell) : cell}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
       )}
+
+      {/* Card View */}
+      {viewMode === "cards" && (
+        <div>
+          <div style={{ marginBottom: 10, fontSize: 12, color: BRAND.muted, fontWeight: 600 }}>
+            Operator cards show totals across all project rows.
+          </div>
+          {cardPageRows.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "48px 24px",
+                color: BRAND.muted,
+                fontSize: 13,
+                background: BRAND.elevated,
+                borderRadius: 14,
+                border: `1px solid ${BRAND.border}`,
+                boxShadow: "var(--color-shadow-soft)",
+              }}
+            >
+              {search ? "No operators match your search" : "No operator stats available"}
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(265px, 1fr))",
+                gridAutoFlow: "row dense",
+                gap: 12,
+              }}
+            >
+              {cardPageRows.map((item, i) => {
+                const cardNumber = page * pageSize + i + 1;
+                const qualityStatus = item.invalidRows > 0 ? `${item.invalidRows} invalid` : "No invalid rows";
+                const qualityStyle = getStatusStyle(item.invalidRows > 0 ? "invalid" : "finished");
+
+                return (
+                  <div
+                    key={`operator-card-${item.operator}-${cardNumber}`}
+                    style={{
+                      background: BRAND.white,
+                      border: `1px solid ${BRAND.border}`,
+                      borderLeft: `4px solid ${BRAND.green}`,
+                      borderRadius: 12,
+                      padding: 0,
+                      boxShadow: "var(--color-shadow-soft)",
+                      transition: "box-shadow 0.2s ease, transform 0.15s ease",
+                      overflow: "hidden",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--color-shadow-strong)";
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = "var(--color-shadow-soft)";
+                      e.currentTarget.style.transform = "translateY(0)";
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        padding: "9px 10px",
+                        background: BRAND.soft,
+                        borderBottom: `1px solid ${BRAND.border}`,
+                      }}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: BRAND.muted,
+                            letterSpacing: "0.05em",
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          Operator
+                        </div>
+                        <div
+                          title={item.operator}
+                          style={{
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: BRAND.dark,
+                            marginTop: 2,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {item.operator}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => setDetailOperator(item)}
+                        title="Expand full operator details"
+                        aria-label={`Expand details for ${item.operator}`}
+                        style={{
+                          height: 24,
+                          borderRadius: 7,
+                          border: `1px solid rgba(255, 179, 71, 0.7)`,
+                          background: BRAND.saffron,
+                          color: BRAND.dark,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                          padding: "0 8px",
+                          fontSize: 10,
+                          fontWeight: 700,
+                          letterSpacing: "0.03em",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M8 3H3v5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M16 3h5v5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M3 16v5h5" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M21 16v5h-5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Expand
+                      </button>
+                    </div>
+
+                    <div style={{ padding: "8px 10px 10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <span
+                          style={{
+                            padding: "3px 8px",
+                            borderRadius: 999,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            whiteSpace: "nowrap",
+                            ...qualityStyle,
+                          }}
+                        >
+                          {qualityStatus}
+                        </span>
+                        <span style={{ fontSize: 10, color: BRAND.muted, fontWeight: 700 }}>Completion {formatPercent(item.completionRate)}</span>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+                        <MetricTile label="Total rows" value={formatMetric(item.totalRows)} />
+                        <MetricTile label="Active days" value={formatMetric(item.activeDays)} />
+                        <MetricTile label={validDurationHeader || "Valid duration"} value={formatMetric(item.totalValidDuration)} />
+                        <MetricTile label={annotationHeader || "Annotation time"} value={formatMetric(item.totalAnnotation)} />
+                        <MetricTile label={reworkHeader || "Rework time"} value={formatMetric(item.totalRework)} />
+                        <MetricTile label={recordHeader || "Unique records"} value={formatMetric(item.uniqueRecords)} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Full detail drawer */}
+      {detailOperator && (
+        <div
+          onClick={() => setDetailOperator(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 140,
+            background: "rgba(19, 48, 32, 0.42)",
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+        >
+          <aside
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(620px, 100vw)",
+              height: "100%",
+              background: BRAND.white,
+              borderLeft: `1px solid ${BRAND.border}`,
+              boxShadow: "-14px 0 30px rgba(19, 48, 32, 0.2)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                padding: "14px 14px 12px",
+                borderBottom: `1px solid ${BRAND.border}`,
+                background: BRAND.soft,
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 10,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, color: BRAND.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Operator project details
+                </div>
+                <div
+                  title={detailOperator.operator}
+                  style={{
+                    fontSize: 18,
+                    fontWeight: 700,
+                    color: BRAND.dark,
+                    marginTop: 3,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {detailOperator.operator}
+                </div>
+                <div style={{ fontSize: 12, color: BRAND.muted, marginTop: 2 }}>
+                  {formatMetric(detailOperator.totalRows)} rows across {formatMetric(detailOperator.activeDays)} day(s)
+                </div>
+              </div>
+              <button
+                onClick={() => setDetailOperator(null)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 9,
+                  border: `1px solid ${BRAND.border}`,
+                  background: BRAND.white,
+                  color: BRAND.dark,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: 0,
+                  lineHeight: 1,
+                  cursor: "pointer",
+                }}
+                aria-label="Close details"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+                  <path d="M18 6L6 18" strokeLinecap="round" />
+                  <path d="M6 6l12 12" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <div style={{ padding: 12, overflowY: "auto", flex: 1 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginBottom: 12 }}>
+                <MetricTile label="Total rows" value={formatMetric(detailOperator.totalRows)} />
+                <MetricTile label="Completed rows" value={formatMetric(detailOperator.finishedRows)} />
+                <MetricTile label="Invalid rows" value={formatMetric(detailOperator.invalidRows)} />
+                <MetricTile label={validDurationHeader || "Valid duration"} value={formatMetric(detailOperator.totalValidDuration)} />
+                <MetricTile label={annotationHeader || "Annotation time"} value={formatMetric(detailOperator.totalAnnotation)} />
+                <MetricTile label={reworkHeader || "Rework time"} value={formatMetric(detailOperator.totalRework)} />
+                <MetricTile label={recordHeader || "Unique records"} value={formatMetric(detailOperator.uniqueRecords)} />
+                <MetricTile label="Active days" value={formatMetric(detailOperator.activeDays)} />
+                <MetricTile label="Completion rate" value={formatPercent(detailOperator.completionRate)} />
+              </div>
+
+              <div
+                style={{
+                  border: `1px solid ${BRAND.border}`,
+                  borderRadius: 10,
+                  background: BRAND.elevated,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "10px 12px",
+                    borderBottom: `1px solid ${BRAND.border}`,
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: BRAND.dark,
+                    background: BRAND.soft,
+                  }}
+                >
+                  Daily breakdown
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: BRAND.soft }}>
+                        <th style={dailyTableHeadStyle}>Date</th>
+                        <th style={dailyTableHeadStyle}>Rows</th>
+                        <th style={dailyTableHeadStyle}>Completed</th>
+                        <th style={dailyTableHeadStyle}>Invalid</th>
+                        <th style={dailyTableHeadStyle}>{validDurationHeader || "Valid duration"}</th>
+                        <th style={dailyTableHeadStyle}>{annotationHeader || "Annotation time"}</th>
+                        <th style={dailyTableHeadStyle}>{reworkHeader || "Rework time"}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detailOperator.dailyStats.map((day) => (
+                        <tr key={`daily-${detailOperator.operator}-${day.key}`}>
+                          <td style={dailyTableCellStyle}>{day.label}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.rows)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.finishedRows)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.invalidRows)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.validDuration)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.annotation)}</td>
+                          <td style={dailyTableCellStyle}>{formatMetric(day.rework)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 6, marginTop: 16, flexWrap: "wrap" }}>
+          <PagBtn onClick={() => goTo(0)} disabled={page === 0}>
+            {"<<"}
+          </PagBtn>
+          <PagBtn onClick={() => goTo(page - 1)} disabled={page === 0}>
+            {"<"}
+          </PagBtn>
+          {getPageNumbers(page, totalPages).map((p, i) =>
+            p === "..." ? (
+              <span key={i} style={{ color: BRAND.muted, padding: "0 2px" }}>
+                ...
+              </span>
+            ) : (
+              <PagBtn key={i} onClick={() => goTo(p)} active={p === page}>
+                {p + 1}
+              </PagBtn>
+            ),
+          )}
+          <PagBtn onClick={() => goTo(page + 1)} disabled={page === totalPages - 1}>
+            {">"}
+          </PagBtn>
+          <PagBtn onClick={() => goTo(totalPages - 1)} disabled={page === totalPages - 1}>
+            {">>"}
+          </PagBtn>
+          <span style={{ fontSize: 11, color: BRAND.muted, marginLeft: 6, fontWeight: 600 }}>
+            Page {page + 1} of {totalPages}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const dailyTableHeadStyle = {
+  textAlign: "left",
+  padding: "8px 10px",
+  borderBottom: `1px solid ${BRAND.border}`,
+  color: BRAND.dark,
+  fontWeight: 700,
+  whiteSpace: "nowrap",
+};
+
+const dailyTableCellStyle = {
+  padding: "8px 10px",
+  borderBottom: `1px solid ${BRAND.border}`,
+  color: BRAND.dark,
+  whiteSpace: "nowrap",
+};
+
+function MetricTile({ label, value }) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${BRAND.border}`,
+        borderRadius: 8,
+        background: BRAND.elevated,
+        padding: "6px 7px",
+        minWidth: 0,
+      }}
+    >
+      <div
+        title={label}
+        style={{
+          fontSize: 9,
+          fontWeight: 700,
+          color: BRAND.muted,
+          textTransform: "uppercase",
+          letterSpacing: "0.04em",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        title={value}
+        style={{
+          marginTop: 3,
+          fontSize: 12,
+          fontWeight: 700,
+          color: BRAND.dark,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {value}
+      </div>
     </div>
   );
 }
@@ -504,4 +1174,11 @@ function PagBtn({ onClick, disabled, active, children }) {
       {children}
     </button>
   );
+}
+
+function getPageNumbers(current, total) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i);
+  if (current < 4) return [0, 1, 2, 3, 4, "...", total - 1];
+  if (current > total - 5) return [0, "...", total - 5, total - 4, total - 3, total - 2, total - 1];
+  return [0, "...", current - 1, current, current + 1, "...", total - 1];
 }
