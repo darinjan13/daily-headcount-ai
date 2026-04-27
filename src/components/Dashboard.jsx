@@ -1258,49 +1258,88 @@ function getCardPixelWidth(span, workspaceWidth) {
   return colWidth * span + gap * Math.max(span - 1, 0);
 }
 
+function getWorkspaceColumnX(col, workspaceWidth) {
+  const { gap, colWidth } = getWorkspaceMetrics(workspaceWidth);
+  return col * (colWidth + gap);
+}
+
+function rectsOverlap(a, b) {
+  return !(
+    a.x + a.width <= b.x ||
+    b.x + b.width <= a.x ||
+    a.y + a.height <= b.y ||
+    b.y + b.height <= a.y
+  );
+}
+
+function findFirstOpenChartSlot(occupiedRects, span, height, workspaceWidth) {
+  const { gap } = getWorkspaceMetrics(workspaceWidth);
+  const width = getCardPixelWidth(span, workspaceWidth);
+  const maxCol = Math.max(0, 12 - span);
+  const candidateYs = [0, ...occupiedRects.map(rect => rect.y + rect.height + gap)]
+    .filter(value => Number.isFinite(value) && value >= 0)
+    .sort((a, b) => a - b);
+
+  for (const y of candidateYs) {
+    for (let col = 0; col <= maxCol; col += 1) {
+      const x = getWorkspaceColumnX(col, workspaceWidth);
+      const candidate = { x, y, width, height };
+      if (!occupiedRects.some(rect => rectsOverlap(candidate, rect))) {
+        return { x, y };
+      }
+    }
+  }
+
+  const fallbackY = occupiedRects.length
+    ? Math.max(...occupiedRects.map(rect => rect.y + rect.height)) + gap
+    : 0;
+
+  return { x: 0, y: fallbackY };
+}
+
 function buildChartLayouts(cards, previousLayouts, workspaceWidth) {
-  const gap = 20;
   const safeWidth = Math.max(workspaceWidth || 0, 360);
   const defaultSpan = safeWidth >= 1500 ? 3 : safeWidth >= 980 ? 4 : safeWidth >= 640 ? 6 : 12;
-  const storedLayouts = cards
-    .map(card => previousLayouts?.[card.id])
-    .filter(layout => typeof layout?.x === "number" && typeof layout?.y === "number");
-  const hasManualLayout = storedLayouts.some(layout => Math.abs(layout.x) > 2);
-  let cursorX = 0;
-  let cursorY = 0;
-  let rowHeight = 0;
-
-  const getNextPackedPosition = (span, height) => {
-    const cardWidth = getCardPixelWidth(span, safeWidth);
-    if (cursorX > 0 && cursorX + cardWidth > safeWidth) {
-      cursorX = 0;
-      cursorY += rowHeight + gap;
-      rowHeight = 0;
-    }
-
-    const position = { x: cursorX, y: cursorY };
-    cursorX += cardWidth + gap;
-    rowHeight = Math.max(rowHeight, height);
-    return position;
-  };
+  const occupiedRects = [];
 
   return cards.reduce((acc, card) => {
     const defaults = getChartWorkspaceDefault(card);
     const prev = previousLayouts?.[card.id] || {};
-    const responsiveSpan = card.kind === "pivot" ? Math.max(defaultSpan, 6) : defaultSpan;
-    const span = hasManualLayout ? (prev.span ?? defaults.span) : responsiveSpan;
-    const height = prev.height ?? defaults.height;
     const hasStoredPosition = typeof prev.x === "number" && typeof prev.y === "number";
-    const shouldPreservePosition = hasStoredPosition && hasManualLayout;
-    const packedPosition = shouldPreservePosition ? null : getNextPackedPosition(span, height);
+    const responsiveSpan = card.kind === "pivot" ? Math.max(defaultSpan, 6) : defaultSpan;
+    const span = hasStoredPosition ? (prev.span ?? defaults.span) : responsiveSpan;
+    const height = hasStoredPosition ? (prev.height ?? defaults.height) : defaults.height;
+    const width = getCardPixelWidth(span, safeWidth);
+    const clampedStoredX = hasStoredPosition
+      ? Math.max(0, Math.min(prev.x, Math.max(0, safeWidth - width)))
+      : 0;
+    const clampedStoredY = hasStoredPosition ? Math.max(0, prev.y) : 0;
+
+    let nextPosition = hasStoredPosition
+      ? { x: clampedStoredX, y: clampedStoredY }
+      : findFirstOpenChartSlot(occupiedRects, span, height, safeWidth);
+
+    const nextRect = {
+      x: nextPosition.x,
+      y: nextPosition.y,
+      width,
+      height,
+    };
+
+    if (occupiedRects.some(rect => rectsOverlap(nextRect, rect))) {
+      nextPosition = findFirstOpenChartSlot(occupiedRects, span, height, safeWidth);
+      nextRect.x = nextPosition.x;
+      nextRect.y = nextPosition.y;
+    }
 
     acc[card.id] = {
       span,
       height,
       hidden: prev.hidden ?? false,
-      x: shouldPreservePosition ? prev.x : packedPosition.x,
-      y: shouldPreservePosition ? prev.y : packedPosition.y,
+      x: nextPosition.x,
+      y: nextPosition.y,
     };
+    occupiedRects.push(nextRect);
 
     return acc;
   }, {});
